@@ -1,0 +1,8 @@
+import type { Credenciales, LoginResponse } from '@/types/auth'
+import { apiRequest } from './api'
+
+export const authService = {
+  login(credenciales: Credenciales) {
+    return apiRequest<LoginResponse>('/auth/login', { method: 'POST', body: credenciales })
+  },
+}

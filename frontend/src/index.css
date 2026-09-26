@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Modo claro (índigo) */
+:root {
+  color-scheme: light;
+
+  --background: #f4f5fa;
+  --foreground: #151823;
+  --card: #ffffff;
+  --muted: #f8f9fc;
+  --muted-foreground: #5f667d;
+  --subtle: #4a5068;
+  --faint: #8a90a6;
+  --chip: #eef0f4;
+  --border: #e3e6ef;
+  --input: #cdd2e0;
+  --ring: #c9d0f5;
+
+  --primary: #3446c9;
+  --primary-hover: #26359e;
+  --primary-foreground: #ffffff;
+  --accent: #e8ebfc;
+  --accent-foreground: #2b3aa8;
+
+  --destructive: #c62828;
+  --destructive-soft: #fdecec;
+  --destructive-border: #f0b4b4;
+  --destructive-foreground: #9b1c1c;
+  --success-soft: #e3f5ec;
+  --success-foreground: #1d7148;
+  --warning-soft: #fff6e0;
+  --warning-foreground: #6b4a00;
+
+  --panel: #1e2a78;
+  --panel-card: #2a378f;
+  --panel-card-border: #3b49a3;
+  --panel-foreground: #ffffff;
+  --panel-muted: #c9d0f5;
+  --panel-subtle: #aeb6e8;
+  --panel-accent: #ffffff;
+
+  --alimentos: #9a4a12;
+  --alimentos-soft: #fff1e6;
+  --bebidas: #0e6485;
+  --bebidas-soft: #e6f4fa;
+  --mobiliario: #5b3ba8;
+  --mobiliario-soft: #f1ecfb;
+  --servicios: #a02c63;
+  --servicios-soft: #fce9f1;
+
+  --logo-1: #f08a3c;
+  --logo-2: #2a9bc4;
+  --logo-3: #7c5cd6;
+  --logo-4: #d9477f;
+}
+
+/* Modo oscuro (negro y dorado) */
+.dark {
+  color-scheme: dark;
+
+  --background: #0e0f13;
+  --foreground: #f3f1ec;
+  --card: #17191f;
+  --muted: #1d2027;
+  --muted-foreground: #9a978e;
+  --subtle: #c4c1b8;
+  --faint: #6f6d67;
+  --chip: #262930;
+  --border: #2a2d36;
+  --input: #3a3e4a;
+  --ring: #6b5a1e;
+
+  --primary: #d4af37;
+  --primary-hover: #e3c25a;
+  --primary-foreground: #15130c;
+  --accent: #2a2412;
+  --accent-foreground: #e8c95e;
+
+  --destructive: #f07070;
+  --destructive-soft: #301618;
+  --destructive-border: #5c2a2d;
+  --destructive-foreground: #f7a8a8;
+  --success-soft: #12291f;
+  --success-foreground: #6fd3a0;
+  --warning-soft: #2e2410;
+  --warning-foreground: #f2c66b;
+
+  --panel: #07080a;
+  --panel-card: #15171c;
+  --panel-card-border: #2a2d35;
+  --panel-foreground: #f3f1ec;
+  --panel-muted: #c9c4b5;
+  --panel-subtle: #a8a395;
+  --panel-accent: #e6c65c;
+
+  --alimentos: #f5a765;
+  --alimentos-soft: #33210f;
+  --bebidas: #6cc4e8;
+  --bebidas-soft: #0e2a36;
+  --mobiliario: #b79cf2;
+  --mobiliario-soft: #251c3d;
+  --servicios: #f08bb8;
+  --servicios-soft: #361427;
+
+  --logo-1: #d4af37;
+  --logo-2: #b8932a;
+  --logo-3: #e6c65c;
+  --logo-4: #8c6f1e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle: var(--subtle);
+  --color-faint: var(--faint);
+  --color-chip: var(--chip);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-border: var(--destructive-border);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --color-panel: var(--panel);
+  --color-panel-card: var(--panel-card);
+  --color-panel-card-border: var(--panel-card-border);
+  --color-panel-foreground: var(--panel-foreground);
+  --color-panel-muted: var(--panel-muted);
+  --color-panel-subtle: var(--panel-subtle);
+  --color-panel-accent: var(--panel-accent);
+
+  --color-alimentos: var(--alimentos);
+  --color-alimentos-soft: var(--alimentos-soft);
+  --color-bebidas: var(--bebidas);
+  --color-bebidas-soft: var(--bebidas-soft);
+  --color-mobiliario: var(--mobiliario);
+  --color-mobiliario-soft: var(--mobiliario-soft);
+  --color-servicios: var(--servicios);
+  --color-servicios-soft: var(--servicios-soft);
+
+  --color-logo-1: var(--logo-1);
+  --color-logo-2: var(--logo-2);
+  --color-logo-3: var(--logo-3);
+  --color-logo-4: var(--logo-4);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+}
