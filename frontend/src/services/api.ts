@@ -37,7 +37,9 @@ export async function apiRequest<T>(ruta: string, { method = 'GET', body }: Opci
   const datos = await respuesta.json().catch(() => null)
 
   if (!respuesta.ok) {
-    const mensaje = (datos as { error?: string } | null)?.error ?? 'Ocurrió un error inesperado. Intenta de nuevo.'
+    const { error, detalle } = (datos ?? {}) as { error?: string; detalle?: string }
+    const mensaje =
+      respuesta.status === 400 && detalle ? detalle : (error ?? 'Ocurrió un error inesperado. Intenta de nuevo.')
     throw new ApiError(mensaje, respuesta.status)
   }
 

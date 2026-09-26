@@ -17,6 +17,7 @@ export function ThemeToggle({ variant = 'pill', className }: ThemeToggleProps) {
         type="button"
         role="switch"
         aria-checked={oscuro}
+        aria-label="Modo oscuro"
         onClick={alternarTema}
         className={cn(
           'flex h-11 w-full cursor-pointer items-center gap-3 rounded-[10px] px-3 text-left text-sm font-semibold text-subtle outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring',

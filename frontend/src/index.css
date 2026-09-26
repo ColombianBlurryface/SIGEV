@@ -37,6 +37,9 @@
   --success-foreground: #1d7148;
   --warning-soft: #fff6e0;
   --warning-foreground: #6b4a00;
+  --range-ok: #bfe3cf;
+  --range-buffet: #c9d0f5;
+  --range-out: #f3d6d6;
 
   --panel: #1e2a78;
   --panel-card: #2a378f;
@@ -91,6 +94,9 @@
   --success-foreground: #6fd3a0;
   --warning-soft: #2e2410;
   --warning-foreground: #f2c66b;
+  --range-ok: #1e4d36;
+  --range-buffet: #5a4817;
+  --range-out: #4a2124;
 
   --panel: #07080a;
   --panel-card: #15171c;
@@ -142,6 +148,9 @@
   --color-success-foreground: var(--success-foreground);
   --color-warning-soft: var(--warning-soft);
   --color-warning-foreground: var(--warning-foreground);
+  --color-range-ok: var(--range-ok);
+  --color-range-buffet: var(--range-buffet);
+  --color-range-out: var(--range-out);
 
   --color-panel: var(--panel);
   --color-panel-card: var(--panel-card);

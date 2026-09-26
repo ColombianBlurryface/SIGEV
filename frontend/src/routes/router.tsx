@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/layouts/AppLayout'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { EventosPage } from '@/pages/eventos/EventosPage'
+import { NuevoEventoPage } from '@/pages/eventos/NuevoEventoPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { ProtectedRoute } from './ProtectedRoute'
 import { PublicOnlyRoute } from './PublicOnlyRoute'
@@ -17,7 +18,10 @@ export const router = createBrowserRouter([
     children: [
       {
         element: <AppLayout />,
-        children: [{ path: '/eventos', element: <EventosPage /> }],
+        children: [
+          { path: '/eventos', element: <EventosPage /> },
+          { path: '/eventos/nuevo', element: <NuevoEventoPage /> },
+        ],
       },
     ],
   },

@@ -13,7 +13,7 @@ interface ItemNavegacion {
 
 const navegacion: ItemNavegacion[] = [
   { etiqueta: 'Eventos', icono: CalendarDays, ruta: '/eventos' },
-  { etiqueta: 'Nuevo evento', icono: CirclePlus },
+  { etiqueta: 'Nuevo evento', icono: CirclePlus, ruta: '/eventos/nuevo' },
   { etiqueta: 'Catálogo', icono: Package },
 ]
 
@@ -38,6 +38,7 @@ export function Sidebar() {
             <NavLink
               key={etiqueta}
               to={ruta}
+              end
               className={({ isActive }) =>
                 cn(
                   claseItem,
