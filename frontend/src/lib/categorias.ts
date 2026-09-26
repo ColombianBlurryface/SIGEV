@@ -5,6 +5,22 @@ export type Categoria = 'alimentos' | 'bebidas' | 'mobiliario' | 'servicios'
 
 export const TIPO_MOBILIARIO = 'mobiliario'
 
+export const TIPOS_SERVICIO = [
+  { valor: 'dj', etiqueta: 'DJ' },
+  { valor: 'musica_en_vivo', etiqueta: 'Música en vivo' },
+  { valor: 'sonido', etiqueta: 'Sonido' },
+  { valor: 'iluminacion', etiqueta: 'Iluminación' },
+  { valor: 'entretenimiento', etiqueta: 'Entretenimiento' },
+  { valor: 'otro', etiqueta: 'Otro' },
+] as const
+
+export function etiquetaServicio(tipo: string) {
+  const conocido = TIPOS_SERVICIO.find((t) => t.valor === tipo)
+  if (conocido) return conocido.etiqueta
+  const limpio = tipo.replace(/_/g, ' ')
+  return limpio.charAt(0).toUpperCase() + limpio.slice(1)
+}
+
 interface ConfigCategoria {
   etiqueta: string
   icono: LucideIcon
