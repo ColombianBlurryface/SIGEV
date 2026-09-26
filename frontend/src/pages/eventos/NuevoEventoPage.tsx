@@ -12,7 +12,7 @@ import { formatearFecha, formatearNumero } from '@/lib/formato'
 import { validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
 import { ApiError } from '@/services/api'
 import { eventosService } from '@/services/eventosService'
-import type { RequerimientosEvento } from '@/types/registro'
+import { REQUERIMIENTOS_VACIOS, type RequerimientosEvento } from '@/types/registro'
 
 const VALORES_INICIALES: ValoresEvento = {
   nombre: '',
@@ -39,7 +39,7 @@ export function NuevoEventoPage() {
   const navigate = useNavigate()
   const [paso, setPaso] = useState<Paso>(1)
   const [valores, setValores] = useState<ValoresEvento>(VALORES_INICIALES)
-  const [requerimientos, setRequerimientos] = useState<RequerimientosEvento>({ alimentos: [] })
+  const [requerimientos, setRequerimientos] = useState<RequerimientosEvento>(REQUERIMIENTOS_VACIOS)
   const [intentoAvanzar, setIntentoAvanzar] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [errorServidor, setErrorServidor] = useState<string | null>(null)
@@ -72,11 +72,14 @@ export function NuevoEventoPage() {
         duracion_horas: Number(valores.duracion),
         asistentes: Number(valores.asistentes),
         observaciones_generales: valores.observaciones.trim() || undefined,
-        productos: requerimientos.alimentos.map((a) => ({
-          producto_id: a.producto.id,
-          porcion_por_persona: a.porcion,
-          componentes_menu: a.componentes || undefined,
-        })),
+        productos: [
+          ...requerimientos.alimentos.map((a) => ({
+            producto_id: a.producto.id,
+            porcion_por_persona: a.porcion,
+            componentes_menu: a.componentes || undefined,
+          })),
+          ...requerimientos.bebidas.map((b) => ({ producto_id: b.producto.id, porcion_por_persona: b.porcion })),
+        ],
       })
       navigate(`/eventos?evento=${evento.id}`, {
         state: { aviso: `Evento «${evento.nombre_evento}» registrado en planificación.` },

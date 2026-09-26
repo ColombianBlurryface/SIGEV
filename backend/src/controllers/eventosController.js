@@ -1,6 +1,9 @@
 // backend/src/controllers/eventosController.js
 const pool = require('../config/db');
 
+// Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
+const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
+
 /**
  * Registra un evento, sus productos de catálogo calculados con 10% de margen (RN-09, RN-11)
  * y los servicios adicionales opcionales sin cálculo (RF-06, RF-47, RF-48).
@@ -65,12 +68,12 @@ const crearEvento = async (req, res) => {
       } else if (prod.tipo_calculo === 'unidad_persona') {
         // Ej: Cervezas individuales -> asistentes * unidades_persona. Margen 10% y redondeo hacia arriba.
         cantidadNeta = asistentes * porcion;
-        cantidadConMargen = Math.ceil(cantidadNeta * 1.10);
+        cantidadConMargen = redondearArriba(cantidadNeta * 1.10);
       } else if (prod.tipo_calculo === 'botella_compartida') {
         // Ej: Vino/Whisky -> Porciones por botella = volumen / tamaño copa. Margen 10% y ceil.
         const porcionesPorBotella = Number(prod.volumen_botella_ml) / Number(prod.tamano_porcion_ml);
         cantidadNeta = asistentes / porcionesPorBotella;
-        cantidadConMargen = Math.ceil(cantidadNeta * 1.10);
+        cantidadConMargen = redondearArriba(cantidadNeta * 1.10);
         unidadEntrega = 'botellas';
       }
 

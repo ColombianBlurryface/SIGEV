@@ -18,6 +18,11 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
       detalle: `${requerimientos.alimentos.length} ${requerimientos.alimentos.length === 1 ? 'producto' : 'productos'}`,
       valor: formatearMoneda(totales.alimentos),
     },
+    {
+      categoria: 'bebidas',
+      detalle: `${requerimientos.bebidas.length} ${requerimientos.bebidas.length === 1 ? 'producto' : 'productos'}`,
+      valor: formatearMoneda(totales.bebidas),
+    },
   ]
 
   return (

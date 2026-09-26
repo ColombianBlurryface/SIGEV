@@ -1,10 +1,12 @@
 import { calcularProducto } from '@/lib/calculos'
 import type { RequerimientosEvento } from '@/types/registro'
+import type { ProductoCatalogo } from '@/types/catalogo'
+
+const sumarCostos = (items: { producto: ProductoCatalogo; porcion: number }[], asistentes: number) =>
+  items.reduce((suma, item) => suma + calcularProducto(item.producto, item.porcion, asistentes).costo, 0)
 
 export function calcularTotales(requerimientos: RequerimientosEvento, asistentes: number) {
-  const alimentos = requerimientos.alimentos.reduce(
-    (suma, a) => suma + calcularProducto(a.producto, a.porcion, asistentes).costo,
-    0,
-  )
-  return { alimentos, total: alimentos }
+  const alimentos = sumarCostos(requerimientos.alimentos, asistentes)
+  const bebidas = sumarCostos(requerimientos.bebidas, asistentes)
+  return { alimentos, bebidas, total: alimentos + bebidas }
 }
