@@ -86,3 +86,14 @@ CREATE TABLE IF NOT EXISTS requerimientos_adicionales (
     notas TEXT,
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 6. Usuarios del sistema (login únicamente; el alta se hace directo en BD, sin registro público)
+CREATE TABLE IF NOT EXISTS usuarios (
+    id SERIAL PRIMARY KEY,
+    nombre_completo VARCHAR(150) NOT NULL,
+    usuario VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    rol VARCHAR(30) NOT NULL DEFAULT 'operador',
+    activo BOOLEAN NOT NULL DEFAULT true,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
