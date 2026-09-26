@@ -22,6 +22,13 @@ export interface ProductoEventoPayload {
   componentes_menu?: string
 }
 
+export interface RequerimientoAdicionalPayload {
+  tipo: string
+  descripcion: string
+  cantidad?: number
+  notas?: string
+}
+
 export interface NuevoEvento {
   nombre_evento: string
   fecha_evento: string
@@ -30,6 +37,7 @@ export interface NuevoEvento {
   asistentes: number
   observaciones_generales?: string
   productos?: ProductoEventoPayload[]
+  servicios_adicionales?: RequerimientoAdicionalPayload[]
 }
 
 export interface CrearEventoResponse {

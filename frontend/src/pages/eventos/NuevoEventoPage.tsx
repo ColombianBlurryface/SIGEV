@@ -8,6 +8,7 @@ import { PasosRegistro, type Paso } from '@/components/eventos/registro/PasosReg
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
+import { TIPO_MOBILIARIO } from '@/lib/categorias'
 import { formatearFecha, formatearNumero } from '@/lib/formato'
 import { validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
 import { ApiError } from '@/services/api'
@@ -80,6 +81,12 @@ export function NuevoEventoPage() {
           })),
           ...requerimientos.bebidas.map((b) => ({ producto_id: b.producto.id, porcion_por_persona: b.porcion })),
         ],
+        servicios_adicionales: requerimientos.mobiliario.map((m) => ({
+          tipo: TIPO_MOBILIARIO,
+          descripcion: m.elemento,
+          cantidad: m.cantidad,
+          notas: m.referencia || undefined,
+        })),
       })
       navigate(`/eventos?evento=${evento.id}`, {
         state: { aviso: `Evento «${evento.nombre_evento}» registrado en planificación.` },

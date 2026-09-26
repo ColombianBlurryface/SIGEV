@@ -3,6 +3,8 @@ import type { ClasificacionProducto } from '@/types/evento'
 
 export type Categoria = 'alimentos' | 'bebidas' | 'mobiliario' | 'servicios'
 
+export const TIPO_MOBILIARIO = 'mobiliario'
+
 interface ConfigCategoria {
   etiqueta: string
   icono: LucideIcon
