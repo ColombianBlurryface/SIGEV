@@ -13,7 +13,7 @@ export const eventosService = {
   crear(evento: NuevoEvento) {
     return apiRequest<CrearEventoResponse>('/eventos', {
       method: 'POST',
-      body: { ...evento, productos: [], servicios_adicionales: [] },
+      body: { productos: [], servicios_adicionales: [], ...evento },
     })
   },
 }

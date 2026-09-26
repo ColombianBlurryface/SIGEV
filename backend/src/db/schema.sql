@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS evento_productos (
     CONSTRAINT uq_evento_producto UNIQUE (evento_id, producto_id)
 );
 
+-- Componentes del menú por alimento (HU-02). ALTER para bases ya creadas.
+ALTER TABLE evento_productos ADD COLUMN IF NOT EXISTS componentes_menu TEXT;
+
 -- 5. Servicios Opcionales sin Cálculo Automático (RF-06, RF-47, RF-48)
 CREATE TABLE IF NOT EXISTS requerimientos_adicionales (
     id SERIAL PRIMARY KEY,
