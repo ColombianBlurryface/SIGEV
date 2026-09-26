@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { CATEGORIAS, type Categoria } from '@/lib/categorias'
 import { cn } from '@/lib/utils'
-import type { AlimentoAgregado, RequerimientosEvento } from '@/types/registro'
+import type { AlimentoAgregado, BebidaAgregada, RequerimientosEvento } from '@/types/registro'
 import { PestanaAlimentos } from './PestanaAlimentos'
+import { PestanaBebidas } from './PestanaBebidas'
 import { ResumenRequerimientos } from './ResumenRequerimientos'
 
 const PESTANAS: { categoria: Categoria; disponible: boolean }[] = [
   { categoria: 'alimentos', disponible: true },
-  { categoria: 'bebidas', disponible: false },
+  { categoria: 'bebidas', disponible: true },
   { categoria: 'mobiliario', disponible: false },
   { categoria: 'servicios', disponible: false },
 ]
@@ -27,12 +28,20 @@ interface PasoRequerimientosProps {
 
 export function PasoRequerimientos({ asistentes, requerimientos, onCambio }: PasoRequerimientosProps) {
   const [activa, setActiva] = useState<Categoria>('alimentos')
-  const conteo: Record<Categoria, number> = { alimentos: requerimientos.alimentos.length, bebidas: 0, mobiliario: 0, servicios: 0 }
+  const conteo: Record<Categoria, number> = {
+    alimentos: requerimientos.alimentos.length,
+    bebidas: requerimientos.bebidas.length,
+    mobiliario: 0,
+    servicios: 0,
+  }
 
   const agregarAlimento = (alimento: AlimentoAgregado) =>
     onCambio({ ...requerimientos, alimentos: [...requerimientos.alimentos, alimento] })
   const quitarAlimento = (productoId: number) =>
     onCambio({ ...requerimientos, alimentos: requerimientos.alimentos.filter((a) => a.producto.id !== productoId) })
+  const agregarBebida = (bebida: BebidaAgregada) => onCambio({ ...requerimientos, bebidas: [...requerimientos.bebidas, bebida] })
+  const quitarBebida = (productoId: number) =>
+    onCambio({ ...requerimientos, bebidas: requerimientos.bebidas.filter((b) => b.producto.id !== productoId) })
 
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -80,6 +89,14 @@ export function PasoRequerimientos({ asistentes, requerimientos, onCambio }: Pas
               alimentos={requerimientos.alimentos}
               onAgregar={agregarAlimento}
               onQuitar={quitarAlimento}
+            />
+          )}
+          {activa === 'bebidas' && (
+            <PestanaBebidas
+              asistentes={asistentes}
+              bebidas={requerimientos.bebidas}
+              onAgregar={agregarBebida}
+              onQuitar={quitarBebida}
             />
           )}
         </div>
