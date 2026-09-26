@@ -78,8 +78,8 @@ const crearEvento = async (req, res) => {
 
       const queryProdEvento = `
         INSERT INTO evento_productos 
-          (evento_id, producto_id, porcion_por_persona, cantidad_neta, cantidad_con_margen, unidad_entrega, costo_estimado)
-        VALUES ($1, $2, $3, $4, $5, $6, $7);
+          (evento_id, producto_id, porcion_por_persona, cantidad_neta, cantidad_con_margen, unidad_entrega, costo_estimado, componentes_menu)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
       `;
       await client.query(queryProdEvento, [
         nuevoEvento.id,
@@ -88,7 +88,8 @@ const crearEvento = async (req, res) => {
         cantidadNeta,
         cantidadConMargen,
         unidadEntrega,
-        costoEstimado
+        costoEstimado,
+        item.componentes_menu || null
       ]);
     }
 
@@ -177,6 +178,7 @@ const obtenerDetalleEvento = async (req, res) => {
         cp.nombre,
         cp.clasificacion,
         ep.porcion_por_persona,
+        ep.componentes_menu,
         ep.cantidad_neta,
         ep.cantidad_con_margen,
         ep.unidad_entrega,

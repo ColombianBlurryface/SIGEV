@@ -13,6 +13,7 @@ import { BuffetBadge, EstadoBadge } from './EstadoBadge'
 interface ItemRequerimiento {
   id: string
   nombre: string
+  nota?: string
   cantidad: string
   costo: string | null
 }
@@ -24,6 +25,7 @@ function agruparRequerimientos(detalle: EventoDetalle) {
     grupos[categoriaDe(producto.clasificacion)].push({
       id: `p-${producto.id}`,
       nombre: producto.nombre,
+      nota: producto.componentes_menu ?? undefined,
       cantidad: `${formatearNumero(producto.cantidad_con_margen)} ${producto.unidad_entrega}`,
       costo: formatearMoneda(producto.costo_estimado),
     })
@@ -122,8 +124,15 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
                   <ul className="flex flex-col gap-1">
                     {requerimientos.grupos[categoria].map((item) => (
                       <li key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_88px] gap-2 text-[13px]">
-                        <span className="truncate" title={item.nombre}>
-                          {item.nombre}
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate" title={item.nombre}>
+                            {item.nombre}
+                          </span>
+                          {item.nota && (
+                            <span className="truncate text-xs text-muted-foreground" title={item.nota}>
+                              {item.nota}
+                            </span>
+                          )}
                         </span>
                         <span className="text-right font-semibold whitespace-nowrap">{item.cantidad}</span>
                         <span className="text-right text-subtle">{item.costo ?? ''}</span>

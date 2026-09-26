@@ -16,6 +16,12 @@ export interface Evento {
   creado_en: string
 }
 
+export interface ProductoEventoPayload {
+  producto_id: number
+  porcion_por_persona: number
+  componentes_menu?: string
+}
+
 export interface NuevoEvento {
   nombre_evento: string
   fecha_evento: string
@@ -23,6 +29,7 @@ export interface NuevoEvento {
   duracion_horas: number
   asistentes: number
   observaciones_generales?: string
+  productos?: ProductoEventoPayload[]
 }
 
 export interface CrearEventoResponse {
@@ -46,6 +53,7 @@ export interface ProductoCalculado {
   unidad_entrega: string
   precio_unitario: string
   costo_estimado: string
+  componentes_menu: string | null
 }
 
 export interface ServicioAdicional {
