@@ -60,7 +60,9 @@ export function NuevoEventoPage() {
         asistentes: Number(valores.asistentes),
         observaciones_generales: valores.observaciones.trim() || undefined,
       })
-      navigate('/eventos', { state: { aviso: `Evento «${creado.nombre_evento}» registrado en planificación.` } })
+      navigate(`/eventos?evento=${creado.id}`, {
+        state: { aviso: `Evento «${creado.nombre_evento}» registrado en planificación.` },
+      })
     } catch (err) {
       setErrorServidor(err instanceof ApiError ? err.message : 'No fue posible registrar el evento. Intenta de nuevo.')
       setEnviando(false)
