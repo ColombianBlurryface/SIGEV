@@ -2,7 +2,7 @@ import { Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { calcularProducto } from '@/lib/calculos'
-import { CATEGORIAS, type Categoria } from '@/lib/categorias'
+import { CATEGORIAS, etiquetaServicio, type Categoria } from '@/lib/categorias'
 import { formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
 import { validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
 import { cn } from '@/lib/utils'
@@ -60,6 +60,15 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
           nombre: m.elemento,
           nota: m.referencia || undefined,
           cantidad: `${formatearNumero(m.cantidad)} und`,
+        })),
+      },
+      {
+        categoria: 'servicios',
+        lineas: requerimientos.servicios.map((sv, indice) => ({
+          id: indice,
+          nombre: `${etiquetaServicio(sv.tipo)} · ${sv.descripcion}`,
+          nota: sv.notas || undefined,
+          cantidad: sv.cantidad === null ? '—' : formatearNumero(sv.cantidad),
         })),
       },
     ] satisfies SeccionResumen[]

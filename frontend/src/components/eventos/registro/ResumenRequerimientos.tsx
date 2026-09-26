@@ -29,6 +29,11 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
       detalle: `${requerimientos.mobiliario.length} ${requerimientos.mobiliario.length === 1 ? 'elemento' : 'elementos'} · ${formatearNumero(unidadesMobiliario)} und`,
       valor: 'Aparte',
     },
+    {
+      categoria: 'servicios',
+      detalle: `${requerimientos.servicios.length} ${requerimientos.servicios.length === 1 ? 'servicio' : 'servicios'}`,
+      valor: 'Aparte',
+    },
   ]
 
   return (
@@ -57,7 +62,7 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
       <div className="flex flex-col gap-1 border-t border-border pt-3.5">
         <span className="text-[13px] text-subtle">Total estimado</span>
         <span className="font-display text-3xl font-extrabold tracking-tight">{formatearMoneda(totales.total)}</span>
-        <span className="text-[12.5px] leading-relaxed text-muted-foreground">Alimentos y bebidas. El mobiliario se cotiza aparte.</span>
+        <span className="text-[12.5px] leading-relaxed text-muted-foreground">Alimentos y bebidas. El mobiliario y los servicios se cotizan aparte.</span>
       </div>
     </Card>
   )

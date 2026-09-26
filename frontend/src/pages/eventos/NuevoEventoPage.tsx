@@ -81,12 +81,20 @@ export function NuevoEventoPage() {
           })),
           ...requerimientos.bebidas.map((b) => ({ producto_id: b.producto.id, porcion_por_persona: b.porcion })),
         ],
-        servicios_adicionales: requerimientos.mobiliario.map((m) => ({
-          tipo: TIPO_MOBILIARIO,
-          descripcion: m.elemento,
-          cantidad: m.cantidad,
-          notas: m.referencia || undefined,
-        })),
+        servicios_adicionales: [
+          ...requerimientos.mobiliario.map((m) => ({
+            tipo: TIPO_MOBILIARIO,
+            descripcion: m.elemento,
+            cantidad: m.cantidad,
+            notas: m.referencia || undefined,
+          })),
+          ...requerimientos.servicios.map((s) => ({
+            tipo: s.tipo,
+            descripcion: s.descripcion,
+            cantidad: s.cantidad ?? undefined,
+            notas: s.notas || undefined,
+          })),
+        ],
       })
       navigate(`/eventos?evento=${evento.id}`, {
         state: { aviso: `Evento «${evento.nombre_evento}» registrado en planificación.` },

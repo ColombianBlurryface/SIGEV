@@ -29,10 +29,19 @@ export interface MobiliarioAgregado {
   cantidad: number
 }
 
+export interface ServicioAgregado {
+  id: string
+  tipo: string
+  descripcion: string
+  cantidad: number | null
+  notas: string
+}
+
 export interface RequerimientosEvento {
   alimentos: AlimentoAgregado[]
   bebidas: BebidaAgregada[]
   mobiliario: MobiliarioAgregado[]
+  servicios: ServicioAgregado[]
 }
 
-export const REQUERIMIENTOS_VACIOS: RequerimientosEvento = { alimentos: [], bebidas: [], mobiliario: [] }
+export const REQUERIMIENTOS_VACIOS: RequerimientosEvento = { alimentos: [], bebidas: [], mobiliario: [], servicios: [] }
