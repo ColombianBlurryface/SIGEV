@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useEventoDetalle } from '@/hooks/useEventoDetalle'
-import { CATEGORIAS, categoriaDe, type Categoria } from '@/lib/categorias'
+import { CATEGORIAS, categoriaDe, TIPO_MOBILIARIO, type Categoria } from '@/lib/categorias'
 import { capitalizar, formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
 import { cn } from '@/lib/utils'
 import type { EventoDetalle, EventoListado } from '@/types/evento'
@@ -32,10 +32,13 @@ function agruparRequerimientos(detalle: EventoDetalle) {
   }
 
   for (const servicio of detalle.servicios_adicionales) {
-    grupos.servicios.push({
+    const esMobiliario = servicio.tipo === TIPO_MOBILIARIO
+    grupos[esMobiliario ? 'mobiliario' : 'servicios'].push({
       id: `s-${servicio.id}`,
       nombre: servicio.descripcion || capitalizar(servicio.tipo),
-      cantidad: servicio.cantidad === null ? '—' : formatearNumero(servicio.cantidad),
+      nota: servicio.notas ?? undefined,
+      cantidad:
+        servicio.cantidad === null ? '—' : `${formatearNumero(servicio.cantidad)}${esMobiliario ? ' und' : ''}`,
       costo: null,
     })
   }

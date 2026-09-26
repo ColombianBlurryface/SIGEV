@@ -12,6 +12,7 @@ interface ResumenRequerimientosProps {
 
 export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenRequerimientosProps) {
   const totales = calcularTotales(requerimientos, asistentes)
+  const unidadesMobiliario = requerimientos.mobiliario.reduce((suma, m) => suma + m.cantidad, 0)
   const filas: { categoria: Categoria; detalle: string; valor: string }[] = [
     {
       categoria: 'alimentos',
@@ -22,6 +23,11 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
       categoria: 'bebidas',
       detalle: `${requerimientos.bebidas.length} ${requerimientos.bebidas.length === 1 ? 'producto' : 'productos'}`,
       valor: formatearMoneda(totales.bebidas),
+    },
+    {
+      categoria: 'mobiliario',
+      detalle: `${requerimientos.mobiliario.length} ${requerimientos.mobiliario.length === 1 ? 'elemento' : 'elementos'} · ${formatearNumero(unidadesMobiliario)} und`,
+      valor: 'Aparte',
     },
   ]
 
@@ -43,7 +49,7 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
                 <span className="text-sm font-bold">{etiqueta}</span>
                 <span className="text-xs text-muted-foreground">{detalle}</span>
               </span>
-              <span className="text-sm font-semibold">{valor}</span>
+              <span className={cn('text-sm', valor === 'Aparte' ? 'text-muted-foreground' : 'font-semibold')}>{valor}</span>
             </li>
           )
         })}
@@ -51,6 +57,7 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
       <div className="flex flex-col gap-1 border-t border-border pt-3.5">
         <span className="text-[13px] text-subtle">Total estimado</span>
         <span className="font-display text-3xl font-extrabold tracking-tight">{formatearMoneda(totales.total)}</span>
+        <span className="text-[12.5px] leading-relaxed text-muted-foreground">Alimentos y bebidas. El mobiliario se cotiza aparte.</span>
       </div>
     </Card>
   )

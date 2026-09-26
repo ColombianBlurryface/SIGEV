@@ -53,6 +53,15 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
         total: totales.alimentos,
       },
       { categoria: 'bebidas', lineas: requerimientos.bebidas.map((b) => lineaProducto(b)), total: totales.bebidas },
+      {
+        categoria: 'mobiliario',
+        lineas: requerimientos.mobiliario.map((m, indice) => ({
+          id: indice,
+          nombre: m.elemento,
+          nota: m.referencia || undefined,
+          cantidad: `${formatearNumero(m.cantidad)} und`,
+        })),
+      },
     ] satisfies SeccionResumen[]
   ).filter((s) => s.lineas.length > 0)
 
@@ -123,7 +132,11 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
                         <Icono className="size-[15px]" />
                       </span>
                       <span className="flex-1 text-sm font-bold">{etiqueta}</span>
-                      {total !== undefined && <span className="text-[13.5px] font-bold">{formatearMoneda(total)}</span>}
+                      {total !== undefined ? (
+                        <span className="text-[13.5px] font-bold">{formatearMoneda(total)}</span>
+                      ) : (
+                        <span className="text-[12.5px] text-muted-foreground">Cotización aparte</span>
+                      )}
                     </div>
                     <ul className="flex flex-col gap-1.5">
                       {lineas.map((linea) => (
