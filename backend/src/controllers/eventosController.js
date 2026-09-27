@@ -2,7 +2,7 @@
 const pool = require('../config/db');
 
 /**
- * Registra un evento, sus productos de catálogo calculados con 10% de margen (RN-09, RN-11)
+ * aqui  registro un evento, sus productos de catálogo calculados con 10% de margen (RN-09, RN-11)
  * y los servicios adicionales opcionales sin cálculo (RF-06, RF-47, RF-48).
  */
 const crearEvento = async (req, res) => {
