@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const eventosRoutes = require('./routes/eventosRoutes');
 const catalogoRoutes = require('./routes/catalogoRoutes'); // <-- 1. Importar rutas del catálogo
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 
@@ -11,6 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 // Rutas de la API
+app.use('/api/auth', authRoutes);
 app.use('/api/eventos', eventosRoutes);
 app.use('/api/catalogo', catalogoRoutes); // <-- 2. Conectar endpoint del catálogo
 
