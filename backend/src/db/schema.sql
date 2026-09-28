@@ -100,3 +100,9 @@ CREATE TABLE IF NOT EXISTS usuarios (
     activo BOOLEAN NOT NULL DEFAULT true,
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+-- Extensión de tabla para cubrir HU-08, HU-09, HU-10, HU-12 y HU-13
+ALTER TABLE catalogo_productos
+ADD COLUMN categoria_inventario VARCHAR(50) CHECK (categoria_inventario IN ('Mobiliario', 'Bar/Bebidas', 'Bebidas de Coctelería')),
+ADD COLUMN cantidad_propia INT DEFAULT 0,
+ADD COLUMN cantidad_danada INT DEFAULT 0,
+ADD COLUMN es_propio BOOLEAN DEFAULT TRUE;
