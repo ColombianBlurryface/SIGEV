@@ -1,3 +1,7 @@
+/**
+ * Página de Inventario (HU-08 y HU-09): formulario para registrar elementos o adquisiciones,
+ * buscador, filtros por categoría, tabla de elementos e historial de movimientos.
+ */
 import { RotateCw, Search } from 'lucide-react'
 import { useState } from 'react'
 import { FormularioAdquisicion } from '@/components/inventario/FormularioAdquisicion'
@@ -26,6 +30,8 @@ export function InventarioPage() {
   const [filtro, setFiltro] = useState<Filtro>('todas')
   const [busqueda, setBusqueda] = useState('')
   const [modo, setModo] = useState<Modo>('elemento')
+  // Elemento elegido con el botón "Adquisición" de una fila. "version" cambia en cada clic para que
+  // el formulario se reinicie aunque se elija el mismo elemento dos veces.
   const [preseleccion, setPreseleccion] = useState<{ id: number; version: number } | null>(null)
   const [elementoHistorial, setElementoHistorial] = useState<number | null>(null)
   const [limiteHistorial, setLimiteHistorial] = useState(MOVIMIENTOS_POR_PAGINA)
@@ -51,6 +57,7 @@ export function InventarioPage() {
     document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // Después de registrar, ajustar o adquirir: se actualiza la fila en pantalla y se recarga el historial
   function cambioDeInventario(elemento: ElementoInventario) {
     guardarLocal(elemento)
     historial.recargar()
@@ -106,6 +113,7 @@ export function InventarioPage() {
               </p>
             </div>
 
+            {/* La "key" hace que React cree un formulario nuevo al cambiar la preselección */}
             {modo === 'elemento' ? (
               <FormularioElemento onRegistrado={cambioDeInventario} />
             ) : (

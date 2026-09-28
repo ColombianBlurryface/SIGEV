@@ -1,3 +1,6 @@
+/**
+ * Llamadas a la API de autenticación.
+ */
 import type { Credenciales, LoginResponse } from '@/types/auth'
 import { apiRequest } from './api'
 

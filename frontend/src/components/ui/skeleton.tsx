@@ -1,3 +1,6 @@
+/**
+ * Bloque gris animado que se muestra mientras se cargan los datos.
+ */
 import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 

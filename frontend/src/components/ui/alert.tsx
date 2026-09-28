@@ -1,3 +1,7 @@
+/**
+ * Mensaje destacado de información, éxito, advertencia o error, con su ícono.
+ * Los errores usan role="alert" para que los lectores de pantalla los anuncien.
+ */
 import { cva, type VariantProps } from 'class-variance-authority'
 import { CircleAlert, CircleCheck, Info, TriangleAlert } from 'lucide-react'
 import type { ComponentProps } from 'react'

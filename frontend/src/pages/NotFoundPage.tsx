@@ -1,3 +1,6 @@
+/**
+ * Página que se muestra cuando la dirección no existe (error 404).
+ */
 import { Link } from 'react-router-dom'
 import { buttonVariants } from '@/components/ui/button-variants'
 

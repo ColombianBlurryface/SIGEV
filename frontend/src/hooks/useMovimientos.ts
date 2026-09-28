@@ -1,3 +1,7 @@
+/**
+ * Carga el historial de movimientos del inventario, filtrado por elemento y con un límite
+ * que aumenta con el botón "Ver más".
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'

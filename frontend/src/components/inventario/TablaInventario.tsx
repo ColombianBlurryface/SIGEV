@@ -1,3 +1,8 @@
+/**
+ * Tabla de elementos del inventario. Permite actualizar la cantidad en la misma fila (HU-08)
+ * y abrir el formulario de adquisición del elemento (HU-09).
+ * En pantallas medianas cada fila se muestra como tarjeta.
+ */
 import { Check, LoaderCircle, PackagePlus, Pencil, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Alert } from '@/components/ui/alert'
@@ -21,6 +26,7 @@ interface TablaInventarioProps {
 }
 
 export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdquirir }: TablaInventarioProps) {
+  // Solo una fila se edita a la vez: la del id guardado aquí
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [valor, setValor] = useState('')
   const [motivo, setMotivo] = useState('')
@@ -39,6 +45,7 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
     setError(null)
   }
 
+  // Guarda la nueva cantidad; el backend registra la diferencia como un "ajuste" en el historial
   async function guardar(evento: FormEvent<HTMLFormElement>, elemento: ElementoInventario) {
     evento.preventDefault()
     const cantidad = Number(valor)

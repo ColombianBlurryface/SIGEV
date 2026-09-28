@@ -1,3 +1,9 @@
+/**
+ * Middleware que valida los datos básicos antes de registrar un evento.
+ *
+ * Se ejecuta antes de crearEvento (ver routes/eventosRoutes.js). Si algún dato
+ * no cumple las reglas, responde 400 con el motivo y la petición no continúa.
+ */
 const validarCreacionEvento = (req, res, next) => {
   const { nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes } = req.body;
 
@@ -9,7 +15,7 @@ const validarCreacionEvento = (req, res, next) => {
     });
   }
 
-  // Aqui hago la validación obligatoria: rango de 40 a 600 asistentes (RF-08, RN-01)
+  // Regla de negocio: un evento debe tener entre 40 y 600 asistentes (RF-08, RN-01)
   const cantAsistentes = parseInt(asistentes, 10);
   if (isNaN(cantAsistentes) || cantAsistentes < 40 || cantAsistentes > 600) {
     return res.status(400).json({

@@ -1,3 +1,7 @@
+/**
+ * Tarjetas de resumen en la página de Eventos: próximo evento, eventos en planificación
+ * y confirmados. Se calculan a partir de la lista de eventos ya cargada.
+ */
 import { Card } from '@/components/ui/card'
 import { formatearFechaCorta, formatearNumero, hoyIso } from '@/lib/formato'
 import type { EventoListado } from '@/types/evento'

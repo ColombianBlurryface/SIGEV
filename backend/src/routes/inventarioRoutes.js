@@ -1,3 +1,9 @@
+/**
+ * Rutas del inventario propio (HU-08) y de sus movimientos (HU-09).
+ *
+ * Importante: /movimientos se declara antes de las rutas con /:id para que
+ * Express no confunda la palabra "movimientos" con un id.
+ */
 const express = require('express');
 const router = express.Router();
 const inventarioController = require('../controllers/inventarioController');

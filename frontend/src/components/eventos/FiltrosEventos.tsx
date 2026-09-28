@@ -1,3 +1,6 @@
+/**
+ * Buscador y botones para filtrar la lista de eventos por estado.
+ */
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ESTADOS_EVENTO, ORDEN_ESTADOS } from '@/lib/estadosEvento'

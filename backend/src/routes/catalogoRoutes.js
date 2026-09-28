@@ -1,4 +1,9 @@
-// backend/src/routes/catalogoRoutes.js
+/**
+ * Rutas del catálogo de productos.
+ *
+ * El catálogo contiene los alimentos y bebidas con los que el sistema calcula
+ * las cantidades de un evento. Los elementos de inventario no aparecen aquí.
+ */
 const { Router } = require('express');
 const {
   obtenerCatalogo,
@@ -7,10 +12,10 @@ const {
 
 const router = Router();
 
-// GET /api/catalogo -> Listar todos o filtrar (?clasificacion=alimento)
+// GET /api/catalogo -> lista todos los productos, o filtra con ?clasificacion=alimento
 router.get('/', obtenerCatalogo);
 
-// GET /api/catalogo/:id -> Obtener un producto puntual
+// GET /api/catalogo/:id -> devuelve un producto puntual
 router.get('/:id', obtenerProductoPorId);
 
 module.exports = router;

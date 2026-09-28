@@ -1,3 +1,7 @@
+/**
+ * Panel con el detalle de un evento (HU-06): datos generales y requerimientos agrupados
+ * por categoría, con cantidades y el costo estimado total.
+ */
 import { RotateCw } from 'lucide-react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -18,6 +22,11 @@ interface ItemRequerimiento {
   costo: string | null
 }
 
+/**
+ * Ordena los requerimientos del evento en las cuatro categorías que se muestran en pantalla.
+ * - Los productos del catálogo van a Alimentos o Bebidas según su clasificación.
+ * - Los requerimientos adicionales van a Mobiliario (tipo "mobiliario") o a Servicios.
+ */
 function agruparRequerimientos(detalle: EventoDetalle) {
   const grupos: Record<Categoria, ItemRequerimiento[]> = { alimentos: [], bebidas: [], mobiliario: [], servicios: [] }
 
@@ -45,6 +54,7 @@ function agruparRequerimientos(detalle: EventoDetalle) {
     })
   }
 
+  // El costo estimado solo incluye alimentos y bebidas; mobiliario y servicios se cotizan aparte
   const total = detalle.productos_calculados.reduce((suma, p) => suma + Number(p.costo_estimado || 0), 0)
   return { grupos, total, vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0 }
 }

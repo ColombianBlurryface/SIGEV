@@ -1,3 +1,7 @@
+/**
+ * Tabla de eventos. Cada fila es un botón: al hacer clic se selecciona el evento
+ * y se muestra su detalle en el panel lateral.
+ */
 import { ChevronRight } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { ESTADOS_EVENTO } from '@/lib/estadosEvento'

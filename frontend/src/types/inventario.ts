@@ -1,3 +1,6 @@
+/**
+ * Tipos del inventario propio (HU-08) y de su historial de movimientos (HU-09).
+ */
 export const CATEGORIAS_INVENTARIO = ['Mobiliario', 'Bar/Bebidas', 'Bebidas de Coctelería'] as const
 
 export type CategoriaInventario = (typeof CATEGORIAS_INVENTARIO)[number]

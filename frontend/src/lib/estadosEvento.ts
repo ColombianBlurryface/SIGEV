@@ -1,3 +1,6 @@
+/**
+ * Estados posibles de un evento con su nombre visible y sus colores.
+ */
 import type { EstadoEvento } from '@/types/evento'
 
 interface ConfigEstado {

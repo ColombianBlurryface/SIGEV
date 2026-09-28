@@ -1,3 +1,6 @@
+/**
+ * Ícono y colores de cada categoría del inventario.
+ */
 import { Armchair, Martini, Wine, type LucideIcon } from 'lucide-react'
 import type { CategoriaInventario } from '@/types/inventario'
 

@@ -1,3 +1,6 @@
+/**
+ * Tipos de los productos del catálogo que devuelve GET /api/catalogo.
+ */
 import type { ClasificacionProducto } from './evento'
 
 export type TipoCalculo = 'porcion_persona' | 'unidad_persona' | 'botella_compartida' | 'cantidad_fija'

@@ -1,3 +1,6 @@
+/**
+ * Lista desplegable base, con la flecha dibujada encima del select nativo.
+ */
 import { ChevronDown } from 'lucide-react'
 import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
