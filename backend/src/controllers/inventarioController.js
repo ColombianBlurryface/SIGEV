@@ -29,3 +29,27 @@ const registrarElemento = async (req, res) => {
 module.exports = {
     registrarElemento
 };
+const consultarInventario = async (req, res) => {
+    try {
+        const { categoria } = req.query;
+        let query = `SELECT * FROM catalogo_productos WHERE categoria_inventario IS NOT NULL`;
+        const params = [];
+
+        if (categoria) {
+            query += ` AND categoria_inventario = $1`;
+            params.push(categoria);
+        }
+
+        query += ` ORDER BY categoria_inventario ASC, nombre ASC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+module.exports = {
+    registrarElemento,
+    consultarInventario
+}; 
