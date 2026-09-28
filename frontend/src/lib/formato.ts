@@ -1,5 +1,6 @@
 const formatoFecha = new Intl.DateTimeFormat('es-CO', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 const formatoFechaCorta = new Intl.DateTimeFormat('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })
+const formatoFechaHora = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 const formatoNumero = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 })
 const formatoMoneda = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0, useGrouping: 'always' })
 
@@ -43,4 +44,9 @@ export function hoyIso() {
   const mes = String(hoy.getMonth() + 1).padStart(2, '0')
   const dia = String(hoy.getDate()).padStart(2, '0')
   return `${hoy.getFullYear()}-${mes}-${dia}`
+}
+
+export function formatearFechaHora(fechaIso: string) {
+  const fecha = new Date(fechaIso)
+  return Number.isNaN(fecha.getTime()) ? '—' : formatoFechaHora.format(fecha)
 }

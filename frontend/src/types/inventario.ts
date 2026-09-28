@@ -17,3 +17,22 @@ export interface NuevoElementoInventario {
   categoria_inventario: CategoriaInventario
   cantidad_propia: number
 }
+
+export type TipoMovimiento = 'registro' | 'adquisicion' | 'ajuste'
+
+export interface MovimientoInventario {
+  id: number
+  producto_id: number
+  nombre: string
+  categoria_inventario: CategoriaInventario
+  tipo: TipoMovimiento
+  cantidad: number
+  cantidad_resultante: number
+  notas: string | null
+  creado_en: string
+}
+
+export interface RegistrarAdquisicionResponse {
+  elemento: ElementoInventario
+  movimiento: Omit<MovimientoInventario, 'nombre' | 'categoria_inventario'>
+}
