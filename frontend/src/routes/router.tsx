@@ -3,6 +3,7 @@ import { AppLayout } from '@/layouts/AppLayout'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { EventosPage } from '@/pages/eventos/EventosPage'
 import { NuevoEventoPage } from '@/pages/eventos/NuevoEventoPage'
+import { InventarioPage } from '@/pages/inventario/InventarioPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { ProtectedRoute } from './ProtectedRoute'
 import { PublicOnlyRoute } from './PublicOnlyRoute'
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/eventos', element: <EventosPage /> },
           { path: '/eventos/nuevo', element: <NuevoEventoPage /> },
+          { path: '/inventario', element: <InventarioPage /> },
         ],
       },
     ],

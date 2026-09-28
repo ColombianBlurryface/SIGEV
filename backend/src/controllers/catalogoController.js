@@ -22,6 +22,7 @@ const obtenerCatalogo = async (req, res) => {
         precio_unitario
       FROM catalogo_productos
       WHERE activo = true
+        AND categoria_inventario IS NULL
     `;
     const valores = [];
 
@@ -51,7 +52,7 @@ const obtenerProductoPorId = async (req, res) => {
     const { id } = req.params;
     const query = `
       SELECT * FROM catalogo_productos 
-      WHERE id = $1 AND activo = true;
+      WHERE id = $1 AND activo = true AND categoria_inventario IS NULL;
     `;
     const resultado = await pool.query(query, [id]);
 
