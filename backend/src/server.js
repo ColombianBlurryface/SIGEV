@@ -5,6 +5,7 @@ require('dotenv').config();
 const eventosRoutes = require('./routes/eventosRoutes');
 const catalogoRoutes = require('./routes/catalogoRoutes'); // <-- 1. Importar rutas del catálogo
 const authRoutes = require('./routes/authRoutes');
+const inventarioRoutes = require('./routes/inventarioRoutes'); // <-- 1. Importar rutas de inventario
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/eventos', eventosRoutes);
 app.use('/api/catalogo', catalogoRoutes); // <-- 2. Conectar endpoint del catálogo
+app.use('/api/inventario', inventarioRoutes);
 
 // Ruta base de prueba de estado
 app.get('/api/health', (req, res) => {
