@@ -1,4 +1,4 @@
-import { CalendarDays, CirclePlus, LogOut, Package, type LucideIcon } from 'lucide-react'
+import { Boxes, CalendarDays, CirclePlus, LogOut, Package, type LucideIcon } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { Logo } from '@/components/brand/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -14,6 +14,7 @@ interface ItemNavegacion {
 const navegacion: ItemNavegacion[] = [
   { etiqueta: 'Eventos', icono: CalendarDays, ruta: '/eventos' },
   { etiqueta: 'Nuevo evento', icono: CirclePlus, ruta: '/eventos/nuevo' },
+  { etiqueta: 'Inventario', icono: Boxes, ruta: '/inventario' },
   { etiqueta: 'Catálogo', icono: Package },
 ]
 
