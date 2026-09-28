@@ -2,7 +2,6 @@ import { LoaderCircle, Plus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -66,73 +65,66 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
   }
 
   return (
-    <Card className="p-6">
-      <form onSubmit={registrar} noValidate className="flex flex-col gap-5">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-bold">Registrar elemento</h2>
-          <p className="text-[13.5px] text-subtle">Agrega un recurso propio de la organización.</p>
-        </div>
+    <form onSubmit={registrar} noValidate className="flex flex-col gap-5">
+      {errorServidor && <Alert variant="error">{errorServidor}</Alert>}
+      {exito && <Alert variant="success">{exito}</Alert>}
 
-        {errorServidor && <Alert variant="error">{errorServidor}</Alert>}
-        {exito && <Alert variant="success">{exito}</Alert>}
+      <FormField id="inventario-nombre" label="Nombre del elemento" error={errores.nombre}>
+        <Input
+          id="inventario-nombre"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          placeholder="Ej. Sillas Tiffany doradas"
+          maxLength={150}
+          disabled={enviando}
+          {...propsError('nombre', 'inventario-nombre')}
+        />
+      </FormField>
 
-        <FormField id="inventario-nombre" label="Nombre del elemento" error={errores.nombre}>
-          <Input
-            id="inventario-nombre"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            placeholder="Ej. Sillas Tiffany doradas"
-            maxLength={150}
-            disabled={enviando}
-            {...propsError('nombre', 'inventario-nombre')}
-          />
-        </FormField>
-
-        <FormField id="inventario-categoria" label="Categoría" error={errores.categoria}>
-          <Select
-            id="inventario-categoria"
-            value={categoria}
-            onChange={(e) => setCategoria(e.target.value)}
-            disabled={enviando}
-            {...propsError('categoria', 'inventario-categoria')}
-          >
-            <option value="" disabled>
-              Selecciona una categoría
+      <FormField id="inventario-categoria" label="Categoría" error={errores.categoria}>
+        <Select
+          id="inventario-categoria"
+          value={categoria}
+          onChange={(e) => setCategoria(e.target.value)}
+          disabled={enviando}
+          {...propsError('categoria', 'inventario-categoria')}
+        >
+          <option value="" disabled>
+            Selecciona una categoría
+          </option>
+          {CATEGORIAS_INVENTARIO.map((c) => (
+            <option key={c} value={c}>
+              {c}
             </option>
-            {CATEGORIAS_INVENTARIO.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </Select>
-        </FormField>
+          ))}
+        </Select>
+      </FormField>
 
-        <FormField id="inventario-cantidad" label="Cantidad disponible" error={errores.cantidad}>
-          <div className="relative">
-            <Input
-              id="inventario-cantidad"
-              type="number"
-              min={0}
-              step={1}
-              inputMode="numeric"
-              value={cantidad}
-              onChange={(e) => setCantidad(e.target.value)}
-              placeholder="Ej. 120"
-              disabled={enviando}
-              className="pr-24"
-              {...propsError('cantidad', 'inventario-cantidad')}
-            />
-            <span aria-hidden="true" className="pointer-events-none absolute top-3.5 right-3.5 text-sm text-muted-foreground">
-              unidades
-            </span>
-          </div>
-        </FormField>
+      <FormField id="inventario-cantidad" label="Cantidad disponible" error={errores.cantidad}>
+        <div className="relative">
+          <Input
+            id="inventario-cantidad"
+            type="number"
+            min={0}
+            step={1}
+            inputMode="numeric"
+            value={cantidad}
+            onChange={(e) => setCantidad(e.target.value)}
+            placeholder="Ej. 120"
+            disabled={enviando}
+            className="pr-24"
+            {...propsError('cantidad', 'inventario-cantidad')}
+          />
+          <span aria-hidden="true" className="pointer-events-none absolute top-3.5 right-3.5 text-sm text-muted-foreground">
+            unidades
+          </span>
+        </div>
+      </FormField>
 
-        <Button type="submit" size="lg" disabled={enviando}>
-          {enviando ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Plus aria-hidden="true" />}
-          {enviando ? 'Registrando…' : 'Registrar elemento'}
-        </Button>
-      </form>
-    </Card>
+      <Button type="submit" size="lg" disabled={enviando}>
+        {enviando ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Plus aria-hidden="true" />}
+        {enviando ? 'Registrando…' : 'Registrar elemento'}
+      </Button>
+    </form>
   )
 }

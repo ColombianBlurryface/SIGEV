@@ -1,22 +1,40 @@
-import { RotateCw } from 'lucide-react'
+import { RotateCw, Search } from 'lucide-react'
 import { useState } from 'react'
+import { FormularioAdquisicion } from '@/components/inventario/FormularioAdquisicion'
 import { FormularioElemento } from '@/components/inventario/FormularioElemento'
+import { HistorialMovimientos } from '@/components/inventario/HistorialMovimientos'
 import { TablaInventario } from '@/components/inventario/TablaInventario'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useInventario } from '@/hooks/useInventario'
-import { formatearNumero } from '@/lib/formato'
+import { useMovimientos } from '@/hooks/useMovimientos'
+import { formatearNumero, normalizar } from '@/lib/formato'
 import { cn } from '@/lib/utils'
-import { CATEGORIAS_INVENTARIO, type CategoriaInventario } from '@/types/inventario'
+import { CATEGORIAS_INVENTARIO, type CategoriaInventario, type ElementoInventario } from '@/types/inventario'
 
 type Filtro = CategoriaInventario | 'todas'
+type Modo = 'elemento' | 'adquisicion'
+
+const MOVIMIENTOS_POR_PAGINA = 20
+const MOVIMIENTOS_MAXIMOS = 200
 
 export function InventarioPage() {
   const { elementos, cargando, error, recargar, guardarLocal } = useInventario()
   const [filtro, setFiltro] = useState<Filtro>('todas')
+  const [busqueda, setBusqueda] = useState('')
+  const [modo, setModo] = useState<Modo>('elemento')
+  const [preseleccion, setPreseleccion] = useState<{ id: number; version: number } | null>(null)
+  const [elementoHistorial, setElementoHistorial] = useState<number | null>(null)
+  const [limiteHistorial, setLimiteHistorial] = useState(MOVIMIENTOS_POR_PAGINA)
+  const historial = useMovimientos(elementoHistorial, limiteHistorial)
 
-  const visibles = filtro === 'todas' ? elementos : elementos.filter((e) => e.categoria_inventario === filtro)
+  const termino = normalizar(busqueda.trim())
+  const visibles = elementos.filter(
+    (e) => (filtro === 'todas' || e.categoria_inventario === filtro) && (termino === '' || normalizar(e.nombre).includes(termino)),
+  )
   const totalUnidades = elementos.reduce((suma, e) => suma + e.cantidad_propia, 0)
   const opciones: { valor: Filtro; etiqueta: string; cantidad: number }[] = [
     { valor: 'todas', etiqueta: 'Todas', cantidad: elementos.length },
@@ -26,6 +44,22 @@ export function InventarioPage() {
       cantidad: elementos.filter((e) => e.categoria_inventario === c).length,
     })),
   ]
+
+  function adquirir(elemento: ElementoInventario) {
+    setModo('adquisicion')
+    setPreseleccion((anterior) => ({ id: elemento.id, version: (anterior?.version ?? 0) + 1 }))
+    document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cambioDeInventario(elemento: ElementoInventario) {
+    guardarLocal(elemento)
+    historial.recargar()
+  }
+
+  function filtrarHistorial(id: number | null) {
+    setElementoHistorial(id)
+    setLimiteHistorial(MOVIMIENTOS_POR_PAGINA)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -39,11 +73,68 @@ export function InventarioPage() {
       </header>
 
       <div className="grid items-start gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="xl:sticky xl:top-0">
-          <FormularioElemento onRegistrado={guardarLocal} />
+        <div className="flex flex-col gap-6 xl:sticky xl:top-0">
+          <Card className="flex flex-col gap-5 p-6">
+            <div role="group" aria-label="Acción" className="flex rounded-[10px] bg-chip p-[3px]">
+              {(
+                [
+                  ['elemento', 'Nuevo elemento'],
+                  ['adquisicion', 'Adquisición'],
+                ] as const
+              ).map(([valor, etiqueta]) => (
+                <button
+                  key={valor}
+                  type="button"
+                  aria-pressed={modo === valor}
+                  onClick={() => setModo(valor)}
+                  className={cn(
+                    'h-9 flex-1 cursor-pointer rounded-lg text-[13.5px] font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
+                    modo === valor ? 'bg-card text-foreground shadow-sm dark:bg-input' : 'text-subtle',
+                  )}
+                >
+                  {etiqueta}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-bold">{modo === 'elemento' ? 'Registrar elemento' : 'Registrar adquisición'}</h2>
+              <p className="text-[13.5px] text-subtle">
+                {modo === 'elemento'
+                  ? 'Agrega un recurso propio de la organización.'
+                  : 'Suma unidades compradas a un elemento que ya está en el inventario.'}
+              </p>
+            </div>
+
+            {modo === 'elemento' ? (
+              <FormularioElemento onRegistrado={cambioDeInventario} />
+            ) : (
+              <FormularioAdquisicion
+                key={preseleccion ? `${preseleccion.id}-${preseleccion.version}` : 'sin-seleccion'}
+                elementos={elementos}
+                elementoInicialId={preseleccion?.id}
+                onRegistrada={cambioDeInventario}
+              />
+            )}
+          </Card>
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
+          <div className="relative">
+            <label htmlFor="buscar-inventario" className="sr-only">
+              Buscar elemento
+            </label>
+            <Search aria-hidden="true" className="pointer-events-none absolute top-3 left-3.5 size-[18px] text-muted-foreground" />
+            <Input
+              id="buscar-inventario"
+              type="search"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar elemento por nombre"
+              className="h-11 pl-10 text-[14.5px]"
+            />
+          </div>
+
           <div role="group" aria-label="Filtrar por categoría" className="flex flex-wrap gap-2">
             {opciones.map(({ valor, etiqueta, cantidad }) => {
               const activo = valor === filtro
@@ -79,8 +170,31 @@ export function InventarioPage() {
           {cargando && elementos.length === 0 ? (
             <Skeleton className="h-64 rounded-[14px]" />
           ) : (
-            !error && <TablaInventario elementos={visibles} onActualizado={guardarLocal} />
+            !error && (
+              <TablaInventario
+                elementos={visibles}
+                mensajeVacio={
+                  elementos.length === 0
+                    ? 'Todavía no hay elementos en el inventario.'
+                    : 'Ningún elemento coincide con la búsqueda o el filtro.'
+                }
+                onActualizado={cambioDeInventario}
+                onAdquirir={adquirir}
+              />
+            )
           )}
+
+          <HistorialMovimientos
+            elementos={elementos}
+            elementoId={elementoHistorial}
+            onElemento={filtrarHistorial}
+            movimientos={historial.movimientos}
+            cargando={historial.cargando}
+            error={historial.error}
+            hayMas={historial.movimientos.length === limiteHistorial && limiteHistorial < MOVIMIENTOS_MAXIMOS}
+            onVerMas={() => setLimiteHistorial((n) => Math.min(n + MOVIMIENTOS_POR_PAGINA, MOVIMIENTOS_MAXIMOS))}
+            onReintentar={historial.recargar}
+          />
         </div>
       </div>
     </div>
