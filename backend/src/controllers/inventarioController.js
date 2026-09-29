@@ -1,3 +1,16 @@
+/**
+ * Controlador del inventario propio de la organización (HU-08 y HU-09).
+ *
+ * Los elementos del inventario se guardan en la tabla catalogo_productos, marcados
+ * con una categoria_inventario. Cada cambio de cantidad queda registrado en la
+ * tabla movimientos_inventario, de modo que la suma de los movimientos de un
+ * elemento siempre es igual a su cantidad disponible (cantidad_propia).
+ *
+ * Tipos de movimiento:
+ *   - registro:    cantidad inicial al crear el elemento
+ *   - adquisicion: unidades compradas que se suman (HU-09)
+ *   - ajuste:      corrección manual de la cantidad (+ o -) desde "Actualizar"
+ */
 const pool = require('../config/db');
 
 // Cada categoría de inventario se guarda con la clasificación del catálogo que le corresponde.
@@ -7,17 +20,23 @@ const CATEGORIAS_INVENTARIO = {
     'Bebidas de Coctelería': 'bar_cocteleria'
 };
 
+// Columnas que se devuelven al frontend para cada elemento del inventario
 const CAMPOS_INVENTARIO = 'id, nombre, categoria_inventario, cantidad_propia, cantidad_danada, es_propio, unidad_medida';
 
+// Una cantidad de inventario válida es un número entero mayor o igual a 0
 const esCantidadValida = (valor) => typeof valor === 'number' && Number.isInteger(valor) && valor >= 0;
 
+// Respuesta estándar 400 cuando los datos enviados no cumplen las reglas
 const datosInvalidos = (res, detalle) => res.status(400).json({ error: 'Datos inválidos', detalle });
 
 const TIPOS_MOVIMIENTO = ['registro', 'adquisicion', 'ajuste'];
 const CANTIDAD_MAXIMA_ADQUISICION = 100000;
 
+// Devuelve el texto sin espacios sobrantes, o '' si no se envió texto
 const leerNotas = (valor) => (typeof valor === 'string' ? valor.trim() : '');
 
+// Guarda un movimiento en el historial. Recibe el "client" de la transacción en curso
+// para que el movimiento y el cambio de cantidad se guarden juntos o no se guarde ninguno.
 const registrarMovimiento = (client, { productoId, tipo, cantidad, cantidadResultante, notas }) =>
     client.query(
         `INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, cantidad_resultante, notas)
@@ -26,7 +45,11 @@ const registrarMovimiento = (client, { productoId, tipo, cantidad, cantidadResul
         [productoId, tipo, cantidad, cantidadResultante, notas || null]
     );
 
-// HU-08 (RF-09): Registrar un elemento del inventario propio
+/**
+ * POST /api/inventario - HU-08 (RF-09)
+ * Registra un elemento del inventario propio con { nombre, categoria_inventario, cantidad_propia }.
+ * La clasificación, el tipo de cálculo y la unidad se deducen de la categoría.
+ */
 const registrarElemento = async (req, res) => {
     const nombre = typeof req.body.nombre === 'string' ? req.body.nombre.trim() : '';
     const { categoria_inventario, cantidad_propia } = req.body;
@@ -68,6 +91,7 @@ const registrarElemento = async (req, res) => {
         res.status(201).json(elemento);
     } catch (error) {
         await client.query('ROLLBACK');
+        // 23505 es el código de PostgreSQL para "valor duplicado" (el nombre es único)
         if (error.code === '23505') {
             return res.status(409).json({ error: `Ya existe un elemento llamado «${nombre}».` });
         }
@@ -78,7 +102,10 @@ const registrarElemento = async (req, res) => {
     }
 };
 
-// HU-08: Consultar el inventario, opcionalmente por categoría
+/**
+ * GET /api/inventario - HU-08
+ * Lista los elementos del inventario. Filtro opcional: ?categoria=Mobiliario
+ */
 const consultarInventario = async (req, res) => {
     const { categoria } = req.query;
 
@@ -105,7 +132,11 @@ const consultarInventario = async (req, res) => {
     }
 };
 
-// HU-08 (RF-11): Actualizar la cantidad disponible; el cambio queda como ajuste en los movimientos
+/**
+ * PATCH /api/inventario/:id/cantidad - HU-08 (RF-11)
+ * Fija una nueva cantidad disponible { cantidad_propia, motivo? }.
+ * La diferencia con la cantidad anterior queda registrada como un movimiento de "ajuste".
+ */
 const actualizarCantidad = async (req, res) => {
     const id = Number(req.params.id);
     const { cantidad_propia } = req.body;
@@ -128,7 +159,7 @@ const actualizarCantidad = async (req, res) => {
         const actual = await client.query(
             `SELECT cantidad_propia FROM catalogo_productos
             WHERE id = $1 AND categoria_inventario IS NOT NULL
-            FOR UPDATE`,
+            FOR UPDATE`, // Bloquea la fila hasta terminar, para que dos ajustes simultáneos no se pisen
             [id]
         );
 
@@ -164,7 +195,11 @@ const actualizarCantidad = async (req, res) => {
     }
 };
 
-// HU-09 (RF-13): Registrar una adquisición de un elemento existente; suma a la cantidad disponible
+/**
+ * POST /api/inventario/:id/adquisiciones - HU-09 (RF-13)
+ * Registra una adquisición { cantidad, notas? } de un elemento que ya existe:
+ * suma las unidades a la cantidad disponible y guarda el movimiento en el historial.
+ */
 const registrarAdquisicion = async (req, res) => {
     const id = Number(req.params.id);
     const { cantidad } = req.body;
@@ -185,6 +220,7 @@ const registrarAdquisicion = async (req, res) => {
         await client.query('BEGIN');
 
         const actualizado = await client.query(
+            // La suma se hace en la propia base de datos, así dos adquisiciones al mismo tiempo no se pierden
             `UPDATE catalogo_productos SET cantidad_propia = cantidad_propia + $1
             WHERE id = $2 AND categoria_inventario IS NOT NULL
             RETURNING ${CAMPOS_INVENTARIO}`,
@@ -216,7 +252,11 @@ const registrarAdquisicion = async (req, res) => {
     }
 };
 
-// HU-09: Consultar los movimientos del inventario (los más recientes primero)
+/**
+ * GET /api/inventario/movimientos - HU-09
+ * Historial de movimientos, del más reciente al más antiguo.
+ * Filtros opcionales: ?elemento_id=10&tipo=ajuste&limite=20 (límite máximo 200).
+ */
 const consultarMovimientos = async (req, res) => {
     const limite = req.query.limite === undefined ? 20 : Number(req.query.limite);
     const elementoId = req.query.elemento_id === undefined ? null : Number(req.query.elemento_id);
@@ -233,6 +273,8 @@ const consultarMovimientos = async (req, res) => {
     }
 
     try {
+        // Se arma el WHERE solo con los filtros que llegaron; los valores van como parámetros ($1, $2...)
+        // y nunca pegados al texto de la consulta, para evitar inyección SQL.
         const condiciones = [];
         const params = [];
 

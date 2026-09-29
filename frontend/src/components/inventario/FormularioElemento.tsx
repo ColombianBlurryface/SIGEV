@@ -1,3 +1,7 @@
+/**
+ * Formulario para registrar un elemento nuevo en el inventario (HU-08):
+ * nombre, categoría y cantidad disponible.
+ */
 import { LoaderCircle, Plus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Alert } from '@/components/ui/alert'

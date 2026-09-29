@@ -1,3 +1,7 @@
+/**
+ * Menú lateral: logo, navegación entre módulos, interruptor de modo oscuro,
+ * datos del usuario y botón para cerrar sesión.
+ */
 import { Boxes, CalendarDays, CirclePlus, LogOut, Package, type LucideIcon } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { Logo } from '@/components/brand/Logo'
@@ -11,6 +15,7 @@ interface ItemNavegacion {
   ruta?: string
 }
 
+// Opciones del menú. Las que no tienen ruta todavía se muestran deshabilitadas con la etiqueta "Pronto".
 const navegacion: ItemNavegacion[] = [
   { etiqueta: 'Eventos', icono: CalendarDays, ruta: '/eventos' },
   { etiqueta: 'Nuevo evento', icono: CirclePlus, ruta: '/eventos/nuevo' },

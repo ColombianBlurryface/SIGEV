@@ -1,3 +1,7 @@
+/**
+ * Pestaña "Mobiliario" (HU-04): tipo de elemento, referencia y cantidad.
+ * No tiene cálculo automático de costo; se guarda como requerimiento adicional de tipo "mobiliario".
+ */
 import { Info, Plus, Trash2, Users } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Alert } from '@/components/ui/alert'

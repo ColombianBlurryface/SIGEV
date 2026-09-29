@@ -1,3 +1,7 @@
+/**
+ * Guarda, lee y borra la sesión del usuario en el localStorage del navegador,
+ * para que siga iniciada aunque se recargue la página.
+ */
 import type { Sesion } from '@/types/auth'
 
 const SESION_KEY = 'sigev-sesion'

@@ -1,3 +1,7 @@
+/**
+ * Pestaña "Servicios adicionales" (HU-05): DJ, música, sonido, etc.
+ * Sin cálculo automático; se guardan como requerimientos adicionales.
+ */
 import { Info, Music, Plus, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Alert } from '@/components/ui/alert'

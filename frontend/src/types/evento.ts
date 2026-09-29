@@ -1,3 +1,7 @@
+/**
+ * Tipos de los eventos: lo que se envía al registrarlos y lo que devuelve la API al consultarlos.
+ * Los valores numéricos de PostgreSQL (NUMERIC) llegan como texto, por eso varios campos son string.
+ */
 export const TIPOS_EVENTO = ['Boda', 'Corporativo', 'Quinceañero', 'Gala', 'Cumpleaños', 'Otro'] as const
 
 export type TipoEvento = (typeof TIPOS_EVENTO)[number]

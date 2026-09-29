@@ -1,3 +1,6 @@
+/**
+ * Indicador de progreso del asistente de registro (1 Datos, 2 Requerimientos, 3 Resumen).
+ */
 import { Check } from 'lucide-react'
 import { Fragment } from 'react'
 import { cn } from '@/lib/utils'

@@ -1,3 +1,7 @@
+/**
+ * Formulario para registrar una adquisición (HU-09): suma unidades compradas a un elemento
+ * que ya existe y muestra cómo queda la cantidad disponible antes de guardar.
+ */
 import { ArrowRight, LoaderCircle, PackagePlus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Alert } from '@/components/ui/alert'
@@ -149,6 +153,7 @@ export function FormularioAdquisicion({ elementos, elementoInicialId, onRegistra
         />
       </FormField>
 
+      {/* Vista previa: cantidad disponible actual -> cantidad después de la adquisición */}
       {elemento && (
         <div aria-live="polite" className="flex items-center justify-between gap-3 rounded-[10px] bg-accent px-3.5 py-3 text-sm text-accent-foreground">
           <span className="font-semibold">Disponible</span>

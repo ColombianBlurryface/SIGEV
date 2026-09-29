@@ -1,3 +1,7 @@
+/**
+ * Paso 2 del registro de eventos: pestañas para agregar alimentos (HU-02), bebidas (HU-03),
+ * mobiliario (HU-04) y servicios adicionales (HU-05), con un resumen lateral de costos.
+ */
 import { useState } from 'react'
 import { CATEGORIAS, type Categoria } from '@/lib/categorias'
 import { cn } from '@/lib/utils'

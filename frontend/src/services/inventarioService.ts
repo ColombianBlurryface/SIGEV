@@ -1,3 +1,6 @@
+/**
+ * Llamadas a la API del inventario: elementos, cantidades, adquisiciones y movimientos.
+ */
 import type {
   ElementoInventario,
   MovimientoInventario,

@@ -1,3 +1,7 @@
+/**
+ * Carga los elementos del inventario y permite actualizar la lista en pantalla sin volver
+ * a pedirla al servidor (después de registrar o modificar un elemento).
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'
@@ -9,6 +13,7 @@ interface Resultado {
   error: string | null
 }
 
+// Mismo orden que devuelve el backend: por categoría y luego por nombre
 const ordenar = (lista: ElementoInventario[]) =>
   [...lista].sort(
     (a, b) => a.categoria_inventario.localeCompare(b.categoria_inventario) || a.nombre.localeCompare(b.nombre),
@@ -39,6 +44,7 @@ export function useInventario() {
 
   const recargar = useCallback(() => setIntento((n) => n + 1), [])
 
+  // Reemplaza (o agrega) un elemento en la lista local con la versión que devolvió el backend
   const guardarLocal = useCallback((elemento: ElementoInventario) => {
     setResultado((anterior) => {
       if (!anterior) return anterior

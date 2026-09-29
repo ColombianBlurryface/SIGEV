@@ -1,3 +1,6 @@
+/**
+ * Botón base de la app (estilo shadcn/ui). Sus variantes y tamaños están en button-variants.ts.
+ */
 import type { VariantProps } from 'class-variance-authority'
 import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'

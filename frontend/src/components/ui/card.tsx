@@ -1,3 +1,6 @@
+/**
+ * Tarjeta base: fondo, borde y esquinas redondeadas.
+ */
 import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 

@@ -1,12 +1,24 @@
-// backend/src/controllers/eventosController.js
+/**
+ * Controlador de eventos.
+ *
+ * Aquí está el "motor de cálculo" de SIGEV: al registrar un evento, calcula cuánto
+ * se necesita de cada alimento y bebida según el número de asistentes, con un
+ * margen de seguridad del 10%. También guarda los servicios adicionales y el
+ * mobiliario, que se registran sin cálculo.
+ */
 const pool = require('../config/db');
 
+// Redondea hacia arriba evitando errores de precisión decimal de JavaScript.
 // Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
 const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
 
 /**
- * aqui  registro un evento, sus productos de catálogo calculados con 10% de margen (RN-09, RN-11)
+ * POST /api/eventos
+ * Registra un evento, sus productos de catálogo calculados con 10% de margen (RN-09, RN-11)
  * y los servicios adicionales opcionales sin cálculo (RF-06, RF-47, RF-48).
+ *
+ * Todo se guarda dentro de una transacción: si algo falla a mitad de camino
+ * (por ejemplo, un producto que no existe), no queda nada guardado a medias.
  */
 const crearEvento = async (req, res) => {
   const client = await pool.connect();
@@ -22,6 +34,7 @@ const crearEvento = async (req, res) => {
       servicios_adicionales = [] // DJ, música, sonido, requerimientos de mobiliario
     } = req.body;
 
+    // Inicia la transacción: a partir de aquí todo se confirma junto (COMMIT) o se deshace (ROLLBACK)
     await client.query('BEGIN');
 
     // 1. Insertar el evento base (RF-01, RF-02)
@@ -60,7 +73,7 @@ const crearEvento = async (req, res) => {
 
       // Aplicación de fórmulas según clasificación y tipo de cálculo (RN-10, RN-09, RN-11)
       if (prod.tipo_calculo === 'porcion_persona') {
-        // Ej: Carne (gramos) -> asistentes * porción. Margen 10%.
+        // Ej: carne en gramos -> asistentes * porción. Si pasa de 1000 g se entrega en kg. Margen 10%.
         const totalGramos = asistentes * porcion;
         cantidadNeta = totalGramos >= 1000 ? totalGramos / 1000 : totalGramos;
         unidadEntrega = totalGramos >= 1000 ? 'kg' : 'g';
@@ -77,6 +90,7 @@ const crearEvento = async (req, res) => {
         unidadEntrega = 'botellas';
       }
 
+      // El costo se calcula sobre la cantidad con margen (lo que realmente se compra)
       const costoEstimado = cantidadConMargen * Number(prod.precio_unitario);
 
       const queryProdEvento = `
@@ -96,7 +110,8 @@ const crearEvento = async (req, res) => {
       ]);
     }
 
-    // 3. Registrar servicios adicionales (DJ, música, mobiliario) sin cálculo (RF-06, RF-47, RF-48)
+    // 3. Registrar servicios adicionales (DJ, música, mobiliario) sin cálculo (RF-06, RF-47, RF-48).
+    //    El mobiliario llega con tipo 'mobiliario'; el resto con su tipo de servicio (dj, sonido...).
     for (const servicio of servicios_adicionales) {
       const queryServicio = `
         INSERT INTO requerimientos_adicionales (evento_id, tipo, descripcion, cantidad, notas)
@@ -118,6 +133,7 @@ const crearEvento = async (req, res) => {
       evento: nuevoEvento
     });
   } catch (error) {
+    // Deshace todo lo que se alcanzó a guardar en esta transacción
     await client.query('ROLLBACK');
     console.error('Error en crearEvento:', error);
     res.status(500).json({ error: 'Error al registrar el evento', detalle: error.message });
@@ -127,8 +143,9 @@ const crearEvento = async (req, res) => {
 };
 
 /**
- * Consulta la lista general de eventos registrados (RF-07)
- * Incluye la bandera de si aplica modalidad buffet por asistentes > 300 (RN-02)
+ * GET /api/eventos
+ * Consulta la lista general de eventos registrados (RF-07), ordenada por fecha.
+ * Incluye la bandera es_modalidad_buffet cuando hay más de 300 asistentes (RN-02).
  */
 const listarEventos = async (req, res) => {
   try {
@@ -159,6 +176,7 @@ const listarEventos = async (req, res) => {
 };
 
 /**
+ * GET /api/eventos/:id
  * Consulta el detalle completo de un evento por ID (RF-07)
  * Retorna la información general, los productos calculados y los servicios adicionales.
  */

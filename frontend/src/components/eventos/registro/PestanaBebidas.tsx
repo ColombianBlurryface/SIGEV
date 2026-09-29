@@ -1,3 +1,8 @@
+/**
+ * Pestaña "Bebidas" (HU-03). Hay dos formas de consumo:
+ * - Individual por persona: se indican las unidades por persona (ej. 2 cervezas).
+ * - Compartida por botella: se calcula con el volumen de la botella y el tamaño de cada porción.
+ */
 import { Calculator, Plus, RotateCw, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Alert } from '@/components/ui/alert'
@@ -18,6 +23,7 @@ type ModoConsumo = 'individual' | 'compartida'
 
 const COLUMNAS = 'grid grid-cols-[minmax(0,1fr)_92px_104px_80px_92px_104px_36px] items-center gap-2.5'
 
+// Las bebidas del catálogo pueden ser generales o de bar/coctelería
 const esBebida = (p: ProductoCatalogo) => p.clasificacion === 'bebida_general' || p.clasificacion === 'bar_cocteleria'
 const modoDe = (p: ProductoCatalogo): ModoConsumo => (p.tipo_calculo === 'botella_compartida' ? 'compartida' : 'individual')
 const porcionesPorBotella = (p: ProductoCatalogo) => Number(p.volumen_botella_ml) / Number(p.tamano_porcion_ml)
@@ -48,6 +54,7 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
   const unidadesNumero = Number(unidades)
   const unidadesValidas = unidades.trim() !== '' && Number.isFinite(unidadesNumero) && unidadesNumero > 0
   const listo = producto !== null && (modo === 'compartida' || unidadesValidas)
+  // En las compartidas la porción viene del catálogo (tamaño de la copa); en las individuales la escribe el usuario
   const porcionEnvio = modo === 'compartida' ? Number(producto?.porcion_por_persona ?? 0) : unidadesNumero
   const vistaPrevia = listo && producto ? calcularProducto(producto, porcionEnvio, asistentes) : null
   const subtotal = bebidas.reduce((suma, b) => suma + calcularProducto(b.producto, b.porcion, asistentes).costo, 0)

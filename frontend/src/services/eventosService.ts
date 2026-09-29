@@ -1,3 +1,6 @@
+/**
+ * Llamadas a la API de eventos: listar, ver el detalle y registrar.
+ */
 import type { CrearEventoResponse, EventoDetalle, EventoListado, NuevoEvento } from '@/types/evento'
 import { apiRequest } from './api'
 

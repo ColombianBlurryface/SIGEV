@@ -1,3 +1,7 @@
+/**
+ * Historial de movimientos del inventario (HU-09): registros iniciales, adquisiciones y ajustes,
+ * con filtro por elemento y botón "Ver más".
+ */
 import { History, RotateCw } from 'lucide-react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'

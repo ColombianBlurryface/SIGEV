@@ -1,3 +1,7 @@
+/**
+ * Las cuatro categorías de requerimientos de un evento (alimentos, bebidas, mobiliario y servicios)
+ * con su nombre, ícono y colores, y los tipos de servicio adicional.
+ */
 import { Armchair, Music, Utensils, Wine, type LucideIcon } from 'lucide-react'
 import type { ClasificacionProducto } from '@/types/evento'
 

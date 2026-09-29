@@ -1,3 +1,6 @@
+/**
+ * Etiquetas de color para el estado de un evento y para la modalidad buffet.
+ */
 import { ESTADOS_EVENTO } from '@/lib/estadosEvento'
 import { cn } from '@/lib/utils'
 import type { EstadoEvento } from '@/types/evento'

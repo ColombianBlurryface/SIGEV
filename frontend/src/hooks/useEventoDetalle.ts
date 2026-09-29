@@ -1,3 +1,6 @@
+/**
+ * Carga el detalle de un evento (con sus requerimientos) cada vez que cambia el id seleccionado.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '@/services/api'
 import { eventosService } from '@/services/eventosService'

@@ -1,3 +1,6 @@
+/**
+ * Paso 1 del registro de eventos (HU-01): datos básicos del evento y número de asistentes.
+ */
 import { CampoAsistentes } from '@/components/eventos/CampoAsistentes'
 import { VistaPreviaEvento } from '@/components/eventos/VistaPreviaEvento'
 import { Card } from '@/components/ui/card'

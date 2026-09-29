@@ -1,3 +1,7 @@
+/**
+ * Paso 3 del registro: revisión final de los datos y requerimientos antes de guardar,
+ * con botones para volver a editar cualquier paso.
+ */
 import { Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'

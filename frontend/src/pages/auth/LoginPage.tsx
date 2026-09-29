@@ -1,3 +1,7 @@
+/**
+ * Página de inicio de sesión. No hay registro público: los usuarios los crea el administrador.
+ * A la izquierda hay un panel de presentación y a la derecha el formulario.
+ */
 import { Armchair, Info, LoaderCircle, LockKeyhole, Music, User, Utensils, Wine, type LucideIcon } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'

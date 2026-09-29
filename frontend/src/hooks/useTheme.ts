@@ -1,3 +1,6 @@
+/**
+ * Hook para leer o cambiar el tema: const { tema, alternarTema } = useTheme().
+ */
 import { useContext } from 'react'
 import { ThemeContext } from '@/context/theme-context'
 

@@ -1,3 +1,6 @@
+/**
+ * Tarjeta de "Vista previa" del paso 1 del registro: muestra en vivo lo que se va escribiendo.
+ */
 import { Card } from '@/components/ui/card'
 import { formatearFecha } from '@/lib/formato'
 import { validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'

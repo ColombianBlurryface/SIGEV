@@ -1,3 +1,8 @@
+/**
+ * Reglas de negocio para registrar un evento (HU-01 y HU-07).
+ * Son las mismas que valida el backend; aquí se revisan antes de enviar para avisar al usuario de inmediato.
+ */
+// Rango permitido de asistentes (HU-07, RN-01) y desde cuántos asistentes el evento es buffet (RN-02)
 export const ASISTENTES_MIN = 40
 export const ASISTENTES_MAX = 600
 export const BUFFET_DESDE = 301
@@ -12,6 +17,10 @@ export interface ValidacionAsistentes {
   mensaje: string | null
 }
 
+/**
+ * Revisa el número de asistentes escrito en el formulario (llega como texto).
+ * Devuelve el estado (vacío, bajo, alto o válido), el número, si es buffet y el mensaje a mostrar.
+ */
 export function validarAsistentes(valor: string): ValidacionAsistentes {
   const limpio = valor.trim()
   const cantidad = /^\d+$/.test(limpio) ? Number(limpio) : null
@@ -44,6 +53,10 @@ export interface ValoresEvento {
 
 export type ErroresEvento = Partial<Record<keyof ValoresEvento, string>>
 
+/**
+ * Valida todos los datos del paso 1 del registro.
+ * Devuelve un objeto con un mensaje por cada campo con error; si está vacío, todo está bien.
+ */
 export function validarEvento(valores: ValoresEvento): ErroresEvento {
   const errores: ErroresEvento = {}
 

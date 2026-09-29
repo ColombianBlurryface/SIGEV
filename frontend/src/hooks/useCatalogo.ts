@@ -1,3 +1,6 @@
+/**
+ * Carga los productos del catálogo, opcionalmente filtrados por clasificación.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '@/services/api'
 import { catalogoService } from '@/services/catalogoService'

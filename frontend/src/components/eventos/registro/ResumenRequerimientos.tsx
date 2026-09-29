@@ -1,3 +1,6 @@
+/**
+ * Resumen lateral del paso 2: cuántos elementos hay en cada categoría y el costo estimado.
+ */
 import { Card } from '@/components/ui/card'
 import { CATEGORIAS, type Categoria } from '@/lib/categorias'
 import { formatearMoneda, formatearNumero } from '@/lib/formato'

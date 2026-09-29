@@ -1,3 +1,7 @@
+/**
+ * Proveedor del tema visual. Aplica la clase "dark" en <html> cuando el modo oscuro está
+ * activo (los colores de cada tema están en index.css) y recuerda la preferencia del usuario.
+ */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Tema } from '@/types/theme'
 import { ThemeContext } from './theme-context'
@@ -15,6 +19,7 @@ function temaInicial(): Tema {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [tema, setTema] = useState<Tema>(temaInicial)
 
+  // Cada vez que cambia el tema se aplica la clase "dark" y se guarda la preferencia
   useEffect(() => {
     document.documentElement.classList.toggle('dark', tema === 'oscuro')
     try {

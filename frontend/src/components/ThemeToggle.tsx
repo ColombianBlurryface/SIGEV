@@ -1,3 +1,7 @@
+/**
+ * Botón para cambiar entre modo claro y oscuro. Tiene dos formas:
+ * "pill" (botón redondeado, usado en el login) y "row" (fila con interruptor, usada en el menú lateral).
+ */
 import { Moon, Sun } from 'lucide-react'
 import { useTheme } from '@/hooks/useTheme'
 import { cn } from '@/lib/utils'

@@ -1,3 +1,7 @@
+/**
+ * Tipos del asistente de registro de eventos: lo que el usuario va agregando en el paso
+ * "Requerimientos" (alimentos, bebidas, mobiliario y servicios) antes de guardar.
+ */
 import type { ProductoCatalogo } from './catalogo'
 
 export interface AlimentoAgregado {

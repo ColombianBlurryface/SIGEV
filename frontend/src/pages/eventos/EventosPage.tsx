@@ -1,3 +1,7 @@
+/**
+ * Página principal de Eventos (HU-06): resumen, búsqueda, filtros, tabla de eventos y
+ * panel con el detalle del evento seleccionado.
+ */
 import { CalendarDays, Plus, RotateCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
@@ -19,14 +23,17 @@ export function EventosPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { eventos, cargando, error, recargar } = useEventos()
 
+  // Mensaje de éxito que llega desde "Registrar evento". Se guarda una sola vez...
   const [aviso] = useState(() => (location.state as { aviso?: string } | null)?.aviso)
   const [busqueda, setBusqueda] = useState('')
   const [estado, setEstado] = useState<FiltroEstado>('todos')
 
+  // ...y se borra del historial del navegador para que no vuelva a salir al recargar la página
   useEffect(() => {
     if (aviso) navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
   }, [aviso, location.pathname, location.search, navigate])
 
+  // Eventos que cumplen la búsqueda (sin importar tildes ni mayúsculas) y el filtro de estado
   const filtrados = useMemo(() => {
     const termino = normalizar(busqueda.trim())
     return eventos.filter(
@@ -36,6 +43,8 @@ export function EventosPage() {
     )
   }, [eventos, busqueda, estado])
 
+  // Evento seleccionado: el que viene en la URL (?evento=ID); si no hay, el próximo evento
+  // no cancelado; y si tampoco, el primero de la lista. Así la URL se puede compartir.
   const idEnUrl = Number(searchParams.get('evento'))
   const hoy = hoyIso()
   const seleccionado =
