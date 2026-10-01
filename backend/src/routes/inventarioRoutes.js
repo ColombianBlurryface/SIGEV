@@ -7,7 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const inventarioController = require('../controllers/inventarioController');
-
+router.use(verificarToken);
 // POST /api/inventario - HU-08 (RF-09): Registrar elemento de inventario
 router.post('/', inventarioController.registrarElemento);
 
@@ -23,4 +23,6 @@ router.get('/movimientos', inventarioController.consultarMovimientos);
 // POST /api/inventario/:id/adquisiciones - HU-09 (RF-13): Registrar adquisición de un elemento existente
 router.post('/:id/adquisiciones', inventarioController.registrarAdquisicion);
 
+// POST /api/inventario/:id/baja - HU-10 (RF-12): Retirar elementos dañados
+router.post('/:id/baja', inventarioController.retirarDanado);
 module.exports = router;

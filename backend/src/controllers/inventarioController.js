@@ -304,11 +304,94 @@ const consultarMovimientos = async (req, res) => {
         res.status(500).json({ error: 'Error al consultar los movimientos del inventario' });
     }
 };
+/**
+ * HU-10: Retirar elementos dañados del inventario (RF-12)
+ */
+const retirarDanado = async (req, res) => {
+  const { id } = req.params;
+  const { cantidad, motivo } = req.body;
+  const cantidadRetirar = parseInt(cantidad, 10);
 
+  // Validaciones iniciales
+  if (!cantidadRetirar || cantidadRetirar <= 0) {
+    return res.status(400).json({
+      error: 'La cantidad a retirar debe ser un número entero mayor a 0.'
+    });
+  }
+
+  if (!motivo || motivo.trim() === '') {
+    return res.status(400).json({
+      error: 'Debe especificar el motivo o descripción del daño.'
+    });
+  }
+
+  const client = await db.getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1. Consultar el elemento actual
+    const elementoRes = await client.query(
+      'SELECT id, nombre, cantidad_disponible, categoria, es_propio FROM inventario WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+
+    if (elementoRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Elemento de inventario no encontrado.' });
+    }
+
+    const elemento = elementoRes.rows[0];
+
+    // 2. Validar existencias disponibles
+    if (cantidadRetirar > elemento.cantidad_disponible) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `No se puede retirar ${cantidadRetirar} unidad(es). Solo hay ${elemento.cantidad_disponible} disponible(s).`
+      });
+    }
+
+    const nuevaCantidad = elemento.cantidad_disponible - cantidadRetirar;
+
+    // 3. Actualizar la cantidad disponible en inventario
+    await client.query(
+      'UPDATE inventario SET cantidad_disponible = $1 WHERE id = $2',
+      [nuevaCantidad, id]
+    );
+
+    // 4. Registrar en la tabla de historial de movimientos
+    await client.query(
+      `INSERT INTO movimientos_inventario (inventario_id, tipo_movimiento, cantidad, motivo, fecha)
+       VALUES ($1, 'BAJA_DANO', $2, $3, NOW())`,
+      [id, cantidadRetirar, motivo.trim()]
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({
+      mensaje: 'Elemento dañado retirado exitosamente del inventario disponible.',
+      elemento: {
+        ...elemento,
+        cantidad_disponible: nuevaCantidad
+      },
+      retiro: {
+        cantidad_retirada: cantidadRetirar,
+        motivo: motivo.trim()
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error al retirar elemento dañado:', error);
+    return res.status(500).json({ error: 'Error interno del servidor al procesar el retiro.' });
+  } finally {
+    client.release();
+  }
+};
 module.exports = {
     registrarElemento,
     consultarInventario,
     actualizarCantidad,
     registrarAdquisicion,
-    consultarMovimientos
+    consultarMovimientos,
+    retirarDanado
 };
