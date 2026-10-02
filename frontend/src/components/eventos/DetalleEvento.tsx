@@ -1,7 +1,8 @@
 /**
  * Panel con el detalle de un evento (HU-06): datos generales y requerimientos agrupados
  * por categoría, con cantidades y el costo estimado total. El mobiliario indica cuánto es
- * propio y cuánto hay que alquilar según el inventario actual (HU-12).
+ * propio y cuánto hay que alquilar según el inventario actual (HU-12). Las bebidas generales
+ * y las de coctelería se muestran en secciones separadas, cada una con su costo (HU-13).
  */
 import { RotateCw } from 'lucide-react'
 import { Alert } from '@/components/ui/alert'
@@ -10,7 +11,16 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useEventoDetalle } from '@/hooks/useEventoDetalle'
 import { describirReparto, type RepartoMobiliario } from '@/lib/alquiler'
-import { CATEGORIAS, categoriaDe, etiquetaServicio, TIPO_MOBILIARIO, type Categoria } from '@/lib/categorias'
+import {
+  CATEGORIAS,
+  categoriaDe,
+  esTipoBebida,
+  etiquetaServicio,
+  TIPO_MOBILIARIO,
+  TIPOS_BEBIDA,
+  type ConfigCategoria,
+  type TipoBebida,
+} from '@/lib/categorias'
 import { capitalizar, formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
 import { cn } from '@/lib/utils'
 import type { EventoDetalle, EventoListado } from '@/types/evento'
@@ -26,16 +36,40 @@ interface ItemRequerimiento {
   reparto?: RepartoMobiliario // Solo mobiliario: unidades propias y a alquilar
 }
 
+// Secciones del detalle, en orden. Las bebidas se dividen en generales y bar de coctelería (HU-13).
+type Seccion = 'alimentos' | TipoBebida | 'mobiliario' | 'servicios'
+
+const SECCIONES: Record<Seccion, ConfigCategoria> = {
+  alimentos: CATEGORIAS.alimentos,
+  bebida_general: TIPOS_BEBIDA.bebida_general,
+  bar_cocteleria: TIPOS_BEBIDA.bar_cocteleria,
+  mobiliario: CATEGORIAS.mobiliario,
+  servicios: CATEGORIAS.servicios,
+}
+
 /**
- * Ordena los requerimientos del evento en las cuatro categorías que se muestran en pantalla.
- * - Los productos del catálogo van a Alimentos o Bebidas según su clasificación.
+ * Ordena los requerimientos del evento en las secciones que se muestran en pantalla.
+ * - Los productos del catálogo van a Alimentos, Bebidas generales o Bar de coctelería según su clasificación.
  * - Los requerimientos adicionales van a Mobiliario (tipo "mobiliario") o a Servicios.
  */
 function agruparRequerimientos(detalle: EventoDetalle) {
-  const grupos: Record<Categoria, ItemRequerimiento[]> = { alimentos: [], bebidas: [], mobiliario: [], servicios: [] }
+  const grupos: Record<Seccion, ItemRequerimiento[]> = {
+    alimentos: [],
+    bebida_general: [],
+    bar_cocteleria: [],
+    mobiliario: [],
+    servicios: [],
+  }
+  const costos: Partial<Record<Seccion, number>> = {}
 
   for (const producto of detalle.productos_calculados) {
-    grupos[categoriaDe(producto.clasificacion)].push({
+    const seccion: Seccion = esTipoBebida(producto.clasificacion)
+      ? producto.clasificacion
+      : categoriaDe(producto.clasificacion) === 'alimentos'
+        ? 'alimentos'
+        : 'mobiliario'
+    costos[seccion] = (costos[seccion] ?? 0) + Number(producto.costo_estimado || 0)
+    grupos[seccion].push({
       id: `p-${producto.id}`,
       nombre: producto.nombre,
       nota: producto.componentes_menu ?? undefined,
@@ -71,6 +105,7 @@ function agruparRequerimientos(detalle: EventoDetalle) {
   const unidadesAlquilar = grupos.mobiliario.reduce((suma, item) => suma + (item.reparto?.alquilar ?? 0), 0)
   return {
     grupos,
+    costos,
     total,
     unidadesAlquilar,
     vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0,
@@ -146,20 +181,24 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
 
         {requerimientos &&
           !requerimientos.vacio &&
-          (Object.keys(CATEGORIAS) as Categoria[])
-            .filter((categoria) => requerimientos.grupos[categoria].length > 0)
-            .map((categoria) => {
-              const { etiqueta, icono: Icono, clases } = CATEGORIAS[categoria]
+          (Object.keys(SECCIONES) as Seccion[])
+            .filter((seccion) => requerimientos.grupos[seccion].length > 0)
+            .map((seccion) => {
+              const { etiqueta, icono: Icono, clases } = SECCIONES[seccion]
+              const costo = requerimientos.costos[seccion]
               return (
-                <section key={categoria} aria-label={etiqueta} className="flex flex-col gap-1.5">
+                <section key={seccion} aria-label={etiqueta} className="flex flex-col gap-1.5">
                   <div className="flex items-center gap-2">
                     <span aria-hidden="true" className={cn('flex size-[26px] items-center justify-center rounded-[7px]', clases)}>
                       <Icono className="size-[15px]" />
                     </span>
                     <span className="text-[13.5px] font-bold">{etiqueta}</span>
+                    {costo !== undefined && (
+                      <span className="ml-auto text-[12.5px] font-semibold text-subtle">{formatearMoneda(costo)}</span>
+                    )}
                   </div>
                   <ul className="flex flex-col gap-1">
-                    {requerimientos.grupos[categoria].map((item) => (
+                    {requerimientos.grupos[seccion].map((item) => (
                       <li key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_88px] gap-2 text-[13px]">
                         <span className="flex min-w-0 flex-col">
                           <span className="truncate" title={item.nombre}>

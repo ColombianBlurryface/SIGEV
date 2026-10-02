@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { describirReparto, repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { calcularProducto } from '@/lib/calculos'
-import { CATEGORIAS, etiquetaServicio, type Categoria } from '@/lib/categorias'
+import { CATEGORIAS, etiquetaServicio, TIPOS_BEBIDA, type ConfigCategoria } from '@/lib/categorias'
 import { formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
 import { validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
 import { cn } from '@/lib/utils'
@@ -25,7 +25,8 @@ interface LineaResumen {
 }
 
 interface SeccionResumen {
-  categoria: Categoria
+  clave: string
+  config: ConfigCategoria
   lineas: LineaResumen[]
   total?: number
 }
@@ -55,13 +56,27 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
   const secciones: SeccionResumen[] = (
     [
       {
-        categoria: 'alimentos',
+        clave: 'alimentos',
+        config: CATEGORIAS.alimentos,
         lineas: requerimientos.alimentos.map((a) => lineaProducto(a, a.componentes || undefined)),
         total: totales.alimentos,
       },
-      { categoria: 'bebidas', lineas: requerimientos.bebidas.map((b) => lineaProducto(b)), total: totales.bebidas },
+      // HU-13: las bebidas generales y las de coctelería van en secciones separadas
       {
-        categoria: 'mobiliario',
+        clave: 'bebida_general',
+        config: TIPOS_BEBIDA.bebida_general,
+        lineas: requerimientos.bebidas.filter((b) => b.producto.clasificacion === 'bebida_general').map((b) => lineaProducto(b)),
+        total: totales.bebidasGenerales,
+      },
+      {
+        clave: 'bar_cocteleria',
+        config: TIPOS_BEBIDA.bar_cocteleria,
+        lineas: requerimientos.bebidas.filter((b) => b.producto.clasificacion === 'bar_cocteleria').map((b) => lineaProducto(b)),
+        total: totales.barCocteleria,
+      },
+      {
+        clave: 'mobiliario',
+        config: CATEGORIAS.mobiliario,
         lineas: requerimientos.mobiliario.map((m, indice) => ({
           id: indice,
           nombre: m.elemento,
@@ -70,7 +85,8 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
         })),
       },
       {
-        categoria: 'servicios',
+        clave: 'servicios',
+        config: CATEGORIAS.servicios,
         lineas: requerimientos.servicios.map((sv, indice) => ({
           id: indice,
           nombre: `${etiquetaServicio(sv.tipo)} · ${sv.descripcion}`,
@@ -92,7 +108,8 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
 
   const desglose = [
     { etiqueta: 'Alimentos', valor: totales.alimentos },
-    { etiqueta: 'Bebidas', valor: totales.bebidas },
+    { etiqueta: 'Bebidas generales', valor: totales.bebidasGenerales },
+    { etiqueta: 'Bar de coctelería', valor: totales.barCocteleria },
   ]
 
   return (
@@ -141,10 +158,10 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
             </p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {secciones.map(({ categoria, lineas, total }) => {
-                const { etiqueta, icono: Icono, clases } = CATEGORIAS[categoria]
+              {secciones.map(({ clave, config, lineas, total }) => {
+                const { etiqueta, icono: Icono, clases } = config
                 return (
-                  <section key={categoria} aria-label={etiqueta} className="flex flex-col gap-2 rounded-xl border border-border bg-background p-4">
+                  <section key={clave} aria-label={etiqueta} className="flex flex-col gap-2 rounded-xl border border-border bg-background p-4">
                     <div className="flex items-center gap-2">
                       <span aria-hidden="true" className={cn('flex size-[26px] items-center justify-center rounded-[7px]', clases)}>
                         <Icono className="size-[15px]" />

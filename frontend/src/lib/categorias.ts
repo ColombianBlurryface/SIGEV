@@ -1,8 +1,8 @@
 /**
  * Las cuatro categorías de requerimientos de un evento (alimentos, bebidas, mobiliario y servicios)
- * con su nombre, ícono y colores, y los tipos de servicio adicional.
+ * con su nombre, ícono y colores, los dos tipos de bebida (HU-13) y los tipos de servicio adicional.
  */
-import { Armchair, Music, Utensils, Wine, type LucideIcon } from 'lucide-react'
+import { Armchair, Martini, Music, Utensils, Wine, type LucideIcon } from 'lucide-react'
 import type { ClasificacionProducto } from '@/types/evento'
 
 export type Categoria = 'alimentos' | 'bebidas' | 'mobiliario' | 'servicios'
@@ -25,7 +25,7 @@ export function etiquetaServicio(tipo: string) {
   return limpio.charAt(0).toUpperCase() + limpio.slice(1)
 }
 
-interface ConfigCategoria {
+export interface ConfigCategoria {
   etiqueta: string
   icono: LucideIcon
   clases: string
@@ -37,6 +37,20 @@ export const CATEGORIAS: Record<Categoria, ConfigCategoria> = {
   mobiliario: { etiqueta: 'Mobiliario', icono: Armchair, clases: 'bg-mobiliario-soft text-mobiliario' },
   servicios: { etiqueta: 'Servicios adicionales', icono: Music, clases: 'bg-servicios-soft text-servicios' },
 }
+
+// HU-13 (RF-15 a RF-17, RN-08): las bebidas se manejan en dos grupos que no se mezclan.
+// Cada producto del catálogo tiene una sola clasificación, así que nunca está en los dos.
+export type TipoBebida = 'bebida_general' | 'bar_cocteleria'
+
+export const TIPOS_BEBIDA: Record<TipoBebida, ConfigCategoria> = {
+  bebida_general: { etiqueta: 'Bebidas generales', icono: Wine, clases: 'bg-bebidas-soft text-bebidas' },
+  bar_cocteleria: { etiqueta: 'Bar de coctelería', icono: Martini, clases: 'bg-bebidas-soft text-bebidas' },
+}
+
+export const ORDEN_TIPOS_BEBIDA: TipoBebida[] = ['bebida_general', 'bar_cocteleria']
+
+export const esTipoBebida = (clasificacion: string): clasificacion is TipoBebida =>
+  clasificacion === 'bebida_general' || clasificacion === 'bar_cocteleria'
 
 export function categoriaDe(clasificacion: ClasificacionProducto): Categoria {
   if (clasificacion === 'alimento') return 'alimentos'

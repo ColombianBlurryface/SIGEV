@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS eventos (
 -- 3. Catálogo de Alimentos y Bebidas Predeterminadas (RF-18, RF-19, RF-20)
 CREATE TABLE IF NOT EXISTS catalogo_productos (
     id SERIAL PRIMARY KEY,
-    nombre VARCHAR(150) NOT NULL UNIQUE,
+    nombre VARCHAR(150) NOT NULL, -- Único dentro del catálogo y dentro del inventario (ver sección 7)
     clasificacion clasificacion_producto_enum NOT NULL,
     tipo_calculo tipo_calculo_enum NOT NULL,
     porcion_por_persona NUMERIC(10, 2) DEFAULT 0,
@@ -126,6 +126,15 @@ ADD COLUMN IF NOT EXISTS categoria_inventario VARCHAR(50) CHECK (categoria_inven
 ADD COLUMN IF NOT EXISTS cantidad_propia INT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS cantidad_danada INT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS es_propio BOOLEAN DEFAULT TRUE;
+
+-- HU-13: el nombre es único dentro del catálogo y, por separado, dentro del inventario.
+-- Así un producto del catálogo («Ginebra Tanqueray 750ml», para calcular eventos) y una botella
+-- del inventario pueden llamarse igual. Antes el nombre era único en toda la tabla.
+ALTER TABLE catalogo_productos DROP CONSTRAINT IF EXISTS catalogo_productos_nombre_key;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_catalogo_nombre
+    ON catalogo_productos (nombre) WHERE categoria_inventario IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_inventario_nombre
+    ON catalogo_productos (nombre) WHERE categoria_inventario IS NOT NULL;
 
 -- 8. Movimientos del inventario (HU-09, RF-13): registro inicial, adquisiciones, ajustes manuales (HU-08)
 --    y bajas por daño (HU-10, siempre en negativo).

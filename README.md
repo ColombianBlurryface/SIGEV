@@ -29,6 +29,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-07 | Validar que el evento tenga entre 40 y 600 asistentes, con aviso inmediato si está fuera de rango. | Nuevo evento · paso 1 |
 | HU-02 | Agregar alimentos del catálogo con su porción por persona y los componentes del menú. | Nuevo evento · paso 2 |
 | HU-03 | Agregar bebidas individuales (por persona) o compartidas (por botella). | Nuevo evento · paso 2 |
+| HU-13 | Registrar por separado las bebidas generales y las del bar de coctelería: cada grupo tiene sus productos, su tabla y su subtotal, también en el resumen y el detalle del evento. En el inventario, las dos categorías se registran y consultan sin mezclarse. | Nuevo evento · paso 2 y 3, detalle del evento, `/inventario` |
 | HU-04 | Agregar el mobiliario del evento, elegido del inventario (o «Otro» si no está), con su cantidad. | Nuevo evento · paso 2 |
 | HU-05 | Agregar servicios adicionales (DJ, música, sonido, entretenimiento...). | Nuevo evento · paso 2 |
 | HU-06 | Consultar los eventos con búsqueda, filtro por estado y el detalle de sus requerimientos y costos. | `/eventos` |
@@ -75,7 +76,7 @@ Si el número de asistentes está fuera del rango permitido, el campo lo avisa d
 
 **Paso 2 · Requerimientos.** Una pestaña por categoría. Las cantidades y costos se calculan mientras se escribe.
 
-| Alimentos | Bebidas |
+| Alimentos | Bebidas (generales y bar de coctelería, HU-13) |
 | --- | --- |
 | ![Pestaña de alimentos](docs/imagenes/registro-paso2-alimentos.png) | ![Pestaña de bebidas](docs/imagenes/registro-paso2-bebidas.png) |
 
@@ -169,7 +170,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 | Tabla | Para qué sirve |
 | --- | --- |
 | `eventos` | Datos generales de cada evento y su estado (planificación, confirmado, realizado, cancelado). |
-| `catalogo_productos` | Productos del catálogo (alimentos y bebidas con porción y precio) y también los elementos del inventario (los que tienen `categoria_inventario`). |
+| `catalogo_productos` | Productos del catálogo (alimentos y bebidas con porción y precio) y también los elementos del inventario (los que tienen `categoria_inventario`). El nombre es único dentro del catálogo y, por separado, dentro del inventario. |
 | `evento_productos` | Alimentos y bebidas de cada evento con la cantidad neta, la cantidad con margen y el costo estimado. |
 | `requerimientos_adicionales` | Mobiliario y servicios adicionales de cada evento (sin cálculo automático). El mobiliario guarda en `producto_id` el elemento del inventario con el que se relaciona (HU-12). |
 | `usuarios` | Cuentas que pueden iniciar sesión (contraseña guardada como hash bcrypt). |
@@ -185,6 +186,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 - Con **más de 300 asistentes** el evento es de modalidad **buffet** (RN-02).
 - Con **más de 200 asistentes** se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).
 - El mobiliario de un evento se compara con el stock actual del inventario: lo que alcanza es **propio** y el resto se **alquila**. Lo que no está en el inventario se alquila completo (HU-12).
+- Las **bebidas generales** (cerveza, vino, champaña, gaseosa) y las del **bar de coctelería** (licores fuertes) se manejan por separado y un producto pertenece a un solo grupo (RN-08 / HU-13).
 - Todas las cantidades de alimentos y bebidas llevan un **margen de seguridad del 10%** (RN-09).
 - Cómo se calcula cada producto:
   - **Por porción** (alimentos): asistentes × gramos por persona; si supera 1000 g se expresa en kg.

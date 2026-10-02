@@ -152,6 +152,8 @@ El token vence a las 8 horas. El frontend lo envía en la cabecera `Authorizatio
 
 Devuelve los productos activos del catálogo. Los elementos de inventario no aparecen aquí. Clasificaciones: `alimento`, `bebida_general`, `bar_cocteleria`, `mobiliario`.
 
+Las bebidas generales (`bebida_general`) y las del bar de coctelería (`bar_cocteleria`) se consultan por separado (HU-13). Cada producto tiene una sola clasificación, así que nunca aparece en las dos.
+
 ```json
 [
   {
@@ -220,7 +222,7 @@ Las unidades propias se calculan con el inventario **al momento de consultar**, 
 
 ### Inventario
 
-Categorías válidas: `Mobiliario`, `Bar/Bebidas`, `Bebidas de Coctelería`.
+Categorías válidas: `Mobiliario`, `Bar/Bebidas` (bebidas de consumo directo) y `Bebidas de Coctelería` (licores fuertes). Cada elemento tiene una sola categoría y el filtro `?categoria=` devuelve solo esa (HU-13).
 
 #### `POST /api/inventario`
 
@@ -228,7 +230,7 @@ Categorías válidas: `Mobiliario`, `Bar/Bebidas`, `Bebidas de Coctelería`.
 { "nombre": "Sillas Tiffany doradas", "categoria_inventario": "Mobiliario", "cantidad_propia": 300 }
 ```
 
-Respuesta `201` con el elemento creado. Registra un movimiento de tipo `registro` con la cantidad inicial. Si el nombre ya existe responde `409`.
+Respuesta `201` con el elemento creado. Registra un movimiento de tipo `registro` con la cantidad inicial. Si ya hay **otro elemento del inventario** con ese nombre responde `409`; un producto del catálogo sí puede llamarse igual.
 
 #### `GET /api/inventario?categoria=Mobiliario`
 

@@ -1,8 +1,9 @@
 /**
  * Resumen lateral del paso 2: cuántos elementos hay en cada categoría y el costo estimado.
+ * Las bebidas generales y las de coctelería se muestran en filas separadas (HU-13).
  */
 import { Card } from '@/components/ui/card'
-import { CATEGORIAS, type Categoria } from '@/lib/categorias'
+import { CATEGORIAS, TIPOS_BEBIDA, type ConfigCategoria } from '@/lib/categorias'
 import { formatearMoneda, formatearNumero } from '@/lib/formato'
 import { repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { cn } from '@/lib/utils'
@@ -18,24 +19,37 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
   const totales = calcularTotales(requerimientos, asistentes)
   const unidadesMobiliario = requerimientos.mobiliario.reduce((suma, m) => suma + m.cantidad, 0)
   const unidadesAlquilar = totalAlquilar(requerimientos.mobiliario.map((m) => repartirMobiliario(m.cantidad, m.disponible)))
-  const filas: { categoria: Categoria; detalle: string; valor: string }[] = [
+  const productos = (n: number) => `${n} ${n === 1 ? 'producto' : 'productos'}`
+  const contarBebidas = (clasificacion: string) =>
+    requerimientos.bebidas.filter((b) => b.producto.clasificacion === clasificacion).length
+  const filas: { clave: string; config: ConfigCategoria; detalle: string; valor: string }[] = [
     {
-      categoria: 'alimentos',
-      detalle: `${requerimientos.alimentos.length} ${requerimientos.alimentos.length === 1 ? 'producto' : 'productos'}`,
+      clave: 'alimentos',
+      config: CATEGORIAS.alimentos,
+      detalle: productos(requerimientos.alimentos.length),
       valor: formatearMoneda(totales.alimentos),
     },
     {
-      categoria: 'bebidas',
-      detalle: `${requerimientos.bebidas.length} ${requerimientos.bebidas.length === 1 ? 'producto' : 'productos'}`,
-      valor: formatearMoneda(totales.bebidas),
+      clave: 'bebida_general',
+      config: TIPOS_BEBIDA.bebida_general,
+      detalle: productos(contarBebidas('bebida_general')),
+      valor: formatearMoneda(totales.bebidasGenerales),
     },
     {
-      categoria: 'mobiliario',
+      clave: 'bar_cocteleria',
+      config: TIPOS_BEBIDA.bar_cocteleria,
+      detalle: productos(contarBebidas('bar_cocteleria')),
+      valor: formatearMoneda(totales.barCocteleria),
+    },
+    {
+      clave: 'mobiliario',
+      config: CATEGORIAS.mobiliario,
       detalle: `${requerimientos.mobiliario.length} ${requerimientos.mobiliario.length === 1 ? 'elemento' : 'elementos'} · ${formatearNumero(unidadesMobiliario)} und${unidadesAlquilar > 0 ? ` · ${formatearNumero(unidadesAlquilar)} a alquilar` : ''}`,
       valor: 'Aparte',
     },
     {
-      categoria: 'servicios',
+      clave: 'servicios',
+      config: CATEGORIAS.servicios,
       detalle: `${requerimientos.servicios.length} ${requerimientos.servicios.length === 1 ? 'servicio' : 'servicios'}`,
       valor: 'Aparte',
     },
@@ -48,10 +62,10 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
         <span className="text-[13.5px] text-subtle">{formatearNumero(asistentes)} asistentes · margen de seguridad 10%</span>
       </div>
       <ul className="flex flex-col gap-3">
-        {filas.map(({ categoria, detalle, valor }) => {
-          const { etiqueta, icono: Icono, clases } = CATEGORIAS[categoria]
+        {filas.map(({ clave, config, detalle, valor }) => {
+          const { etiqueta, icono: Icono, clases } = config
           return (
-            <li key={categoria} className="flex items-center gap-2.5">
+            <li key={clave} className="flex items-center gap-2.5">
               <span aria-hidden="true" className={cn('flex size-7 items-center justify-center rounded-lg', clases)}>
                 <Icono className="size-[15px]" />
               </span>
