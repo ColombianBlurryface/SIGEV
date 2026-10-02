@@ -1,3 +1,7 @@
+/**
+ * Página "Registrar evento": asistente de 3 pasos (datos, requerimientos y resumen).
+ * Todo se guarda en el navegador mientras se avanza y se envía al servidor en un solo POST al final.
+ */
 import { ArrowLeft, Check, ChevronRight, LoaderCircle } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -45,12 +49,15 @@ export function NuevoEventoPage() {
   const [enviando, setEnviando] = useState(false)
   const [errorServidor, setErrorServidor] = useState<string | null>(null)
 
+  // Los errores del paso 1 solo se muestran después del primer intento de avanzar,
+  // para no llenar de rojo el formulario mientras el usuario apenas empieza a escribir.
   const errores: ErroresEvento = intentoAvanzar ? validarEvento(valores) : {}
   const asistentes = validarAsistentes(valores.asistentes)
   const asistentesFueraDeRango = asistentes.estado === 'bajo' || asistentes.estado === 'alto'
 
   const cambiarValor = (campo: keyof ValoresEvento, valor: string) => setValores((prev) => ({ ...prev, [campo]: valor }))
 
+  // Cambia de paso y vuelve arriba de la página (el scroll está en <main>, no en la ventana)
   function irAPaso(destino: Paso) {
     setErrorServidor(null)
     setPaso(destino)
@@ -62,6 +69,8 @@ export function NuevoEventoPage() {
     if (Object.keys(validarEvento(valores)).length === 0) irAPaso(2)
   }
 
+  // Envía todo el evento en una sola petición: datos, productos (alimentos y bebidas)
+  // y requerimientos adicionales (mobiliario y servicios). El backend calcula y guarda todo junto.
   async function guardar() {
     setEnviando(true)
     setErrorServidor(null)
@@ -87,6 +96,7 @@ export function NuevoEventoPage() {
             descripcion: m.elemento,
             cantidad: m.cantidad,
             notas: m.referencia || undefined,
+            producto_id: m.productoId ?? undefined, // HU-12: elemento del inventario (si no hay, va a alquiler)
           })),
           ...requerimientos.servicios.map((s) => ({
             tipo: s.tipo,

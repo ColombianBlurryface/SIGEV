@@ -1,3 +1,7 @@
+/**
+ * Estructura de las páginas privadas: menú lateral fijo a la izquierda y el contenido
+ * de la página actual (<Outlet />) a la derecha, con su propio scroll.
+ */
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/Sidebar'
 

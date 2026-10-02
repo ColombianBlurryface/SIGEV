@@ -1,3 +1,6 @@
+/**
+ * Llamadas a la API del catálogo de productos.
+ */
 import type { ProductoCatalogo } from '@/types/catalogo'
 import type { ClasificacionProducto } from '@/types/evento'
 import { apiRequest } from './api'

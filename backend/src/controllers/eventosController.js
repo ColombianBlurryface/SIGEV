@@ -1,12 +1,28 @@
-// backend/src/controllers/eventosController.js
+/**
+ * Controlador de eventos.
+ *
+ * Aquí está el "motor de cálculo" de SIGEV: al registrar un evento, calcula cuánto
+ * se necesita de cada alimento y bebida según el número de asistentes, con un
+ * margen de seguridad del 10%. También guarda los servicios adicionales y el
+ * mobiliario, que se registran sin cálculo. Al consultar un evento, compara su
+ * mobiliario con el inventario para saber qué es propio y qué hay que alquilar (HU-12).
+ */
 const pool = require('../config/db');
 
+// Redondea hacia arriba evitando errores de precisión decimal de JavaScript.
 // Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
 const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
 
+// RN-03 (P-05): con más de 200 asistentes se avisa que probablemente haya que alquilar mobiliario.
+const UMBRAL_ALQUILER = 200;
+
 /**
- * aqui  registro un evento, sus productos de catálogo calculados con 10% de margen (RN-09, RN-11)
+ * POST /api/eventos
+ * Registra un evento, sus productos de catálogo calculados con 10% de margen (RN-09, RN-11)
  * y los servicios adicionales opcionales sin cálculo (RF-06, RF-47, RF-48).
+ *
+ * Todo se guarda dentro de una transacción: si algo falla a mitad de camino
+ * (por ejemplo, un producto que no existe), no queda nada guardado a medias.
  */
 const crearEvento = async (req, res) => {
   const client = await pool.connect();
@@ -22,6 +38,7 @@ const crearEvento = async (req, res) => {
       servicios_adicionales = [] // DJ, música, sonido, requerimientos de mobiliario
     } = req.body;
 
+    // Inicia la transacción: a partir de aquí todo se confirma junto (COMMIT) o se deshace (ROLLBACK)
     await client.query('BEGIN');
 
     // 1. Insertar el evento base (RF-01, RF-02)
@@ -60,7 +77,7 @@ const crearEvento = async (req, res) => {
 
       // Aplicación de fórmulas según clasificación y tipo de cálculo (RN-10, RN-09, RN-11)
       if (prod.tipo_calculo === 'porcion_persona') {
-        // Ej: Carne (gramos) -> asistentes * porción. Margen 10%.
+        // Ej: carne en gramos -> asistentes * porción. Si pasa de 1000 g se entrega en kg. Margen 10%.
         const totalGramos = asistentes * porcion;
         cantidadNeta = totalGramos >= 1000 ? totalGramos / 1000 : totalGramos;
         unidadEntrega = totalGramos >= 1000 ? 'kg' : 'g';
@@ -77,6 +94,7 @@ const crearEvento = async (req, res) => {
         unidadEntrega = 'botellas';
       }
 
+      // El costo se calcula sobre la cantidad con margen (lo que realmente se compra)
       const costoEstimado = cantidadConMargen * Number(prod.precio_unitario);
 
       const queryProdEvento = `
@@ -96,18 +114,45 @@ const crearEvento = async (req, res) => {
       ]);
     }
 
-    // 3. Registrar servicios adicionales (DJ, música, mobiliario) sin cálculo (RF-06, RF-47, RF-48)
+    // 3. Registrar servicios adicionales (DJ, música, mobiliario) sin cálculo (RF-06, RF-47, RF-48).
+    //    El mobiliario llega con tipo 'mobiliario'; el resto con su tipo de servicio (dj, sonido...).
+    //    HU-12: el mobiliario puede traer el producto_id de un elemento del inventario.
+    const elementosUsados = new Set();
     for (const servicio of servicios_adicionales) {
+      const esMobiliario = servicio.tipo === 'mobiliario';
+      const productoId = esMobiliario && servicio.producto_id != null ? Number(servicio.producto_id) : null;
+      let descripcion = servicio.descripcion;
+
+      if (productoId !== null) {
+        // Solo se aceptan elementos de la categoría Mobiliario y sin repetir dentro del mismo evento
+        const resElemento = await client.query(
+          `SELECT nombre FROM catalogo_productos WHERE id = $1 AND categoria_inventario = 'Mobiliario'`,
+          [Number.isInteger(productoId) ? productoId : 0]
+        );
+        if (resElemento.rowCount === 0 || elementosUsados.has(productoId)) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Datos inválidos',
+            detalle: resElemento.rowCount === 0
+              ? `El elemento de inventario ${servicio.producto_id} no existe o no es mobiliario.`
+              : `El elemento «${resElemento.rows[0].nombre}» está repetido en el evento.`
+          });
+        }
+        elementosUsados.add(productoId);
+        descripcion = resElemento.rows[0].nombre; // Se guarda el nombre actual del inventario
+      }
+
       const queryServicio = `
-        INSERT INTO requerimientos_adicionales (evento_id, tipo, descripcion, cantidad, notas)
-        VALUES ($1, $2, $3, $4, $5);
+        INSERT INTO requerimientos_adicionales (evento_id, tipo, descripcion, cantidad, notas, producto_id)
+        VALUES ($1, $2, $3, $4, $5, $6);
       `;
       await client.query(queryServicio, [
         nuevoEvento.id,
         servicio.tipo || 'servicio_opcional',
-        servicio.descripcion,
+        descripcion,
         servicio.cantidad || null,
-        servicio.notas || null
+        servicio.notas || null,
+        productoId
       ]);
     }
 
@@ -118,6 +163,7 @@ const crearEvento = async (req, res) => {
       evento: nuevoEvento
     });
   } catch (error) {
+    // Deshace todo lo que se alcanzó a guardar en esta transacción
     await client.query('ROLLBACK');
     console.error('Error en crearEvento:', error);
     res.status(500).json({ error: 'Error al registrar el evento', detalle: error.message });
@@ -127,8 +173,10 @@ const crearEvento = async (req, res) => {
 };
 
 /**
- * Consulta la lista general de eventos registrados (RF-07)
- * Incluye la bandera de si aplica modalidad buffet por asistentes > 300 (RN-02)
+ * GET /api/eventos
+ * Consulta la lista general de eventos registrados (RF-07), ordenada por fecha.
+ * Incluye la bandera es_modalidad_buffet cuando hay más de 300 asistentes (RN-02)
+ * y aviso_alquiler cuando hay más de 200 (RN-03).
  */
 const listarEventos = async (req, res) => {
   try {
@@ -146,11 +194,12 @@ const listarEventos = async (req, res) => {
         CASE 
           WHEN asistentes > 300 THEN true 
           ELSE false 
-        END AS es_modalidad_buffet
+        END AS es_modalidad_buffet,
+        asistentes > $1 AS aviso_alquiler
       FROM eventos
       ORDER BY fecha_evento ASC;
     `;
-    const resultado = await pool.query(consulta);
+    const resultado = await pool.query(consulta, [UMBRAL_ALQUILER]);
     res.json(resultado.rows);
   } catch (error) {
     console.error('Error al listar eventos:', error);
@@ -159,6 +208,7 @@ const listarEventos = async (req, res) => {
 };
 
 /**
+ * GET /api/eventos/:id
  * Consulta el detalle completo de un evento por ID (RF-07)
  * Retorna la información general, los productos calculados y los servicios adicionales.
  */
@@ -194,18 +244,29 @@ const obtenerDetalleEvento = async (req, res) => {
     `;
     const resProductos = await pool.query(queryProductos, [id]);
 
-    // 3. Servicios adicionales opcionales (DJ, música, sonido) (RF-06, RF-47, RF-48)
+    // 3. Servicios adicionales y mobiliario (RF-06, RF-47, RF-48).
+    //    HU-12 (RF-14): para el mobiliario se compara la cantidad pedida con el stock actual
+    //    del inventario. Lo que alcanza son unidades propias y el resto hay que alquilarlo.
+    //    Si el mobiliario no está relacionado con el inventario, todo va a alquiler.
     const queryServicios = `
-      SELECT id, tipo, descripcion, cantidad, notas, creado_en
-      FROM requerimientos_adicionales
-      WHERE evento_id = $1
-      ORDER BY id ASC;
+      SELECT
+        r.id, r.tipo, r.descripcion, r.cantidad, r.notas, r.creado_en, r.producto_id,
+        c.cantidad_propia AS disponible_inventario,
+        CASE WHEN r.tipo = 'mobiliario'
+          THEN LEAST(COALESCE(r.cantidad, 0), COALESCE(c.cantidad_propia, 0)) END AS unidades_propias,
+        CASE WHEN r.tipo = 'mobiliario'
+          THEN COALESCE(r.cantidad, 0) - LEAST(COALESCE(r.cantidad, 0), COALESCE(c.cantidad_propia, 0)) END AS unidades_alquilar
+      FROM requerimientos_adicionales r
+      LEFT JOIN catalogo_productos c ON c.id = r.producto_id
+      WHERE r.evento_id = $1
+      ORDER BY r.id ASC;
     `;
     const resServicios = await pool.query(queryServicios, [id]);
 
     res.json({
       ...resEvento.rows[0],
       es_modalidad_buffet: resEvento.rows[0].asistentes > 300,
+      aviso_alquiler: resEvento.rows[0].asistentes > UMBRAL_ALQUILER,
       productos_calculados: resProductos.rows,
       servicios_adicionales: resServicios.rows
     });

@@ -1,3 +1,7 @@
+/**
+ * Estilos del botón según su variante (principal, secundario, fantasma, peligro) y tamaño.
+ * Está separado de button.tsx para poder dar estilo de botón también a enlaces (<Link>).
+ */
 import { cva } from 'class-variance-authority'
 
 export const buttonVariants = cva(

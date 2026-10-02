@@ -1,3 +1,6 @@
+/**
+ * Tipos de datos de la autenticación: usuario, credenciales y respuesta del login.
+ */
 export interface Usuario {
   id: number
   nombre_completo: string

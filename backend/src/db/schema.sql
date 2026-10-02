@@ -1,5 +1,16 @@
 -- =============================================================================
--- SIGEV: Esquema de Base de Datos - Sprint 1
+-- SIGEV: Esquema de la base de datos (PostgreSQL / Supabase)
+-- =============================================================================
+-- Crea los tipos y tablas del sistema. Se puede ejecutar varias veces sin error:
+-- usa CREATE ... IF NOT EXISTS y ADD COLUMN IF NOT EXISTS.
+--
+-- Cómo aplicarlo:
+--   - Supabase: pegar el archivo en el SQL Editor del proyecto y ejecutarlo.
+--   - Postgres local: psql -d sigev_db -f backend/src/db/schema.sql
+--
+-- IMPORTANTE: cambiar este archivo NO actualiza Supabase por sí solo.
+-- Quien agregue o modifique una tabla debe ejecutar el cambio en Supabase
+-- en el mismo PR y avisarlo en la descripción.
 -- =============================================================================
 
 -- 1. Tipos enumerados
@@ -90,7 +101,14 @@ CREATE TABLE IF NOT EXISTS requerimientos_adicionales (
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 6. Usuarios del sistema (login únicamente; el alta se hace directo en BD, sin registro público)
+-- HU-12 (RF-14): el mobiliario del evento se relaciona con un elemento del inventario.
+-- Si producto_id es NULL, el elemento no está en el inventario y todo se debe alquilar.
+-- ON DELETE SET NULL: si algún día se borra el elemento, el evento conserva la descripción.
+ALTER TABLE requerimientos_adicionales
+ADD COLUMN IF NOT EXISTS producto_id INTEGER REFERENCES catalogo_productos(id) ON DELETE SET NULL;
+
+-- 6. Usuarios del sistema (login únicamente; el alta se hace con src/scripts/crearUsuario.js)
+--    La contraseña se guarda como hash bcrypt, nunca en texto plano.
 CREATE TABLE IF NOT EXISTS usuarios (
     id SERIAL PRIMARY KEY,
     nombre_completo VARCHAR(150) NOT NULL,
@@ -100,9 +118,42 @@ CREATE TABLE IF NOT EXISTS usuarios (
     activo BOOLEAN NOT NULL DEFAULT true,
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+-- 7. Inventario propio: los elementos se guardan en catalogo_productos con una
+--    categoria_inventario (si es NULL, el producto es de catálogo y no de inventario).
 -- Extensión de tabla para cubrir HU-08, HU-09, HU-10, HU-12 y HU-13
 ALTER TABLE catalogo_productos
-ADD COLUMN categoria_inventario VARCHAR(50) CHECK (categoria_inventario IN ('Mobiliario', 'Bar/Bebidas', 'Bebidas de Coctelería')),
-ADD COLUMN cantidad_propia INT DEFAULT 0,
-ADD COLUMN cantidad_danada INT DEFAULT 0,
-ADD COLUMN es_propio BOOLEAN DEFAULT TRUE;
+ADD COLUMN IF NOT EXISTS categoria_inventario VARCHAR(50) CHECK (categoria_inventario IN ('Mobiliario', 'Bar/Bebidas', 'Bebidas de Coctelería')),
+ADD COLUMN IF NOT EXISTS cantidad_propia INT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS cantidad_danada INT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS es_propio BOOLEAN DEFAULT TRUE;
+
+-- 8. Movimientos del inventario (HU-09, RF-13): registro inicial, adquisiciones, ajustes manuales (HU-08)
+--    y bajas por daño (HU-10, siempre en negativo).
+-- La suma de los movimientos de un elemento es igual a su cantidad_propia.
+-- No guarda facturas, comprobantes ni costos: fuera de alcance.
+CREATE TABLE IF NOT EXISTS movimientos_inventario (
+    id SERIAL PRIMARY KEY,
+    producto_id INTEGER NOT NULL REFERENCES catalogo_productos(id) ON DELETE RESTRICT,
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('registro', 'adquisicion', 'ajuste', 'baja')),
+    cantidad INTEGER NOT NULL,
+    cantidad_resultante INTEGER NOT NULL CHECK (cantidad_resultante >= 0),
+    notas TEXT,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_cantidad_por_tipo CHECK (
+        (tipo IN ('registro', 'adquisicion') AND cantidad > 0)
+        OR (tipo = 'ajuste' AND cantidad <> 0)
+        OR (tipo = 'baja' AND cantidad < 0)
+    )
+);
+
+-- HU-10: en bases creadas antes de existir el tipo "baja", se reemplazan las dos restricciones
+-- para aceptarlo. Se puede ejecutar varias veces sin error.
+ALTER TABLE movimientos_inventario DROP CONSTRAINT IF EXISTS movimientos_inventario_tipo_check;
+ALTER TABLE movimientos_inventario ADD CONSTRAINT movimientos_inventario_tipo_check
+    CHECK (tipo IN ('registro', 'adquisicion', 'ajuste', 'baja'));
+ALTER TABLE movimientos_inventario DROP CONSTRAINT IF EXISTS chk_cantidad_por_tipo;
+ALTER TABLE movimientos_inventario ADD CONSTRAINT chk_cantidad_por_tipo CHECK (
+    (tipo IN ('registro', 'adquisicion') AND cantidad > 0)
+    OR (tipo = 'ajuste' AND cantidad <> 0)
+    OR (tipo = 'baja' AND cantidad < 0)
+);

@@ -1,3 +1,7 @@
+/**
+ * Definición del contexto de autenticación: qué datos y funciones de la sesión
+ * quedan disponibles para cualquier componente mediante el hook useAuth().
+ */
 import { createContext } from 'react'
 import type { Credenciales, Usuario } from '@/types/auth'
 

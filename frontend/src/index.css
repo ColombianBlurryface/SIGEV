@@ -1,5 +1,18 @@
+/*
+ * Estilos globales de SIGEV (Tailwind CSS 4).
+ *
+ * Los colores se definen como variables CSS con nombre según su uso (--primary, --card,
+ * --muted-foreground, --alimentos...). Hay dos juegos de valores:
+ *   - :root  -> modo claro (índigo)
+ *   - .dark  -> modo oscuro (negro y dorado); se activa cuando <html> tiene la clase "dark"
+ *
+ * El bloque @theme inline convierte cada variable en una clase de Tailwind, por ejemplo
+ * --primary -> bg-primary / text-primary. En los componentes se usan siempre estas clases
+ * (nunca colores en hexadecimal) para que todo cambie solo al pasar de un tema al otro.
+ */
 @import "tailwindcss";
 
+/* Hace que las clases dark:... de Tailwind se apliquen cuando hay una clase "dark" en un elemento padre */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
@@ -37,10 +50,12 @@
   --success-foreground: #1d7148;
   --warning-soft: #fff6e0;
   --warning-foreground: #6b4a00;
+  /* Colores de la barra de rango del campo de asistentes */
   --range-ok: #bfe3cf;
   --range-buffet: #c9d0f5;
   --range-out: #f3d6d6;
 
+  /* Panel de presentación del login */
   --panel: #1e2a78;
   --panel-card: #2a378f;
   --panel-card-border: #3b49a3;
@@ -49,6 +64,7 @@
   --panel-subtle: #aeb6e8;
   --panel-accent: #ffffff;
 
+  /* Colores de cada categoría de requerimiento (texto y fondo suave) */
   --alimentos: #9a4a12;
   --alimentos-soft: #fff1e6;
   --bebidas: #0e6485;

@@ -1,3 +1,6 @@
+/**
+ * Hook para usar la sesión en cualquier componente: const { usuario, cerrarSesion } = useAuth().
+ */
 import { useContext } from 'react'
 import { AuthContext } from '@/context/auth-context'
 

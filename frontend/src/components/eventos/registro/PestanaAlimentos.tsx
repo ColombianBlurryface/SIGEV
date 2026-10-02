@@ -1,3 +1,7 @@
+/**
+ * Pestaña "Alimentos" (HU-02): se elige un producto del catálogo, se ajusta la porción por persona
+ * y se escriben los componentes del menú. Muestra en vivo la cantidad y el costo calculados.
+ */
 import { Calculator, Plus, RotateCw, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Alert } from '@/components/ui/alert'
@@ -28,14 +32,17 @@ export function PestanaAlimentos({ asistentes, alimentos, onAgregar, onQuitar }:
   const [componentes, setComponentes] = useState('')
   const [errorForm, setErrorForm] = useState<string | null>(null)
 
+  // Un producto solo se puede agregar una vez por evento, así que se quita de la lista al agregarlo
   const agregados = new Set(alimentos.map((a) => a.producto.id))
   const disponibles = productos.filter((p) => !agregados.has(p.id))
   const producto = productos.find((p) => p.id === Number(productoId)) ?? null
   const porcionNumero = Number(porcion)
   const porcionValida = porcion.trim() !== '' && Number.isFinite(porcionNumero) && porcionNumero > 0
+  // Cálculo en vivo mientras el usuario escribe (mismas fórmulas que el backend)
   const vistaPrevia = producto && porcionValida ? calcularProducto(producto, porcionNumero, asistentes) : null
   const subtotal = alimentos.reduce((suma, a) => suma + calcularProducto(a.producto, a.porcion, asistentes).costo, 0)
 
+  // Al elegir un producto se propone la porción por persona que trae el catálogo
   function elegirProducto(id: string) {
     setProductoId(id)
     setErrorForm(null)

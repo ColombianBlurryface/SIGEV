@@ -1,2 +1,213 @@
-# SIGEV
-Sistema de Gestión y Planificación Logística de Eventos.
+# SIGEV · Sistema de Gestión y Planificación Logística de Eventos
+
+SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**: registra el evento y sus asistentes y calcula automáticamente cuánta comida y bebida se necesita, con un margen de seguridad del 10%. También lleva el mobiliario, los servicios adicionales y el **inventario propio** de la organización.
+
+![Pantalla de eventos](docs/imagenes/eventos-claro.png)
+
+---
+
+## Contenido
+
+- [Funcionalidades](#funcionalidades)
+- [Capturas](#capturas)
+- [Arquitectura](#arquitectura)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Puesta en marcha](#puesta-en-marcha)
+- [Base de datos](#base-de-datos)
+- [Reglas de negocio](#reglas-de-negocio)
+- [Flujo de trabajo del equipo](#flujo-de-trabajo-del-equipo)
+- [Pendientes y próximos pasos](#pendientes-y-próximos-pasos)
+
+---
+
+## Funcionalidades
+
+| Historia | Qué permite | Dónde está |
+| --- | --- | --- |
+| Login | Iniciar sesión con usuario y contraseña. No hay registro público: el administrador crea las cuentas. | `/login` |
+| HU-01 | Registrar un evento: nombre, tipo, fecha, duración, asistentes y observaciones. | Nuevo evento · paso 1 |
+| HU-07 | Validar que el evento tenga entre 40 y 600 asistentes, con aviso inmediato si está fuera de rango. | Nuevo evento · paso 1 |
+| HU-02 | Agregar alimentos del catálogo con su porción por persona y los componentes del menú. | Nuevo evento · paso 2 |
+| HU-03 | Agregar bebidas individuales (por persona) o compartidas (por botella). | Nuevo evento · paso 2 |
+| HU-04 | Agregar el mobiliario del evento, elegido del inventario (o «Otro» si no está), con su cantidad. | Nuevo evento · paso 2 |
+| HU-05 | Agregar servicios adicionales (DJ, música, sonido, entretenimiento...). | Nuevo evento · paso 2 |
+| HU-06 | Consultar los eventos con búsqueda, filtro por estado y el detalle de sus requerimientos y costos. | `/eventos` |
+| HU-08 | Registrar elementos del inventario propio, actualizar su cantidad y consultarlos. | `/inventario` |
+| HU-09 | Registrar adquisiciones que suman al inventario, con historial de todos los movimientos. | `/inventario` |
+| HU-10 | Retirar del inventario las unidades dañadas, con su motivo (por ahora solo en la API). | `POST /api/inventario/:id/baja` |
+| HU-12 | Diferenciar el mobiliario propio del que hay que alquilar: cada elemento del evento dice cuántas unidades son propias y cuántas se alquilan, y se avisa de alquiler cuando el evento supera 200 asistentes. | Nuevo evento · paso 2 y 3, detalle del evento |
+
+Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
+
+---
+
+## Capturas
+
+### Inicio de sesión
+
+| Modo claro | Modo oscuro |
+| --- | --- |
+| ![Login en modo claro](docs/imagenes/login-claro.png) | ![Login en modo oscuro](docs/imagenes/login-oscuro.png) |
+
+### Eventos (HU-06)
+
+Resumen, búsqueda, filtros por estado y, a la derecha, el detalle del evento seleccionado con sus requerimientos y el costo estimado.
+
+| Modo claro | Modo oscuro |
+| --- | --- |
+| ![Eventos en modo claro](docs/imagenes/eventos-claro.png) | ![Eventos en modo oscuro](docs/imagenes/eventos-oscuro.png) |
+
+En el detalle, el mobiliario se compara con el **inventario actual**: si después se compran más unidades, lo que hay que alquilar baja solo.
+
+![Detalle de un evento con mobiliario propio y alquilado](docs/imagenes/eventos-alquiler.png)
+
+### Registrar un evento (HU-01 a HU-05 y HU-07)
+
+El registro es un asistente de tres pasos. Todo se guarda al final, en un solo envío.
+
+**Paso 1 · Datos del evento.** A la derecha se ve una vista previa en vivo.
+
+![Paso 1 del registro](docs/imagenes/registro-paso1-datos.png)
+
+Si el número de asistentes está fuera del rango permitido, el campo lo avisa de inmediato y no deja avanzar:
+
+![Validación de asistentes](docs/imagenes/validacion-asistentes.png)
+
+**Paso 2 · Requerimientos.** Una pestaña por categoría. Las cantidades y costos se calculan mientras se escribe.
+
+| Alimentos | Bebidas |
+| --- | --- |
+| ![Pestaña de alimentos](docs/imagenes/registro-paso2-alimentos.png) | ![Pestaña de bebidas](docs/imagenes/registro-paso2-bebidas.png) |
+
+![Pestaña de servicios adicionales](docs/imagenes/registro-paso2-servicios.png)
+
+**Mobiliario propio y alquilado (HU-12).** El mobiliario se elige del inventario. Cada línea indica cuántas unidades son propias y cuántas hay que alquilar; lo que no está en el inventario va todo a alquiler. Con más de 200 asistentes aparece el aviso de alquiler (RN-03).
+
+![Pestaña de mobiliario con unidades propias y a alquilar](docs/imagenes/registro-paso2-mobiliario.png)
+
+**Paso 3 · Resumen.** Revisión final con el costo estimado antes de guardar.
+
+![Paso 3 del registro](docs/imagenes/registro-paso3-resumen.png)
+
+### Inventario (HU-08 y HU-09)
+
+Registro de elementos y adquisiciones, tabla con búsqueda y filtros, y el historial de movimientos (registros, adquisiciones y ajustes).
+
+| Modo claro | Modo oscuro |
+| --- | --- |
+| ![Inventario en modo claro](docs/imagenes/inventario-claro.png) | ![Inventario en modo oscuro](docs/imagenes/inventario-oscuro.png) |
+
+> Las capturas se tomaron con datos de ejemplo en una base de datos local.
+
+---
+
+## Arquitectura
+
+```mermaid
+flowchart LR
+    U[Usuario en el navegador] --> F[Frontend<br/>React + Vite]
+    F -- "HTTP / JSON<br/>(token JWT)" --> B[Backend<br/>Node.js + Express]
+    B -- "SQL (pg)" --> D[(PostgreSQL<br/>Supabase)]
+```
+
+| Capa | Tecnologías | Carpeta |
+| --- | --- | --- |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, componentes estilo shadcn/ui, React Router | [`frontend/`](frontend) |
+| Backend | Node.js, Express 5, `pg` (consultas SQL directas), JWT, bcrypt | [`backend/`](backend) |
+| Base de datos | PostgreSQL alojado en Supabase (se conecta por el *pooler*) | [`backend/src/db/`](backend/src/db) |
+
+- El **frontend** solo muestra información y valida antes de enviar; nunca habla directamente con la base de datos.
+- El **backend** aplica las reglas de negocio (cálculos, validaciones, transacciones) y es el único que consulta la base.
+- **Supabase** se usa solo como PostgreSQL administrado: no se usan su autenticación ni su API automática.
+
+---
+
+## Estructura del repositorio
+
+```text
+SIGEV/
+├── backend/                 API REST (Node.js + Express)
+│   ├── src/
+│   │   ├── server.js        Punto de entrada: configura Express y registra las rutas
+│   │   ├── config/          Conexión a PostgreSQL
+│   │   ├── routes/          Rutas de cada módulo (auth, eventos, catálogo, inventario)
+│   │   ├── controllers/     Lógica de cada ruta: validaciones, cálculos y consultas SQL
+│   │   ├── middlewares/     Validaciones previas y verificación del token
+│   │   ├── scripts/         Script para crear usuarios
+│   │   └── db/              schema.sql (estructura) y seeds.sql (datos iniciales)
+│   ├── .env.example         Plantilla de variables de entorno
+│   └── README.md            Documentación de la API
+├── frontend/                Aplicación web (React + Vite)
+│   ├── src/                 Páginas, componentes, servicios, hooks y tipos
+│   └── README.md            Cómo levantarlo y cómo está organizado
+└── docs/
+    └── imagenes/            Capturas usadas en la documentación
+```
+
+---
+
+## Puesta en marcha
+
+Requisitos: **Node.js 20.19 o superior** (o 22.12+) y **npm 10+**.
+
+```bash
+git clone https://github.com/ColombianBlurryface/SIGEV.git
+cd SIGEV
+git switch develop
+```
+
+1. **Backend:** sigue [`backend/README.md`](backend/README.md). En resumen: `cd backend`, `npm install`, copiar `.env.example` a `.env` con los datos de Supabase y ejecutar `node src/server.js`.
+2. **Frontend:** sigue [`frontend/README.md`](frontend/README.md). En resumen: `cd frontend`, `npm install`, copiar `.env.example` a `.env` y ejecutar `npm run dev`.
+3. Abre <http://localhost:5173> e inicia sesión con un usuario creado con el script `crearUsuario.js`.
+
+---
+
+## Base de datos
+
+La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/schema.sql) y los productos iniciales del catálogo en [`backend/src/db/seeds.sql`](backend/src/db/seeds.sql).
+
+| Tabla | Para qué sirve |
+| --- | --- |
+| `eventos` | Datos generales de cada evento y su estado (planificación, confirmado, realizado, cancelado). |
+| `catalogo_productos` | Productos del catálogo (alimentos y bebidas con porción y precio) y también los elementos del inventario (los que tienen `categoria_inventario`). |
+| `evento_productos` | Alimentos y bebidas de cada evento con la cantidad neta, la cantidad con margen y el costo estimado. |
+| `requerimientos_adicionales` | Mobiliario y servicios adicionales de cada evento (sin cálculo automático). El mobiliario guarda en `producto_id` el elemento del inventario con el que se relaciona (HU-12). |
+| `usuarios` | Cuentas que pueden iniciar sesión (contraseña guardada como hash bcrypt). |
+| `movimientos_inventario` | Historial de cada cambio de cantidad del inventario: registro inicial, adquisición, ajuste o baja por daño. |
+
+> **Importante:** modificar `schema.sql` **no actualiza Supabase por sí solo**. Quien cambie una tabla debe ejecutar ese cambio en Supabase (SQL Editor) dentro del mismo PR y avisarlo en la descripción.
+
+---
+
+## Reglas de negocio
+
+- Un evento debe tener **entre 40 y 600 asistentes** (RN-01 / HU-07).
+- Con **más de 300 asistentes** el evento es de modalidad **buffet** (RN-02).
+- Con **más de 200 asistentes** se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).
+- El mobiliario de un evento se compara con el stock actual del inventario: lo que alcanza es **propio** y el resto se **alquila**. Lo que no está en el inventario se alquila completo (HU-12).
+- Todas las cantidades de alimentos y bebidas llevan un **margen de seguridad del 10%** (RN-09).
+- Cómo se calcula cada producto:
+  - **Por porción** (alimentos): asistentes × gramos por persona; si supera 1000 g se expresa en kg.
+  - **Por unidad** (bebidas individuales): asistentes × unidades por persona, redondeado hacia arriba.
+  - **Por botella** (bebidas compartidas): porciones por botella = volumen ÷ tamaño de la porción; botellas = asistentes ÷ porciones por botella, redondeado hacia arriba.
+- El costo estimado solo incluye alimentos y bebidas; el mobiliario y los servicios se cotizan aparte.
+- En el inventario, la suma de los movimientos de cada elemento siempre es igual a su cantidad disponible.
+
+---
+
+## Flujo de trabajo del equipo
+
+- **Una historia de usuario por rama**, creada desde `develop`: `feature/hu-XX-descripcion-corta`.
+- **Commits** en español, en infinitivo y en minúscula, por ejemplo `agregar registro de bebidas`.
+- Todo llega a `develop` mediante **Pull Request** con una descripción de qué cambió y cómo probarlo.
+- Si el PR cambia la base de datos, se aplica en Supabase en el mismo PR y se indica en la descripción.
+- Antes de abrir el PR: `npm run build` y `npm run lint` en el frontend deben pasar sin errores.
+
+---
+
+## Pendientes y próximos pasos
+
+- **Proteger la API con el token de sesión:** hoy las rutas de eventos, catálogo e inventario responden sin token (el middleware `verificarToken` existe, pero no está aplicado). Con eso también se podrá registrar qué usuario hace cada movimiento.
+- **Desplegar** la aplicación (propuesta: frontend y backend en Vercel, base de datos en Supabase).
+- Editar los requerimientos y cambiar el estado de un evento ya creado.
+- Crear productos nuevos en el catálogo desde la aplicación.

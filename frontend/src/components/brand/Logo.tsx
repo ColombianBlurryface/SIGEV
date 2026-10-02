@@ -1,3 +1,7 @@
+/**
+ * Logo de SIGEV: cuatro cuadros (uno por categoría de requerimiento) y el nombre.
+ * En modo oscuro los cuadros toman tonos dorados.
+ */
 import { cn } from '@/lib/utils'
 
 interface LogoProps {

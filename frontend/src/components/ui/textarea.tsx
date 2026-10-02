@@ -1,3 +1,6 @@
+/**
+ * Área de texto base para escribir varias líneas.
+ */
 import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 

@@ -1,6 +1,12 @@
+/**
+ * Paso 3 del registro: revisión final de los datos y requerimientos antes de guardar,
+ * con botones para volver a editar cualquier paso. Incluye el aviso de alquiler (HU-12).
+ */
 import { Info } from 'lucide-react'
+import { AvisoAlquiler } from '@/components/eventos/AlquilerMobiliario'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { describirReparto, repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { calcularProducto } from '@/lib/calculos'
 import { CATEGORIAS, etiquetaServicio, type Categoria } from '@/lib/categorias'
 import { formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
@@ -34,6 +40,7 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
   const asistentes = validarAsistentes(valores.asistentes)
   const cantidad = asistentes.cantidad ?? 0
   const totales = calcularTotales(requerimientos, cantidad)
+  const repartos = requerimientos.mobiliario.map((m) => repartirMobiliario(m.cantidad, m.disponible))
 
   const lineaProducto = (item: { producto: ProductoCatalogo; porcion: number }, nota?: string): LineaResumen => {
     const calculo = calcularProducto(item.producto, item.porcion, cantidad)
@@ -58,7 +65,7 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
         lineas: requerimientos.mobiliario.map((m, indice) => ({
           id: indice,
           nombre: m.elemento,
-          nota: m.referencia || undefined,
+          nota: [describirReparto(repartos[indice]), m.referencia].filter(Boolean).join(' · '),
           cantidad: `${formatearNumero(m.cantidad)} und`,
         })),
       },
@@ -91,6 +98,8 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex min-w-0 flex-col gap-4">
+        <AvisoAlquiler asistentes={cantidad} unidadesAlquilar={totalAlquilar(repartos)} />
+
         <Card className="flex flex-col gap-4 p-6">
           <div className="flex items-center justify-between">
             <h2 className="text-[17px] font-bold">Datos del evento</h2>

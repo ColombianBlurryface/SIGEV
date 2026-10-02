@@ -1,9 +1,17 @@
-// backend/src/controllers/catalogoController.js
+/**
+ * Controlador del catálogo de productos.
+ *
+ * El catálogo guarda los alimentos y bebidas con sus porciones y precios, que se
+ * usan para calcular las cantidades de cada evento. La misma tabla también guarda
+ * los elementos del inventario, por eso aquí se filtran con
+ * "categoria_inventario IS NULL": el registro de eventos solo ve productos de catálogo.
+ */
 const pool = require('../config/db');
 
 /**
- * Obtiene los productos del catálogo disponibles para selección en eventos
- * Soporta filtro opcional por query param: /api/catalogo?clasificacion=alimento
+ * GET /api/catalogo
+ * Devuelve los productos activos del catálogo, ordenados por clasificación y nombre.
+ * Filtro opcional: /api/catalogo?clasificacion=alimento
  */
 const obtenerCatalogo = async (req, res) => {
   try {
@@ -22,6 +30,7 @@ const obtenerCatalogo = async (req, res) => {
         precio_unitario
       FROM catalogo_productos
       WHERE activo = true
+        AND categoria_inventario IS NULL
     `;
     const valores = [];
 
@@ -44,14 +53,15 @@ const obtenerCatalogo = async (req, res) => {
 };
 
 /**
- * Obtiene el detalle técnico de un producto específico por su ID
+ * GET /api/catalogo/:id
+ * Devuelve todos los datos de un producto del catálogo (404 si no existe).
  */
 const obtenerProductoPorId = async (req, res) => {
   try {
     const { id } = req.params;
     const query = `
       SELECT * FROM catalogo_productos 
-      WHERE id = $1 AND activo = true;
+      WHERE id = $1 AND activo = true AND categoria_inventario IS NULL;
     `;
     const resultado = await pool.query(query, [id]);
 

@@ -1,3 +1,8 @@
+/**
+ * Campo de número de asistentes con la validación de la HU-07 (entre 40 y 600).
+ * Incluye botones de -10/+10, una barra que muestra dónde cae el número y los avisos:
+ * error si está fuera de rango y aviso de modalidad buffet desde 301 asistentes.
+ */
 import { Check, Minus, Plus } from 'lucide-react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -5,9 +10,11 @@ import { Label } from '@/components/ui/label'
 import { ASISTENTES_MAX, ASISTENTES_MIN, BUFFET_DESDE, validarAsistentes } from '@/lib/reglasEvento'
 import { cn } from '@/lib/utils'
 
+// La barra va de 0 a 700 asistentes para que se vean los dos lados del rango permitido (40–600)
 const ESCALA_MAX = 700
 const PASO = 10
 
+// Convierte un número de asistentes en la posición (en %) dentro de la barra
 const porcentaje = (valor: number) => `${(Math.min(Math.max(valor, 0), ESCALA_MAX) / ESCALA_MAX) * 100}%`
 
 interface CampoAsistentesProps {
@@ -24,6 +31,7 @@ export function CampoAsistentes({ id = 'asistentes', valor, onChange, mostrarVac
   const mostrarError = fueraDeRango || (mostrarVacio && validacion.estado === 'vacio')
   const cantidadActual = validacion.cantidad ?? 0
 
+  // Suma o resta con los botones -10 / +10, sin bajar de 0
   const ajustar = (delta: number) => onChange(String(Math.max(0, cantidadActual + delta)))
 
   return (

@@ -1,6 +1,14 @@
 -- =============================================================================
 -- SIGEV: Datos Iniciales de Prueba (Seeds) - Catálogo de Productos
 -- =============================================================================
+-- Carga los productos base del catálogo. Se ejecuta después de schema.sql.
+-- Se puede correr varias veces: ON CONFLICT (nombre) DO NOTHING evita duplicados.
+--
+-- Tipos de cálculo:
+--   porcion_persona    -> gramos por persona (se entrega en kg si pasa de 1000 g)
+--   unidad_persona     -> unidades por persona (ej. cervezas individuales)
+--   botella_compartida -> porciones por botella = volumen_botella_ml / tamano_porcion_ml
+-- =============================================================================
 
 INSERT INTO catalogo_productos 
 (nombre, clasificacion, tipo_calculo, porcion_por_persona, unidad_medida, volumen_botella_ml, tamano_porcion_ml, precio_unitario)

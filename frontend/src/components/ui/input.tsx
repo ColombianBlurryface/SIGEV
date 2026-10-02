@@ -1,3 +1,6 @@
+/**
+ * Campo de texto base. Se marca en rojo automáticamente cuando tiene aria-invalid.
+ */
 import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 

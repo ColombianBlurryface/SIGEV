@@ -1,3 +1,7 @@
+/**
+ * Suma los costos estimados de alimentos y bebidas del evento.
+ * El mobiliario y los servicios no tienen costo calculado (se cotizan aparte).
+ */
 import { calcularProducto } from '@/lib/calculos'
 import type { RequerimientosEvento } from '@/types/registro'
 import type { ProductoCatalogo } from '@/types/catalogo'
