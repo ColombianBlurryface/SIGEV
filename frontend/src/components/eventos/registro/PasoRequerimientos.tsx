@@ -1,6 +1,7 @@
 /**
  * Paso 2 del registro de eventos: pestañas para agregar alimentos (HU-02), bebidas (HU-03),
- * mobiliario (HU-04) y servicios adicionales (HU-05), con un resumen lateral de costos.
+ * mobiliario (HU-04, relacionado con el inventario en HU-12) y servicios adicionales (HU-05),
+ * con un resumen lateral de costos.
  */
 import { useState } from 'react'
 import { CATEGORIAS, type Categoria } from '@/lib/categorias'
@@ -49,8 +50,16 @@ export function PasoRequerimientos({ asistentes, requerimientos, onCambio }: Pas
   const agregarBebida = (bebida: BebidaAgregada) => onCambio({ ...requerimientos, bebidas: [...requerimientos.bebidas, bebida] })
   const quitarBebida = (productoId: number) =>
     onCambio({ ...requerimientos, bebidas: requerimientos.bebidas.filter((b) => b.producto.id !== productoId) })
-  const agregarMobiliario = (item: MobiliarioAgregado) =>
-    onCambio({ ...requerimientos, mobiliario: [...requerimientos.mobiliario, item] })
+  // Un mismo elemento del inventario no se repite: si ya está, se suma la cantidad a la línea existente
+  const agregarMobiliario = (item: MobiliarioAgregado) => {
+    const existente = item.productoId !== null && requerimientos.mobiliario.find((m) => m.productoId === item.productoId)
+    const mobiliario = existente
+      ? requerimientos.mobiliario.map((m) =>
+          m === existente ? { ...m, cantidad: m.cantidad + item.cantidad, referencia: item.referencia || m.referencia } : m,
+        )
+      : [...requerimientos.mobiliario, item]
+    onCambio({ ...requerimientos, mobiliario })
+  }
   const quitarMobiliario = (id: string) =>
     onCambio({ ...requerimientos, mobiliario: requerimientos.mobiliario.filter((m) => m.id !== id) })
   const agregarServicio = (servicio: ServicioAgregado) =>

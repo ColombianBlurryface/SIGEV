@@ -15,22 +15,18 @@ export interface BebidaAgregada {
   porcion: number
 }
 
-export const TIPOS_MOBILIARIO = [
-  'Sillas',
-  'Mesas redondas',
-  'Mesas rectangulares',
-  'Mesas de coctel',
-  'Manteles',
-  'Tarima',
-  'Carpa',
-  'Otro',
-] as const
-
+/**
+ * Mobiliario del evento (HU-04). Desde la HU-12 se elige un elemento del inventario:
+ * productoId y disponible guardan cuál es y cuántas unidades propias había al agregarlo.
+ * Si el elemento no está en el inventario, productoId es null y todo va a alquiler.
+ */
 export interface MobiliarioAgregado {
   id: string
+  productoId: number | null
   elemento: string
   referencia: string
   cantidad: number
+  disponible: number | null
 }
 
 export interface ServicioAgregado {

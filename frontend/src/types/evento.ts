@@ -31,6 +31,8 @@ export interface RequerimientoAdicionalPayload {
   descripcion: string
   cantidad?: number
   notas?: string
+  // Solo para mobiliario: elemento del inventario con el que se relaciona (HU-12)
+  producto_id?: number
 }
 
 export interface NuevoEvento {
@@ -51,6 +53,8 @@ export interface CrearEventoResponse {
 
 export interface EventoListado extends Evento {
   es_modalidad_buffet: boolean
+  // Más de 200 asistentes: se avisa que probablemente haya que alquilar mobiliario (RN-03)
+  aviso_alquiler: boolean
 }
 
 export type ClasificacionProducto = 'alimento' | 'bebida_general' | 'bar_cocteleria' | 'mobiliario'
@@ -75,6 +79,11 @@ export interface ServicioAdicional {
   cantidad: number | null
   notas: string | null
   creado_en: string
+  // HU-12: solo en el mobiliario. Se comparan con el stock actual del inventario.
+  producto_id: number | null
+  disponible_inventario: number | null
+  unidades_propias: number | null
+  unidades_alquilar: number | null
 }
 
 export interface EventoDetalle extends EventoListado {

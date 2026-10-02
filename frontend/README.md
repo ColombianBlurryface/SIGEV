@@ -66,8 +66,8 @@ Abre <http://localhost:5173> e inicia sesión con un usuario creado en el paso 1
 | Ruta | Pantalla | Historias |
 | --- | --- | --- |
 | `/login` | Inicio de sesión (sin registro público) | Login |
-| `/eventos` | Resumen, búsqueda, filtros y detalle del evento seleccionado. Acepta `?evento=ID` para abrir un evento concreto. | HU-06 |
-| `/eventos/nuevo` | Asistente de registro en 3 pasos: datos, requerimientos y resumen | HU-01 a HU-05, HU-07 |
+| `/eventos` | Resumen, búsqueda, filtros y detalle del evento seleccionado (con el mobiliario propio y a alquilar). Acepta `?evento=ID` para abrir un evento concreto. | HU-06, HU-12 |
+| `/eventos/nuevo` | Asistente de registro en 3 pasos: datos, requerimientos y resumen. El mobiliario se elige del inventario y muestra qué se alquila. | HU-01 a HU-05, HU-07, HU-12 |
 | `/inventario` | Elementos del inventario, adquisiciones e historial de movimientos | HU-08, HU-09 |
 
 ![Registro de evento, paso 2](../docs/imagenes/registro-paso2-alimentos.png)

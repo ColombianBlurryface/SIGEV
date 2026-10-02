@@ -4,13 +4,17 @@
  * Aquí está el "motor de cálculo" de SIGEV: al registrar un evento, calcula cuánto
  * se necesita de cada alimento y bebida según el número de asistentes, con un
  * margen de seguridad del 10%. También guarda los servicios adicionales y el
- * mobiliario, que se registran sin cálculo.
+ * mobiliario, que se registran sin cálculo. Al consultar un evento, compara su
+ * mobiliario con el inventario para saber qué es propio y qué hay que alquilar (HU-12).
  */
 const pool = require('../config/db');
 
 // Redondea hacia arriba evitando errores de precisión decimal de JavaScript.
 // Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
 const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
+
+// RN-03 (P-05): con más de 200 asistentes se avisa que probablemente haya que alquilar mobiliario.
+const UMBRAL_ALQUILER = 200;
 
 /**
  * POST /api/eventos
@@ -112,17 +116,43 @@ const crearEvento = async (req, res) => {
 
     // 3. Registrar servicios adicionales (DJ, música, mobiliario) sin cálculo (RF-06, RF-47, RF-48).
     //    El mobiliario llega con tipo 'mobiliario'; el resto con su tipo de servicio (dj, sonido...).
+    //    HU-12: el mobiliario puede traer el producto_id de un elemento del inventario.
+    const elementosUsados = new Set();
     for (const servicio of servicios_adicionales) {
+      const esMobiliario = servicio.tipo === 'mobiliario';
+      const productoId = esMobiliario && servicio.producto_id != null ? Number(servicio.producto_id) : null;
+      let descripcion = servicio.descripcion;
+
+      if (productoId !== null) {
+        // Solo se aceptan elementos de la categoría Mobiliario y sin repetir dentro del mismo evento
+        const resElemento = await client.query(
+          `SELECT nombre FROM catalogo_productos WHERE id = $1 AND categoria_inventario = 'Mobiliario'`,
+          [Number.isInteger(productoId) ? productoId : 0]
+        );
+        if (resElemento.rowCount === 0 || elementosUsados.has(productoId)) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Datos inválidos',
+            detalle: resElemento.rowCount === 0
+              ? `El elemento de inventario ${servicio.producto_id} no existe o no es mobiliario.`
+              : `El elemento «${resElemento.rows[0].nombre}» está repetido en el evento.`
+          });
+        }
+        elementosUsados.add(productoId);
+        descripcion = resElemento.rows[0].nombre; // Se guarda el nombre actual del inventario
+      }
+
       const queryServicio = `
-        INSERT INTO requerimientos_adicionales (evento_id, tipo, descripcion, cantidad, notas)
-        VALUES ($1, $2, $3, $4, $5);
+        INSERT INTO requerimientos_adicionales (evento_id, tipo, descripcion, cantidad, notas, producto_id)
+        VALUES ($1, $2, $3, $4, $5, $6);
       `;
       await client.query(queryServicio, [
         nuevoEvento.id,
         servicio.tipo || 'servicio_opcional',
-        servicio.descripcion,
+        descripcion,
         servicio.cantidad || null,
-        servicio.notas || null
+        servicio.notas || null,
+        productoId
       ]);
     }
 
@@ -145,7 +175,8 @@ const crearEvento = async (req, res) => {
 /**
  * GET /api/eventos
  * Consulta la lista general de eventos registrados (RF-07), ordenada por fecha.
- * Incluye la bandera es_modalidad_buffet cuando hay más de 300 asistentes (RN-02).
+ * Incluye la bandera es_modalidad_buffet cuando hay más de 300 asistentes (RN-02)
+ * y aviso_alquiler cuando hay más de 200 (RN-03).
  */
 const listarEventos = async (req, res) => {
   try {
@@ -163,11 +194,12 @@ const listarEventos = async (req, res) => {
         CASE 
           WHEN asistentes > 300 THEN true 
           ELSE false 
-        END AS es_modalidad_buffet
+        END AS es_modalidad_buffet,
+        asistentes > $1 AS aviso_alquiler
       FROM eventos
       ORDER BY fecha_evento ASC;
     `;
-    const resultado = await pool.query(consulta);
+    const resultado = await pool.query(consulta, [UMBRAL_ALQUILER]);
     res.json(resultado.rows);
   } catch (error) {
     console.error('Error al listar eventos:', error);
@@ -212,18 +244,29 @@ const obtenerDetalleEvento = async (req, res) => {
     `;
     const resProductos = await pool.query(queryProductos, [id]);
 
-    // 3. Servicios adicionales opcionales (DJ, música, sonido) (RF-06, RF-47, RF-48)
+    // 3. Servicios adicionales y mobiliario (RF-06, RF-47, RF-48).
+    //    HU-12 (RF-14): para el mobiliario se compara la cantidad pedida con el stock actual
+    //    del inventario. Lo que alcanza son unidades propias y el resto hay que alquilarlo.
+    //    Si el mobiliario no está relacionado con el inventario, todo va a alquiler.
     const queryServicios = `
-      SELECT id, tipo, descripcion, cantidad, notas, creado_en
-      FROM requerimientos_adicionales
-      WHERE evento_id = $1
-      ORDER BY id ASC;
+      SELECT
+        r.id, r.tipo, r.descripcion, r.cantidad, r.notas, r.creado_en, r.producto_id,
+        c.cantidad_propia AS disponible_inventario,
+        CASE WHEN r.tipo = 'mobiliario'
+          THEN LEAST(COALESCE(r.cantidad, 0), COALESCE(c.cantidad_propia, 0)) END AS unidades_propias,
+        CASE WHEN r.tipo = 'mobiliario'
+          THEN COALESCE(r.cantidad, 0) - LEAST(COALESCE(r.cantidad, 0), COALESCE(c.cantidad_propia, 0)) END AS unidades_alquilar
+      FROM requerimientos_adicionales r
+      LEFT JOIN catalogo_productos c ON c.id = r.producto_id
+      WHERE r.evento_id = $1
+      ORDER BY r.id ASC;
     `;
     const resServicios = await pool.query(queryServicios, [id]);
 
     res.json({
       ...resEvento.rows[0],
       es_modalidad_buffet: resEvento.rows[0].asistentes > 300,
+      aviso_alquiler: resEvento.rows[0].asistentes > UMBRAL_ALQUILER,
       productos_calculados: resProductos.rows,
       servicios_adicionales: resServicios.rows
     });

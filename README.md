@@ -29,12 +29,13 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-07 | Validar que el evento tenga entre 40 y 600 asistentes, con aviso inmediato si está fuera de rango. | Nuevo evento · paso 1 |
 | HU-02 | Agregar alimentos del catálogo con su porción por persona y los componentes del menú. | Nuevo evento · paso 2 |
 | HU-03 | Agregar bebidas individuales (por persona) o compartidas (por botella). | Nuevo evento · paso 2 |
-| HU-04 | Agregar el mobiliario del evento (tipo de elemento y cantidad). | Nuevo evento · paso 2 |
+| HU-04 | Agregar el mobiliario del evento, elegido del inventario (o «Otro» si no está), con su cantidad. | Nuevo evento · paso 2 |
 | HU-05 | Agregar servicios adicionales (DJ, música, sonido, entretenimiento...). | Nuevo evento · paso 2 |
 | HU-06 | Consultar los eventos con búsqueda, filtro por estado y el detalle de sus requerimientos y costos. | `/eventos` |
 | HU-08 | Registrar elementos del inventario propio, actualizar su cantidad y consultarlos. | `/inventario` |
 | HU-09 | Registrar adquisiciones que suman al inventario, con historial de todos los movimientos. | `/inventario` |
 | HU-10 | Retirar del inventario las unidades dañadas, con su motivo (por ahora solo en la API). | `POST /api/inventario/:id/baja` |
+| HU-12 | Diferenciar el mobiliario propio del que hay que alquilar: cada elemento del evento dice cuántas unidades son propias y cuántas se alquilan, y se avisa de alquiler cuando el evento supera 200 asistentes. | Nuevo evento · paso 2 y 3, detalle del evento |
 
 Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
 
@@ -56,6 +57,10 @@ Resumen, búsqueda, filtros por estado y, a la derecha, el detalle del evento se
 | --- | --- |
 | ![Eventos en modo claro](docs/imagenes/eventos-claro.png) | ![Eventos en modo oscuro](docs/imagenes/eventos-oscuro.png) |
 
+En el detalle, el mobiliario se compara con el **inventario actual**: si después se compran más unidades, lo que hay que alquilar baja solo.
+
+![Detalle de un evento con mobiliario propio y alquilado](docs/imagenes/eventos-alquiler.png)
+
 ### Registrar un evento (HU-01 a HU-05 y HU-07)
 
 El registro es un asistente de tres pasos. Todo se guarda al final, en un solo envío.
@@ -75,6 +80,10 @@ Si el número de asistentes está fuera del rango permitido, el campo lo avisa d
 | ![Pestaña de alimentos](docs/imagenes/registro-paso2-alimentos.png) | ![Pestaña de bebidas](docs/imagenes/registro-paso2-bebidas.png) |
 
 ![Pestaña de servicios adicionales](docs/imagenes/registro-paso2-servicios.png)
+
+**Mobiliario propio y alquilado (HU-12).** El mobiliario se elige del inventario. Cada línea indica cuántas unidades son propias y cuántas hay que alquilar; lo que no está en el inventario va todo a alquiler. Con más de 200 asistentes aparece el aviso de alquiler (RN-03).
+
+![Pestaña de mobiliario con unidades propias y a alquilar](docs/imagenes/registro-paso2-mobiliario.png)
 
 **Paso 3 · Resumen.** Revisión final con el costo estimado antes de guardar.
 
@@ -162,7 +171,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 | `eventos` | Datos generales de cada evento y su estado (planificación, confirmado, realizado, cancelado). |
 | `catalogo_productos` | Productos del catálogo (alimentos y bebidas con porción y precio) y también los elementos del inventario (los que tienen `categoria_inventario`). |
 | `evento_productos` | Alimentos y bebidas de cada evento con la cantidad neta, la cantidad con margen y el costo estimado. |
-| `requerimientos_adicionales` | Mobiliario y servicios adicionales de cada evento (sin cálculo automático). |
+| `requerimientos_adicionales` | Mobiliario y servicios adicionales de cada evento (sin cálculo automático). El mobiliario guarda en `producto_id` el elemento del inventario con el que se relaciona (HU-12). |
 | `usuarios` | Cuentas que pueden iniciar sesión (contraseña guardada como hash bcrypt). |
 | `movimientos_inventario` | Historial de cada cambio de cantidad del inventario: registro inicial, adquisición, ajuste o baja por daño. |
 
@@ -174,6 +183,8 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 
 - Un evento debe tener **entre 40 y 600 asistentes** (RN-01 / HU-07).
 - Con **más de 300 asistentes** el evento es de modalidad **buffet** (RN-02).
+- Con **más de 200 asistentes** se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).
+- El mobiliario de un evento se compara con el stock actual del inventario: lo que alcanza es **propio** y el resto se **alquila**. Lo que no está en el inventario se alquila completo (HU-12).
 - Todas las cantidades de alimentos y bebidas llevan un **margen de seguridad del 10%** (RN-09).
 - Cómo se calcula cada producto:
   - **Por porción** (alimentos): asistentes × gramos por persona; si supera 1000 g se expresa en kg.

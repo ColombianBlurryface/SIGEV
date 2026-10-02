@@ -101,6 +101,12 @@ CREATE TABLE IF NOT EXISTS requerimientos_adicionales (
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- HU-12 (RF-14): el mobiliario del evento se relaciona con un elemento del inventario.
+-- Si producto_id es NULL, el elemento no está en el inventario y todo se debe alquilar.
+-- ON DELETE SET NULL: si algún día se borra el elemento, el evento conserva la descripción.
+ALTER TABLE requerimientos_adicionales
+ADD COLUMN IF NOT EXISTS producto_id INTEGER REFERENCES catalogo_productos(id) ON DELETE SET NULL;
+
 -- 6. Usuarios del sistema (login únicamente; el alta se hace con src/scripts/crearUsuario.js)
 --    La contraseña se guarda como hash bcrypt, nunca en texto plano.
 CREATE TABLE IF NOT EXISTS usuarios (

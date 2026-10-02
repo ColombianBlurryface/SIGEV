@@ -90,8 +90,16 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
             return (
               <li key={elemento.id} className="border-b border-border px-[18px] py-3 last:border-b-0">
                 <div className={cn(COLUMNAS, 'flex flex-col gap-2 text-sm')}>
-                  <span className="font-bold break-words lg:truncate" title={elemento.nombre}>
-                    {elemento.nombre}
+                  <span className="flex min-w-0 flex-col items-start gap-1">
+                    <span className="max-w-full font-bold break-words lg:truncate" title={elemento.nombre}>
+                      {elemento.nombre}
+                    </span>
+                    {/* HU-12: todo lo registrado en el inventario es propio; lo que falta en un evento se alquila */}
+                    {elemento.es_propio && (
+                      <span className="rounded-md bg-success-soft px-2 py-0.5 text-[11px] font-bold text-success-foreground">
+                        Propio
+                      </span>
+                    )}
                   </span>
                   <span
                     className={cn(

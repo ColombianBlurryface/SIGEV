@@ -96,6 +96,7 @@ export function NuevoEventoPage() {
             descripcion: m.elemento,
             cantidad: m.cantidad,
             notas: m.referencia || undefined,
+            producto_id: m.productoId ?? undefined, // HU-12: elemento del inventario (si no hay, va a alquiler)
           })),
           ...requerimientos.servicios.map((s) => ({
             tipo: s.tipo,
