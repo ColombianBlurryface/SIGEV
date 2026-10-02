@@ -124,6 +124,7 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | GET | `/inventario` | Elementos del inventario (filtro `?categoria=`) |
 | PATCH | `/inventario/:id/cantidad` | Fijar la cantidad disponible (queda como ajuste) |
 | POST | `/inventario/:id/adquisiciones` | Registrar una adquisición (suma a la cantidad) |
+| POST | `/inventario/:id/baja` | Retirar unidades dañadas (resta de la cantidad) |
 | GET | `/inventario/movimientos` | Historial de movimientos del inventario |
 
 ### Autenticación
@@ -245,9 +246,17 @@ Fija la cantidad disponible. La diferencia con la cantidad anterior queda como u
 
 Suma la cantidad al elemento (entero de 1 a 100.000) y registra un movimiento de tipo `adquisicion`. Solo aplica a elementos que ya existen. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
 
+#### `POST /api/inventario/:id/baja`
+
+```json
+{ "cantidad": 5, "motivo": "Manchas de vino que no salieron" }
+```
+
+Retira unidades dañadas (HU-10): las resta de `cantidad_propia`, las suma a `cantidad_danada` y registra un movimiento de tipo `baja` con la cantidad en negativo. El motivo es obligatorio (máximo 300 caracteres) y no se puede retirar más de lo disponible. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
+
 #### `GET /api/inventario/movimientos?elemento_id=12&tipo=adquisicion&limite=20`
 
-Historial del más reciente al más antiguo. Todos los filtros son opcionales. `tipo` puede ser `registro`, `adquisicion` o `ajuste`, y `limite` va de 1 a 200 (por defecto 20).
+Historial del más reciente al más antiguo. Todos los filtros son opcionales. `tipo` puede ser `registro`, `adquisicion`, `ajuste` o `baja`, y `limite` va de 1 a 200 (por defecto 20).
 
 ```json
 [

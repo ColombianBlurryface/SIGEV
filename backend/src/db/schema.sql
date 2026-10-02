@@ -121,18 +121,33 @@ ADD COLUMN IF NOT EXISTS cantidad_propia INT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS cantidad_danada INT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS es_propio BOOLEAN DEFAULT TRUE;
 
--- 8. Movimientos del inventario (HU-09, RF-13): registro inicial, adquisiciones y ajustes manuales (HU-08).
+-- 8. Movimientos del inventario (HU-09, RF-13): registro inicial, adquisiciones, ajustes manuales (HU-08)
+--    y bajas por daño (HU-10, siempre en negativo).
 -- La suma de los movimientos de un elemento es igual a su cantidad_propia.
 -- No guarda facturas, comprobantes ni costos: fuera de alcance.
 CREATE TABLE IF NOT EXISTS movimientos_inventario (
     id SERIAL PRIMARY KEY,
     producto_id INTEGER NOT NULL REFERENCES catalogo_productos(id) ON DELETE RESTRICT,
-    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('registro', 'adquisicion', 'ajuste')),
+    tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('registro', 'adquisicion', 'ajuste', 'baja')),
     cantidad INTEGER NOT NULL,
     cantidad_resultante INTEGER NOT NULL CHECK (cantidad_resultante >= 0),
     notas TEXT,
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_cantidad_por_tipo CHECK (
-        (tipo IN ('registro', 'adquisicion') AND cantidad > 0) OR (tipo = 'ajuste' AND cantidad <> 0)
+        (tipo IN ('registro', 'adquisicion') AND cantidad > 0)
+        OR (tipo = 'ajuste' AND cantidad <> 0)
+        OR (tipo = 'baja' AND cantidad < 0)
     )
+);
+
+-- HU-10: en bases creadas antes de existir el tipo "baja", se reemplazan las dos restricciones
+-- para aceptarlo. Se puede ejecutar varias veces sin error.
+ALTER TABLE movimientos_inventario DROP CONSTRAINT IF EXISTS movimientos_inventario_tipo_check;
+ALTER TABLE movimientos_inventario ADD CONSTRAINT movimientos_inventario_tipo_check
+    CHECK (tipo IN ('registro', 'adquisicion', 'ajuste', 'baja'));
+ALTER TABLE movimientos_inventario DROP CONSTRAINT IF EXISTS chk_cantidad_por_tipo;
+ALTER TABLE movimientos_inventario ADD CONSTRAINT chk_cantidad_por_tipo CHECK (
+    (tipo IN ('registro', 'adquisicion') AND cantidad > 0)
+    OR (tipo = 'ajuste' AND cantidad <> 0)
+    OR (tipo = 'baja' AND cantidad < 0)
 );

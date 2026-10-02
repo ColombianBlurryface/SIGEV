@@ -34,6 +34,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-06 | Consultar los eventos con búsqueda, filtro por estado y el detalle de sus requerimientos y costos. | `/eventos` |
 | HU-08 | Registrar elementos del inventario propio, actualizar su cantidad y consultarlos. | `/inventario` |
 | HU-09 | Registrar adquisiciones que suman al inventario, con historial de todos los movimientos. | `/inventario` |
+| HU-10 | Retirar del inventario las unidades dañadas, con su motivo (por ahora solo en la API). | `POST /api/inventario/:id/baja` |
 
 Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
 
@@ -163,7 +164,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 | `evento_productos` | Alimentos y bebidas de cada evento con la cantidad neta, la cantidad con margen y el costo estimado. |
 | `requerimientos_adicionales` | Mobiliario y servicios adicionales de cada evento (sin cálculo automático). |
 | `usuarios` | Cuentas que pueden iniciar sesión (contraseña guardada como hash bcrypt). |
-| `movimientos_inventario` | Historial de cada cambio de cantidad del inventario: registro inicial, adquisición o ajuste. |
+| `movimientos_inventario` | Historial de cada cambio de cantidad del inventario: registro inicial, adquisición, ajuste o baja por daño. |
 
 > **Importante:** modificar `schema.sql` **no actualiza Supabase por sí solo**. Quien cambie una tabla debe ejecutar ese cambio en Supabase (SQL Editor) dentro del mismo PR y avisarlo en la descripción.
 
