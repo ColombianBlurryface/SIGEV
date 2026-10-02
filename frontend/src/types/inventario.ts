@@ -21,7 +21,7 @@ export interface NuevoElementoInventario {
   cantidad_propia: number
 }
 
-export type TipoMovimiento = 'registro' | 'adquisicion' | 'ajuste'
+export type TipoMovimiento = 'registro' | 'adquisicion' | 'ajuste' | 'baja'
 
 export interface MovimientoInventario {
   id: number

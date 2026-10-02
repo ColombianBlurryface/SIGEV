@@ -124,6 +124,7 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | GET | `/inventario` | Elementos del inventario (filtro `?categoria=`) |
 | PATCH | `/inventario/:id/cantidad` | Fijar la cantidad disponible (queda como ajuste) |
 | POST | `/inventario/:id/adquisiciones` | Registrar una adquisición (suma a la cantidad) |
+| POST | `/inventario/:id/baja` | Retirar unidades dañadas (resta de la cantidad) |
 | GET | `/inventario/movimientos` | Historial de movimientos del inventario |
 
 ### Autenticación
@@ -180,7 +181,8 @@ Devuelve los productos activos del catálogo. Los elementos de inventario no apa
     { "producto_id": 5, "porcion_por_persona": 2 }
   ],
   "servicios_adicionales": [
-    { "tipo": "mobiliario", "descripcion": "Sillas", "cantidad": 250, "notas": "Sillas Tiffany doradas" },
+    { "tipo": "mobiliario", "descripcion": "Sillas Tiffany doradas", "cantidad": 250, "producto_id": 10 },
+    { "tipo": "mobiliario", "descripcion": "Carpa 10 × 20 m", "cantidad": 1 },
     { "tipo": "dj", "descripcion": "DJ para recepción y fiesta", "cantidad": 6 }
   ]
 }
@@ -188,16 +190,17 @@ Devuelve los productos activos del catálogo. Los elementos de inventario no apa
 
 - `productos` y `servicios_adicionales` son opcionales.
 - `porcion_por_persona` es opcional: si no se envía, se usa la del catálogo.
-- El mobiliario se envía como servicio adicional con `tipo: "mobiliario"`.
+- El mobiliario se envía como servicio adicional con `tipo: "mobiliario"`. Con `producto_id` se relaciona con un elemento del inventario de categoría `Mobiliario` (HU-12); en ese caso la descripción se toma del inventario. Sin `producto_id`, el elemento no está en el inventario y todo se alquila.
+- Un mismo elemento del inventario no puede repetirse en el evento (`400`).
 - Todo se guarda en una transacción: si algo falla, no queda nada a medias.
 
 Respuesta `201`: `{ "mensaje": "...", "evento": { "id": 4, "estado": "planificacion", ... } }`
 
-Validaciones (`400`): campos obligatorios, asistentes entre 40 y 600 y duración mayor a 0.
+Validaciones (`400`): campos obligatorios, asistentes entre 40 y 600, duración mayor a 0 y `producto_id` de mobiliario existente y sin repetir.
 
 #### `GET /api/eventos`
 
-Lista de eventos ordenada por fecha. Cada evento incluye `es_modalidad_buffet` (más de 300 asistentes).
+Lista de eventos ordenada por fecha. Cada evento incluye `es_modalidad_buffet` (más de 300 asistentes) y `aviso_alquiler` (más de 200 asistentes, RN-03).
 
 #### `GET /api/eventos/:id`
 
@@ -205,6 +208,15 @@ Datos del evento más:
 
 - `productos_calculados`: nombre, clasificación, porción, `cantidad_neta`, `cantidad_con_margen`, `unidad_entrega`, `precio_unitario`, `costo_estimado` y `componentes_menu`.
 - `servicios_adicionales`: `tipo`, `descripcion`, `cantidad` y `notas` (incluye el mobiliario).
+- En el mobiliario, además (HU-12): `producto_id`, `disponible_inventario` (stock actual), `unidades_propias` y `unidades_alquilar`. En los demás servicios esos campos llegan en `null`.
+- `aviso_alquiler`: `true` si el evento tiene más de 200 asistentes.
+
+```json
+{ "tipo": "mobiliario", "descripcion": "Sillas Tiffany doradas", "cantidad": 410, "producto_id": 10,
+  "disponible_inventario": 350, "unidades_propias": 350, "unidades_alquilar": 60 }
+```
+
+Las unidades propias se calculan con el inventario **al momento de consultar**, así que cambian si se compran o se retiran unidades.
 
 ### Inventario
 
@@ -245,9 +257,17 @@ Fija la cantidad disponible. La diferencia con la cantidad anterior queda como u
 
 Suma la cantidad al elemento (entero de 1 a 100.000) y registra un movimiento de tipo `adquisicion`. Solo aplica a elementos que ya existen. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
 
+#### `POST /api/inventario/:id/baja`
+
+```json
+{ "cantidad": 5, "motivo": "Manchas de vino que no salieron" }
+```
+
+Retira unidades dañadas (HU-10): las resta de `cantidad_propia`, las suma a `cantidad_danada` y registra un movimiento de tipo `baja` con la cantidad en negativo. El motivo es obligatorio (máximo 300 caracteres) y no se puede retirar más de lo disponible. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
+
 #### `GET /api/inventario/movimientos?elemento_id=12&tipo=adquisicion&limite=20`
 
-Historial del más reciente al más antiguo. Todos los filtros son opcionales. `tipo` puede ser `registro`, `adquisicion` o `ajuste`, y `limite` va de 1 a 200 (por defecto 20).
+Historial del más reciente al más antiguo. Todos los filtros son opcionales. `tipo` puede ser `registro`, `adquisicion`, `ajuste` o `baja`, y `limite` va de 1 a 200 (por defecto 20).
 
 ```json
 [

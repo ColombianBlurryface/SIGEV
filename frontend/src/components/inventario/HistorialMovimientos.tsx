@@ -1,5 +1,5 @@
 /**
- * Historial de movimientos del inventario (HU-09): registros iniciales, adquisiciones y ajustes,
+ * Historial de movimientos del inventario (HU-09): registros iniciales, adquisiciones, ajustes y bajas,
  * con filtro por elemento y botón "Ver más".
  */
 import { History, RotateCw } from 'lucide-react'
@@ -16,6 +16,7 @@ const ESTILO_TIPO: Record<TipoMovimiento, { etiqueta: string; clases: string }> 
   registro: { etiqueta: 'Registro', clases: 'bg-accent text-accent-foreground' },
   adquisicion: { etiqueta: 'Adquisición', clases: 'bg-success-soft text-success-foreground' },
   ajuste: { etiqueta: 'Ajuste', clases: 'bg-warning-soft text-warning-foreground' },
+  baja: { etiqueta: 'Baja por daño', clases: 'bg-destructive-soft text-destructive-foreground' },
 }
 
 const conSigno = (cantidad: number) => `${cantidad > 0 ? '+' : '−'}${formatearNumero(Math.abs(cantidad))}`

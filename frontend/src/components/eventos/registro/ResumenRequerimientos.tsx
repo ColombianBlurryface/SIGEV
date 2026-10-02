@@ -4,6 +4,7 @@
 import { Card } from '@/components/ui/card'
 import { CATEGORIAS, type Categoria } from '@/lib/categorias'
 import { formatearMoneda, formatearNumero } from '@/lib/formato'
+import { repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { cn } from '@/lib/utils'
 import type { RequerimientosEvento } from '@/types/registro'
 import { calcularTotales } from './totales'
@@ -16,6 +17,7 @@ interface ResumenRequerimientosProps {
 export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenRequerimientosProps) {
   const totales = calcularTotales(requerimientos, asistentes)
   const unidadesMobiliario = requerimientos.mobiliario.reduce((suma, m) => suma + m.cantidad, 0)
+  const unidadesAlquilar = totalAlquilar(requerimientos.mobiliario.map((m) => repartirMobiliario(m.cantidad, m.disponible)))
   const filas: { categoria: Categoria; detalle: string; valor: string }[] = [
     {
       categoria: 'alimentos',
@@ -29,7 +31,7 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
     },
     {
       categoria: 'mobiliario',
-      detalle: `${requerimientos.mobiliario.length} ${requerimientos.mobiliario.length === 1 ? 'elemento' : 'elementos'} · ${formatearNumero(unidadesMobiliario)} und`,
+      detalle: `${requerimientos.mobiliario.length} ${requerimientos.mobiliario.length === 1 ? 'elemento' : 'elementos'} · ${formatearNumero(unidadesMobiliario)} und${unidadesAlquilar > 0 ? ` · ${formatearNumero(unidadesAlquilar)} a alquilar` : ''}`,
       valor: 'Aparte',
     },
     {

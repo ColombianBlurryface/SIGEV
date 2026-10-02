@@ -1,6 +1,7 @@
 /**
  * Panel con el detalle de un evento (HU-06): datos generales y requerimientos agrupados
- * por categoría, con cantidades y el costo estimado total.
+ * por categoría, con cantidades y el costo estimado total. El mobiliario indica cuánto es
+ * propio y cuánto hay que alquilar según el inventario actual (HU-12).
  */
 import { RotateCw } from 'lucide-react'
 import { Alert } from '@/components/ui/alert'
@@ -8,10 +9,12 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useEventoDetalle } from '@/hooks/useEventoDetalle'
+import { describirReparto, type RepartoMobiliario } from '@/lib/alquiler'
 import { CATEGORIAS, categoriaDe, etiquetaServicio, TIPO_MOBILIARIO, type Categoria } from '@/lib/categorias'
 import { capitalizar, formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
 import { cn } from '@/lib/utils'
 import type { EventoDetalle, EventoListado } from '@/types/evento'
+import { AvisoAlquiler, OrigenBadge } from './AlquilerMobiliario'
 import { BuffetBadge, EstadoBadge } from './EstadoBadge'
 
 interface ItemRequerimiento {
@@ -20,6 +23,7 @@ interface ItemRequerimiento {
   nota?: string
   cantidad: string
   costo: string | null
+  reparto?: RepartoMobiliario // Solo mobiliario: unidades propias y a alquilar
 }
 
 /**
@@ -42,12 +46,20 @@ function agruparRequerimientos(detalle: EventoDetalle) {
 
   for (const servicio of detalle.servicios_adicionales) {
     const esMobiliario = servicio.tipo === TIPO_MOBILIARIO
+    // El backend ya compara el mobiliario con el stock actual del inventario
+    const reparto = esMobiliario
+      ? { propias: servicio.unidades_propias ?? 0, alquilar: servicio.unidades_alquilar ?? servicio.cantidad ?? 0 }
+      : undefined
+    const origen = reparto
+      ? `${servicio.producto_id === null ? 'No está en el inventario · ' : ''}${describirReparto(reparto)}`
+      : null
     grupos[esMobiliario ? 'mobiliario' : 'servicios'].push({
       id: `s-${servicio.id}`,
       nombre: esMobiliario
         ? servicio.descripcion
         : `${etiquetaServicio(servicio.tipo)}${servicio.descripcion ? ` · ${servicio.descripcion}` : ''}`,
-      nota: servicio.notas ?? undefined,
+      nota: [origen, servicio.notas].filter(Boolean).join(' · ') || undefined,
+      reparto,
       cantidad:
         servicio.cantidad === null ? '—' : `${formatearNumero(servicio.cantidad)}${esMobiliario ? ' und' : ''}`,
       costo: null,
@@ -56,7 +68,13 @@ function agruparRequerimientos(detalle: EventoDetalle) {
 
   // El costo estimado solo incluye alimentos y bebidas; mobiliario y servicios se cotizan aparte
   const total = detalle.productos_calculados.reduce((suma, p) => suma + Number(p.costo_estimado || 0), 0)
-  return { grupos, total, vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0 }
+  const unidadesAlquilar = grupos.mobiliario.reduce((suma, item) => suma + (item.reparto?.alquilar ?? 0), 0)
+  return {
+    grupos,
+    total,
+    unidadesAlquilar,
+    vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0,
+  }
 }
 
 export function DetalleEvento({ evento }: { evento: EventoListado }) {
@@ -97,6 +115,10 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
 
       <div className="flex flex-col gap-3.5">
         <span className="text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase">Requerimientos</span>
+
+        {requerimientos && (
+          <AvisoAlquiler asistentes={evento.asistentes} unidadesAlquilar={requerimientos.unidadesAlquilar} className="text-[13px]" />
+        )}
 
         {cargando && !requerimientos && (
           <div className="flex flex-col gap-2.5">
@@ -143,9 +165,18 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
                           <span className="truncate" title={item.nombre}>
                             {item.nombre}
                           </span>
-                          {item.nota && (
-                            <span className="truncate text-xs text-muted-foreground" title={item.nota}>
-                              {item.nota}
+                          {(item.reparto || item.nota) && (
+                            <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                              {item.reparto && <OrigenBadge reparto={item.reparto} />}
+                              {item.nota && (
+                                // En el mobiliario la nota dice cuánto alquilar: se deja bajar de línea en vez de cortarla
+                                <span
+                                  className={cn('text-xs text-muted-foreground', item.reparto ? 'leading-snug' : 'truncate')}
+                                  title={item.nota}
+                                >
+                                  {item.nota}
+                                </span>
+                              )}
                             </span>
                           )}
                         </span>
