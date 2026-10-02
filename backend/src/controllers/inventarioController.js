@@ -92,9 +92,10 @@ const registrarElemento = async (req, res) => {
         res.status(201).json(elemento);
     } catch (error) {
         await client.query('ROLLBACK');
-        // 23505 es el código de PostgreSQL para "valor duplicado" (el nombre es único)
+        // 23505 es el código de PostgreSQL para "valor duplicado": el nombre es único dentro del
+        // inventario (un producto del catálogo sí puede llamarse igual, ver schema.sql)
         if (error.code === '23505') {
-            return res.status(409).json({ error: `Ya existe un elemento llamado «${nombre}».` });
+            return res.status(409).json({ error: `Ya existe un elemento del inventario llamado «${nombre}».` });
         }
         console.error('Error al registrar elemento de inventario:', error);
         res.status(500).json({ error: 'Error al registrar el elemento de inventario' });
