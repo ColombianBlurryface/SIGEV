@@ -35,6 +35,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-06 | Consultar los eventos con búsqueda, filtro por estado y el detalle de sus requerimientos y costos. | `/eventos` |
 | HU-08 | Registrar elementos del inventario propio, actualizar su cantidad y consultarlos. | `/inventario` |
 | HU-09 | Registrar adquisiciones que suman al inventario, con historial de todos los movimientos. | `/inventario` |
+| HU-09 · clasificación | Clasificar el inventario en cuatro categorías cerradas: Mobiliario, Bar/Bebidas, Bebidas de Coctelería y Vajilla. No existe «Decoración». Se filtra por categoría y se puede cambiar la categoría de un elemento (por ahora solo en la API). | `/inventario` |
 | HU-10 | Retirar del inventario las unidades dañadas, con su motivo (por ahora solo en la API). | `POST /api/inventario/:id/baja` |
 | HU-12 | Diferenciar el mobiliario propio del que hay que alquilar: cada elemento del evento dice cuántas unidades son propias y cuántas se alquilan, y se avisa de alquiler cuando el evento supera 200 asistentes. | Nuevo evento · paso 2 y 3, detalle del evento |
 
@@ -92,11 +93,15 @@ Si el número de asistentes está fuera del rango permitido, el campo lo avisa d
 
 ### Inventario (HU-08 y HU-09)
 
-Registro de elementos y adquisiciones, tabla con búsqueda y filtros, y el historial de movimientos (registros, adquisiciones y ajustes).
+Registro de elementos y adquisiciones, tabla con búsqueda y filtros por categoría, y el historial de movimientos (registros, adquisiciones y ajustes).
 
 | Modo claro | Modo oscuro |
 | --- | --- |
 | ![Inventario en modo claro](docs/imagenes/inventario-claro.png) | ![Inventario en modo oscuro](docs/imagenes/inventario-oscuro.png) |
+
+Las categorías son un conjunto cerrado (Mobiliario, Bar/Bebidas, Bebidas de Coctelería y Vajilla); el filtro de cada una muestra solo sus elementos:
+
+![Inventario filtrado por Vajilla](docs/imagenes/inventario-vajilla.png)
 
 > Las capturas se tomaron con datos de ejemplo en una base de datos local.
 
@@ -193,6 +198,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
   - **Por unidad** (bebidas individuales): asistentes × unidades por persona, redondeado hacia arriba.
   - **Por botella** (bebidas compartidas): porciones por botella = volumen ÷ tamaño de la porción; botellas = asistentes ÷ porciones por botella, redondeado hacia arriba.
 - El costo estimado solo incluye alimentos y bebidas; el mobiliario y los servicios se cotizan aparte.
+- Todo elemento del inventario tiene **una de cuatro categorías**: Mobiliario, Bar/Bebidas, Bebidas de Coctelería o Vajilla. Cualquier otro valor (por ejemplo «Decoración») se rechaza, tanto en la API como en la base de datos (RF-10 / HU-09).
 - En el inventario, la suma de los movimientos de cada elemento siempre es igual a su cantidad disponible.
 
 ---

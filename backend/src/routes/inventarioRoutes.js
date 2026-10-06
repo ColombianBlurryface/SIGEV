@@ -1,5 +1,5 @@
 /**
- * Rutas del inventario propio (HU-08), sus movimientos (HU-09) y el retiro de dañados (HU-10).
+ * Rutas del inventario propio (HU-08), sus categorías (HU-09), sus movimientos (HU-09) y el retiro de dañados (HU-10).
  *
  * Importante: /movimientos se declara antes de las rutas con /:id para que
  * Express no confunda la palabra "movimientos" con un id.
@@ -13,6 +13,9 @@ router.post('/', inventarioController.registrarElemento);
 
 // GET /api/inventario?categoria= - HU-08: Consultar inventario
 router.get('/', inventarioController.consultarInventario);
+
+// PATCH /api/inventario/:id/categoria - HU-09 (RF-10): Cambiar la categoría de un elemento
+router.patch('/:id/categoria', inventarioController.actualizarCategoria);
 
 // PATCH /api/inventario/:id/cantidad - HU-08 (RF-11): Actualizar cantidad disponible (queda como ajuste)
 router.patch('/:id/cantidad', inventarioController.actualizarCantidad);

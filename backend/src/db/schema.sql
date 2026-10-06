@@ -122,10 +122,21 @@ CREATE TABLE IF NOT EXISTS usuarios (
 --    categoria_inventario (si es NULL, el producto es de catálogo y no de inventario).
 -- Extensión de tabla para cubrir HU-08, HU-09, HU-10, HU-12 y HU-13
 ALTER TABLE catalogo_productos
-ADD COLUMN IF NOT EXISTS categoria_inventario VARCHAR(50) CHECK (categoria_inventario IN ('Mobiliario', 'Bar/Bebidas', 'Bebidas de Coctelería')),
+ADD COLUMN IF NOT EXISTS categoria_inventario VARCHAR(50) CHECK (categoria_inventario IN ('Mobiliario', 'Bar/Bebidas', 'Bebidas de Coctelería', 'Vajilla')),
 ADD COLUMN IF NOT EXISTS cantidad_propia INT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS cantidad_danada INT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS es_propio BOOLEAN DEFAULT TRUE;
+
+-- HU-09 (RF-10): conjunto cerrado de cuatro categorías. No existe «Decoración».
+-- En bases creadas antes de que existiera Vajilla se reemplaza la restricción; se puede ejecutar varias veces.
+ALTER TABLE catalogo_productos DROP CONSTRAINT IF EXISTS catalogo_productos_categoria_inventario_check;
+ALTER TABLE catalogo_productos ADD CONSTRAINT catalogo_productos_categoria_inventario_check
+    CHECK (categoria_inventario IN ('Mobiliario', 'Bar/Bebidas', 'Bebidas de Coctelería', 'Vajilla'));
+
+-- HU-09: el inventario se consulta muy seguido filtrando por categoría, por eso lleva índice.
+-- Es parcial: solo indexa los elementos del inventario, no los productos del catálogo.
+CREATE INDEX IF NOT EXISTS idx_catalogo_categoria_inventario
+    ON catalogo_productos (categoria_inventario) WHERE categoria_inventario IS NOT NULL;
 
 -- HU-13: el nombre es único dentro del catálogo y, por separado, dentro del inventario.
 -- Así un producto del catálogo («Ginebra Tanqueray 750ml», para calcular eventos) y una botella
