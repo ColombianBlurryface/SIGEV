@@ -1,6 +1,9 @@
 /**
  * Controlador del inventario propio de la organización (HU-08, HU-09 y HU-10).
  *
+ * Categorías (HU-09, RF-10): conjunto cerrado de cuatro valores. Cualquier otro texto
+ * (por ejemplo «Decoración», que no existe como categoría) se rechaza con un 400.
+ *
  * Los elementos del inventario se guardan en la tabla catalogo_productos, marcados
  * con una categoria_inventario. Cada cambio de cantidad queda registrado en la
  * tabla movimientos_inventario, de modo que la suma de los movimientos de un
@@ -15,10 +18,14 @@
 const pool = require('../config/db');
 
 // Cada categoría de inventario se guarda con la clasificación del catálogo que le corresponde.
+// La vajilla no tiene clasificación propia en el catálogo (el enum solo distingue alimento,
+// bebidas y mobiliario), así que se guarda como 'mobiliario'. No afecta a nada: los elementos
+// del inventario no salen en /api/catalogo, solo se usa la categoría_inventario.
 const CATEGORIAS_INVENTARIO = {
     'Mobiliario': 'mobiliario',
     'Bar/Bebidas': 'bebida_general',
-    'Bebidas de Coctelería': 'bar_cocteleria'
+    'Bebidas de Coctelería': 'bar_cocteleria',
+    'Vajilla': 'mobiliario'
 };
 
 // Columnas que se devuelven al frontend para cada elemento del inventario
@@ -29,6 +36,18 @@ const esCantidadValida = (valor) => typeof valor === 'number' && Number.isIntege
 
 // Respuesta estándar 400 cuando los datos enviados no cumplen las reglas
 const datosInvalidos = (res, detalle) => res.status(400).json({ error: 'Datos inválidos', detalle });
+
+// Una categoría es válida solo si es exactamente una de las cuatro (mayúsculas y tildes incluidas)
+const esCategoriaValida = (valor) => typeof valor === 'string' && Object.hasOwn(CATEGORIAS_INVENTARIO, valor);
+
+// 400 con el valor recibido y la lista de categorías permitidas
+const categoriaInvalida = (res, valor) => {
+    const recibida = typeof valor === 'string' && valor.trim() ? ` «${valor.trim().slice(0, 50)}»` : '';
+    return datosInvalidos(
+        res,
+        `La categoría${recibida} no es válida. Debe ser una de: ${Object.keys(CATEGORIAS_INVENTARIO).join(', ')}.`
+    );
+};
 
 const TIPOS_MOVIMIENTO = ['registro', 'adquisicion', 'ajuste', 'baja'];
 const CANTIDAD_MAXIMA_ADQUISICION = 100000;
@@ -58,8 +77,8 @@ const registrarElemento = async (req, res) => {
     if (!nombre || nombre.length > 150) {
         return datosInvalidos(res, 'El nombre es obligatorio y admite máximo 150 caracteres.');
     }
-    if (!CATEGORIAS_INVENTARIO[categoria_inventario]) {
-        return datosInvalidos(res, `La categoría debe ser una de: ${Object.keys(CATEGORIAS_INVENTARIO).join(', ')}.`);
+    if (!esCategoriaValida(categoria_inventario)) {
+        return categoriaInvalida(res, categoria_inventario);
     }
     if (!esCantidadValida(cantidad_propia)) {
         return datosInvalidos(res, 'La cantidad disponible debe ser un número entero mayor o igual a 0.');
@@ -111,8 +130,9 @@ const registrarElemento = async (req, res) => {
 const consultarInventario = async (req, res) => {
     const { categoria } = req.query;
 
-    if (categoria && !CATEGORIAS_INVENTARIO[categoria]) {
-        return datosInvalidos(res, `La categoría debe ser una de: ${Object.keys(CATEGORIAS_INVENTARIO).join(', ')}.`);
+    // Un filtro vacío (?categoria=) se trata como «sin filtro»; cualquier otro valor debe ser una categoría válida
+    if (categoria !== undefined && categoria !== '' && !esCategoriaValida(categoria)) {
+        return categoriaInvalida(res, categoria);
     }
 
     try {
@@ -131,6 +151,40 @@ const consultarInventario = async (req, res) => {
     } catch (error) {
         console.error('Error al consultar el inventario:', error);
         res.status(500).json({ error: 'Error al consultar el inventario' });
+    }
+};
+
+/**
+ * PATCH /api/inventario/:id/categoria - HU-09 (RF-10)
+ * Cambia la categoría de un elemento { categoria_inventario }. Se valida igual que al crearlo.
+ * No toca la cantidad, por eso no deja movimiento en el historial.
+ */
+const actualizarCategoria = async (req, res) => {
+    const id = Number(req.params.id);
+    const { categoria_inventario } = req.body;
+
+    if (!Number.isInteger(id) || id <= 0) {
+        return datosInvalidos(res, 'El identificador del elemento no es válido.');
+    }
+    if (!esCategoriaValida(categoria_inventario)) {
+        return categoriaInvalida(res, categoria_inventario);
+    }
+
+    try {
+        const result = await pool.query(
+            `UPDATE catalogo_productos SET categoria_inventario = $1, clasificacion = $2
+            WHERE id = $3 AND categoria_inventario IS NOT NULL
+            RETURNING ${CAMPOS_INVENTARIO}`,
+            [categoria_inventario, CATEGORIAS_INVENTARIO[categoria_inventario], id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
+        }
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error al actualizar la categoría del inventario:', error);
+        res.status(500).json({ error: 'Error al actualizar la categoría del elemento' });
     }
 };
 
@@ -382,6 +436,7 @@ module.exports = {
     registrarElemento,
     consultarInventario,
     actualizarCantidad,
+    actualizarCategoria,
     registrarAdquisicion,
     consultarMovimientos,
     retirarDanado

@@ -122,6 +122,7 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | GET | `/eventos/:id` | Detalle de un evento con sus requerimientos |
 | POST | `/inventario` | Registrar un elemento del inventario |
 | GET | `/inventario` | Elementos del inventario (filtro `?categoria=`) |
+| PATCH | `/inventario/:id/categoria` | Cambiar la categoría de un elemento |
 | PATCH | `/inventario/:id/cantidad` | Fijar la cantidad disponible (queda como ajuste) |
 | POST | `/inventario/:id/adquisiciones` | Registrar una adquisición (suma a la cantidad) |
 | POST | `/inventario/:id/baja` | Retirar unidades dañadas (resta de la cantidad) |
@@ -222,7 +223,7 @@ Las unidades propias se calculan con el inventario **al momento de consultar**, 
 
 ### Inventario
 
-Categorías válidas: `Mobiliario`, `Bar/Bebidas` (bebidas de consumo directo) y `Bebidas de Coctelería` (licores fuertes). Cada elemento tiene una sola categoría y el filtro `?categoria=` devuelve solo esa (HU-13).
+Categorías válidas (conjunto cerrado, HU-09 / RF-10): `Mobiliario`, `Bar/Bebidas` (bebidas de consumo directo), `Bebidas de Coctelería` (licores fuertes) y `Vajilla`. Hay que escribirlas exactamente así. Cada elemento tiene una sola categoría y el filtro `?categoria=` devuelve solo esa (HU-13). Cualquier otro valor, como `Decoración`, `null` o un texto en minúsculas, responde `400`: `La categoría «Decoración» no es válida. Debe ser una de: ...`. La base de datos también lo rechaza con una restricción, y hay un índice sobre la categoría porque se filtra muy seguido.
 
 #### `POST /api/inventario`
 
@@ -242,6 +243,14 @@ Respuesta `201` con el elemento creado. Registra un movimiento de tipo `registro
   }
 ]
 ```
+
+#### `PATCH /api/inventario/:id/categoria`
+
+```json
+{ "categoria_inventario": "Vajilla" }
+```
+
+Cambia la categoría de un elemento (HU-09). Se valida igual que al crearlo (`400` si no es una de las cuatro) y responde `200` con el elemento actualizado, o `404` si no existe. No cambia la cantidad, así que no deja movimiento en el historial.
 
 #### `PATCH /api/inventario/:id/cantidad`
 

@@ -2,6 +2,7 @@
  * Llamadas a la API del inventario: elementos, cantidades, adquisiciones y movimientos.
  */
 import type {
+  CategoriaInventario,
   ElementoInventario,
   MovimientoInventario,
   NuevoElementoInventario,
@@ -16,6 +17,14 @@ export const inventarioService = {
 
   registrar(elemento: NuevoElementoInventario) {
     return apiRequest<ElementoInventario>('/inventario', { method: 'POST', body: elemento })
+  },
+
+  // HU-09: cambia la categoría de un elemento (el backend la valida contra las cuatro permitidas)
+  actualizarCategoria(id: number, categoria: CategoriaInventario) {
+    return apiRequest<ElementoInventario>(`/inventario/${id}/categoria`, {
+      method: 'PATCH',
+      body: { categoria_inventario: categoria },
+    })
   },
 
   actualizarCantidad(id: number, cantidad: number, motivo?: string) {
