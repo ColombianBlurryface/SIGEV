@@ -1,6 +1,9 @@
 /**
  * Controlador del inventario propio de la organización (HU-08, HU-09 y HU-10).
  *
+ * Propiedad (HU-12, RF-14): cada elemento es propio (es_propio = true, el valor por defecto) o
+ * alquilado a un proveedor (es_propio = false). Se puede filtrar con ?propiedad=propio|alquilado.
+ *
  * Categorías (HU-09, RF-10): conjunto cerrado de cuatro valores. Cualquier otro texto
  * (por ejemplo «Decoración», que no existe como categoría) se rechaza con un 400.
  *
@@ -36,6 +39,9 @@ const esCantidadValida = (valor) => typeof valor === 'number' && Number.isIntege
 
 // Respuesta estándar 400 cuando los datos enviados no cumplen las reglas
 const datosInvalidos = (res, detalle) => res.status(400).json({ error: 'Datos inválidos', detalle });
+
+// Valores del filtro ?propiedad= y su equivalente en la columna es_propio
+const PROPIEDADES = { propio: true, alquilado: false };
 
 // Una categoría es válida solo si es exactamente una de las cuatro (mayúsculas y tildes incluidas)
 const esCategoriaValida = (valor) => typeof valor === 'string' && Object.hasOwn(CATEGORIAS_INVENTARIO, valor);
@@ -73,6 +79,8 @@ const registrarMovimiento = (client, { productoId, tipo, cantidad, cantidadResul
 const registrarElemento = async (req, res) => {
     const nombre = typeof req.body.nombre === 'string' ? req.body.nombre.trim() : '';
     const { categoria_inventario, cantidad_propia } = req.body;
+    // HU-12: si no se indica, el elemento es propio. Debe ser booleano; un texto como "false" se rechaza.
+    const esPropio = req.body.es_propio === undefined ? true : req.body.es_propio;
 
     if (!nombre || nombre.length > 150) {
         return datosInvalidos(res, 'El nombre es obligatorio y admite máximo 150 caracteres.');
@@ -83,6 +91,9 @@ const registrarElemento = async (req, res) => {
     if (!esCantidadValida(cantidad_propia)) {
         return datosInvalidos(res, 'La cantidad disponible debe ser un número entero mayor o igual a 0.');
     }
+    if (typeof esPropio !== 'boolean') {
+        return datosInvalidos(res, 'es_propio debe ser verdadero (propio) o falso (alquilado).');
+    }
 
     const client = await pool.connect();
     try {
@@ -91,9 +102,9 @@ const registrarElemento = async (req, res) => {
         const result = await client.query(
             `INSERT INTO catalogo_productos
             (nombre, clasificacion, tipo_calculo, unidad_medida, categoria_inventario, cantidad_propia, es_propio)
-            VALUES ($1, $2, 'cantidad_fija', 'unidades', $3, $4, true)
+            VALUES ($1, $2, 'cantidad_fija', 'unidades', $3, $4, $5)
             RETURNING ${CAMPOS_INVENTARIO}`,
-            [nombre, CATEGORIAS_INVENTARIO[categoria_inventario], categoria_inventario, cantidad_propia]
+            [nombre, CATEGORIAS_INVENTARIO[categoria_inventario], categoria_inventario, cantidad_propia, esPropio]
         );
         const elemento = result.rows[0];
 
@@ -125,10 +136,15 @@ const registrarElemento = async (req, res) => {
 
 /**
  * GET /api/inventario - HU-08
- * Lista los elementos del inventario. Filtro opcional: ?categoria=Mobiliario
+ * Lista los elementos del inventario. Filtros opcionales: ?categoria=Mobiliario y
+ * ?propiedad=propio|alquilado (HU-12), que se pueden combinar.
  */
 const consultarInventario = async (req, res) => {
-    const { categoria } = req.query;
+    const { categoria, propiedad } = req.query;
+
+    if (propiedad !== undefined && propiedad !== '' && !Object.hasOwn(PROPIEDADES, propiedad)) {
+        return datosInvalidos(res, 'La propiedad debe ser «propio» o «alquilado».');
+    }
 
     // Un filtro vacío (?categoria=) se trata como «sin filtro»; cualquier otro valor debe ser una categoría válida
     if (categoria !== undefined && categoria !== '' && !esCategoriaValida(categoria)) {
@@ -140,8 +156,12 @@ const consultarInventario = async (req, res) => {
         const params = [];
 
         if (categoria) {
-            query += ` AND categoria_inventario = $1`;
             params.push(categoria);
+            query += ` AND categoria_inventario = $${params.length}`;
+        }
+        if (propiedad) {
+            params.push(PROPIEDADES[propiedad]);
+            query += ` AND es_propio = $${params.length}`;
         }
 
         query += ` ORDER BY categoria_inventario ASC, nombre ASC`;
@@ -151,6 +171,40 @@ const consultarInventario = async (req, res) => {
     } catch (error) {
         console.error('Error al consultar el inventario:', error);
         res.status(500).json({ error: 'Error al consultar el inventario' });
+    }
+};
+
+/**
+ * PATCH /api/inventario/:id/propiedad - HU-12 (RF-14)
+ * Marca un elemento como propio o alquilado { es_propio: true | false }.
+ * No toca la cantidad, así que no deja movimiento en el historial.
+ */
+const actualizarPropiedad = async (req, res) => {
+    const id = Number(req.params.id);
+    const { es_propio } = req.body;
+
+    if (!Number.isInteger(id) || id <= 0) {
+        return datosInvalidos(res, 'El identificador del elemento no es válido.');
+    }
+    if (typeof es_propio !== 'boolean') {
+        return datosInvalidos(res, 'es_propio debe ser verdadero (propio) o falso (alquilado).');
+    }
+
+    try {
+        const result = await pool.query(
+            `UPDATE catalogo_productos SET es_propio = $1
+            WHERE id = $2 AND categoria_inventario IS NOT NULL
+            RETURNING ${CAMPOS_INVENTARIO}`,
+            [es_propio, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
+        }
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Error al actualizar la propiedad del inventario:', error);
+        res.status(500).json({ error: 'Error al actualizar la propiedad del elemento' });
     }
 };
 
@@ -437,6 +491,7 @@ module.exports = {
     consultarInventario,
     actualizarCantidad,
     actualizarCategoria,
+    actualizarPropiedad,
     registrarAdquisicion,
     consultarMovimientos,
     retirarDanado

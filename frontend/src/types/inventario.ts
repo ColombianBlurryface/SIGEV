@@ -19,6 +19,8 @@ export interface NuevoElementoInventario {
   nombre: string
   categoria_inventario: CategoriaInventario
   cantidad_propia: number
+  // HU-12: true = propio (valor por defecto), false = alquilado a un proveedor
+  es_propio?: boolean
 }
 
 export type TipoMovimiento = 'registro' | 'adquisicion' | 'ajuste' | 'baja'

@@ -1,6 +1,6 @@
 /**
  * Formulario para registrar un elemento nuevo en el inventario (HU-08):
- * nombre, categoría y cantidad disponible.
+ * nombre, categoría, si es propio o alquilado (HU-12) y cantidad disponible.
  */
 import { LoaderCircle, Plus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
@@ -10,6 +10,7 @@ import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatearNumero } from '@/lib/formato'
+import { cn } from '@/lib/utils'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'
 import { CATEGORIAS_INVENTARIO, type CategoriaInventario, type ElementoInventario } from '@/types/inventario'
@@ -31,6 +32,8 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
   const [nombre, setNombre] = useState('')
   const [categoria, setCategoria] = useState('')
   const [cantidad, setCantidad] = useState('')
+  // HU-12: por defecto el elemento es propio; también se puede registrar uno alquilado a un proveedor
+  const [esPropio, setEsPropio] = useState(true)
   const [intento, setIntento] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [errorServidor, setErrorServidor] = useState<string | null>(null)
@@ -55,9 +58,12 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
         nombre: nombre.trim(),
         categoria_inventario: categoria as CategoriaInventario,
         cantidad_propia: Number(cantidad),
+        es_propio: esPropio,
       })
       onRegistrado(elemento)
-      setExito(`«${elemento.nombre}» registrado con ${formatearNumero(elemento.cantidad_propia)} unidades disponibles.`)
+      setExito(
+        `«${elemento.nombre}» registrado como ${elemento.es_propio ? 'propio' : 'alquilado'} con ${formatearNumero(elemento.cantidad_propia)} unidades disponibles.`,
+      )
       setNombre('')
       setCantidad('')
       setIntento(false)
@@ -103,6 +109,37 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
           ))}
         </Select>
       </FormField>
+
+      <div className="flex flex-col gap-2">
+        <span id="inventario-propiedad-etiqueta" className="text-sm font-semibold">
+          Propiedad
+        </span>
+        <div role="group" aria-labelledby="inventario-propiedad-etiqueta" className="flex rounded-[10px] bg-chip p-[3px]">
+          {(
+            [
+              [true, 'Propio'],
+              [false, 'Alquilado'],
+            ] as const
+          ).map(([valor, etiqueta]) => (
+            <button
+              key={etiqueta}
+              type="button"
+              aria-pressed={esPropio === valor}
+              onClick={() => setEsPropio(valor)}
+              disabled={enviando}
+              className={cn(
+                'h-9 flex-1 cursor-pointer rounded-lg text-[13.5px] font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
+                esPropio === valor ? 'bg-card text-foreground shadow-sm dark:bg-input' : 'text-subtle',
+              )}
+            >
+              {etiqueta}
+            </button>
+          ))}
+        </div>
+        <span className="text-[12.5px] text-muted-foreground">
+          {esPropio ? 'Pertenece a la organización.' : 'Se alquila a un proveedor: en un evento siempre cuenta como «a alquilar».'}
+        </span>
+      </div>
 
       <FormField id="inventario-cantidad" label="Cantidad disponible" error={errores.cantidad}>
         <div className="relative">

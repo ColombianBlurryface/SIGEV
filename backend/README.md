@@ -30,6 +30,7 @@ Completa `backend/.env` (pide los valores reales al equipo; **nunca subas este a
 | `DB_PASSWORD` | Contraseña de la base de datos |
 | `DB_SSL` | `true` para Supabase, `false` para un Postgres local |
 | `PORT` | Puerto del backend (por defecto `3000`) |
+| `MAX_OWNED_CAPACITY_THRESHOLD` | Umbral de asistentes a partir del cual se avisa que hay que alquilar mobiliario (P-05, RN-03). Opcional: por defecto `200`. Hay que reiniciar el servidor al cambiarlo |
 | `JWT_SECRET` | Clave larga y aleatoria para firmar los tokens de sesión |
 
 > En Supabase usa la conexión del **pooler** (Connect → Direct → *Session/Transaction pooler*). La conexión directa (`db.<ref>.supabase.co`) solo funciona con IPv6 y en muchas redes no resuelve.
@@ -114,6 +115,7 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | Método | Ruta | Descripción |
 | --- | --- | --- |
 | GET | `/health` | Estado del servidor |
+| GET | `/configuracion` | Parámetros del sistema (umbral de alquiler) |
 | POST | `/auth/login` | Iniciar sesión |
 | GET | `/catalogo` | Productos del catálogo (filtro `?clasificacion=`) |
 | GET | `/catalogo/:id` | Un producto del catálogo |
@@ -123,6 +125,7 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | POST | `/inventario` | Registrar un elemento del inventario |
 | GET | `/inventario` | Elementos del inventario (filtro `?categoria=`) |
 | PATCH | `/inventario/:id/categoria` | Cambiar la categoría de un elemento |
+| PATCH | `/inventario/:id/propiedad` | Marcar un elemento como propio o alquilado |
 | PATCH | `/inventario/:id/cantidad` | Fijar la cantidad disponible (queda como ajuste) |
 | POST | `/inventario/:id/adquisiciones` | Registrar una adquisición (suma a la cantidad) |
 | POST | `/inventario/:id/baja` | Retirar unidades dañadas (resta de la cantidad) |
@@ -146,6 +149,16 @@ Respuesta `200`:
 ```
 
 El token vence a las 8 horas. El frontend lo envía en la cabecera `Authorization: Bearer <token>`.
+
+### Configuración
+
+#### `GET /api/configuracion`
+
+```json
+{ "umbral_alquiler": 200 }
+```
+
+Parámetros del sistema que necesita la pantalla. El umbral sale de `MAX_OWNED_CAPACITY_THRESHOLD`; si no está definida o no es un entero positivo, vale `200`.
 
 ### Catálogo
 
@@ -212,7 +225,16 @@ Datos del evento más:
 - `productos_calculados`: nombre, clasificación, porción, `cantidad_neta`, `cantidad_con_margen`, `unidad_entrega`, `precio_unitario`, `costo_estimado` y `componentes_menu`.
 - `servicios_adicionales`: `tipo`, `descripcion`, `cantidad` y `notas` (incluye el mobiliario).
 - En el mobiliario, además (HU-12): `producto_id`, `disponible_inventario` (stock actual), `unidades_propias` y `unidades_alquilar`. En los demás servicios esos campos llegan en `null`.
-- `aviso_alquiler`: `true` si el evento tiene más de 200 asistentes.
+- `aviso_alquiler`: `true` si el evento supera el umbral de asistentes (200 por defecto).
+- `estado_alquiler` (RN-03):
+
+```json
+{ "requiere_alquiler": true, "umbral_superado": true, "umbral": 200,
+  "inventario_insuficiente": true, "unidades_alquilar": 100,
+  "motivo": "La cantidad de asistentes (250) supera la capacidad propia (200)." }
+```
+
+`requiere_alquiler` sigue solo la regla de asistentes. `inventario_insuficiente` avisa además cuando el mobiliario pedido no alcanza con el stock propio, aunque el evento no supere el umbral. Un elemento marcado como alquilado cuenta siempre como «a alquilar» (`unidades_propias` en `0`).
 
 ```json
 { "tipo": "mobiliario", "descripcion": "Sillas Tiffany doradas", "cantidad": 410, "producto_id": 10,
@@ -231,9 +253,14 @@ Categorías válidas (conjunto cerrado, HU-09 / RF-10): `Mobiliario`, `Bar/Bebid
 { "nombre": "Sillas Tiffany doradas", "categoria_inventario": "Mobiliario", "cantidad_propia": 300 }
 ```
 
+`es_propio` es opcional: `true` (valor por defecto) para un elemento de la organización y `false` para uno alquilado a un proveedor (HU-12). Debe ser booleano; un texto como `"false"` responde `400`.
+
 Respuesta `201` con el elemento creado. Registra un movimiento de tipo `registro` con la cantidad inicial. Si ya hay **otro elemento del inventario** con ese nombre responde `409`; un producto del catálogo sí puede llamarse igual.
 
-#### `GET /api/inventario?categoria=Mobiliario`
+#### `GET /api/inventario?categoria=Mobiliario&propiedad=alquilado`
+
+Los dos filtros son opcionales y se pueden combinar. `propiedad` acepta `propio` o `alquilado` (HU-12); cualquier otro valor responde `400`.
+
 
 ```json
 [
@@ -243,6 +270,14 @@ Respuesta `201` con el elemento creado. Registra un movimiento de tipo `registro
   }
 ]
 ```
+
+#### `PATCH /api/inventario/:id/propiedad`
+
+```json
+{ "es_propio": false }
+```
+
+Marca un elemento como propio (`true`) o alquilado (`false`). `400` si no es booleano, `404` si no existe. No cambia la cantidad, así que no deja movimiento en el historial.
 
 #### `PATCH /api/inventario/:id/categoria`
 

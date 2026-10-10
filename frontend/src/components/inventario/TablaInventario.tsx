@@ -1,6 +1,6 @@
 /**
- * Tabla de elementos del inventario. Permite actualizar la cantidad en la misma fila (HU-08)
- * y abrir el formulario de adquisición del elemento (HU-09).
+ * Tabla de elementos del inventario. Permite actualizar la cantidad en la misma fila (HU-08),
+ * marcar el elemento como propio o alquilado (HU-12) y abrir el formulario de adquisición (HU-09).
  * En pantallas medianas cada fila se muestra como tarjeta.
  */
 import { Check, LoaderCircle, PackagePlus, Pencil, X } from 'lucide-react'
@@ -9,6 +9,7 @@ import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { formatearNumero } from '@/lib/formato'
 import { ESTILO_CATEGORIA_INVENTARIO } from '@/lib/inventario'
 import { cn } from '@/lib/utils'
@@ -30,12 +31,14 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [valor, setValor] = useState('')
   const [motivo, setMotivo] = useState('')
+  const [propiedad, setPropiedad] = useState<'propio' | 'alquilado'>('propio')
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function empezarEdicion(elemento: ElementoInventario) {
     setEditandoId(elemento.id)
     setValor(String(elemento.cantidad_propia))
+    setPropiedad(elemento.es_propio ? 'propio' : 'alquilado')
     setMotivo('')
     setError(null)
   }
@@ -56,12 +59,19 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
 
     setGuardando(true)
     try {
-      const actualizado = await inventarioService.actualizarCantidad(elemento.id, cantidad, motivo.trim() || undefined)
+      // Primero la propiedad (si cambió) y luego la cantidad; cada llamada devuelve el elemento actualizado
+      const esPropio = propiedad === 'propio'
+      let actualizado = elemento
+      if (esPropio !== elemento.es_propio) {
+        actualizado = await inventarioService.actualizarPropiedad(elemento.id, esPropio)
+        onActualizado(actualizado)
+      }
+      actualizado = await inventarioService.actualizarCantidad(elemento.id, cantidad, motivo.trim() || undefined)
       onActualizado(actualizado)
       setEditandoId(null)
       setError(null)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No fue posible actualizar la cantidad.')
+      setError(err instanceof ApiError ? err.message : 'No fue posible guardar los cambios.')
     } finally {
       setGuardando(false)
     }
@@ -94,12 +104,17 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
                     <span className="max-w-full font-bold break-words lg:truncate" title={elemento.nombre}>
                       {elemento.nombre}
                     </span>
-                    {/* HU-12: todo lo registrado en el inventario es propio; lo que falta en un evento se alquila */}
-                    {elemento.es_propio && (
-                      <span className="rounded-md bg-success-soft px-2 py-0.5 text-[11px] font-bold text-success-foreground">
-                        Propio
-                      </span>
-                    )}
+                    {/* HU-12: cada elemento dice si es propio o alquilado a un proveedor */}
+                    <span
+                      className={cn(
+                        'rounded-md px-2 py-0.5 text-[11px] font-bold',
+                        elemento.es_propio
+                          ? 'bg-success-soft text-success-foreground'
+                          : 'bg-warning-soft text-warning-foreground',
+                      )}
+                    >
+                      {elemento.es_propio ? 'Propio' : 'Alquilado'}
+                    </span>
                   </span>
                   <span
                     className={cn(
@@ -132,6 +147,19 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
                         autoFocus
                         className="h-9 w-24 text-right"
                       />
+                      <label htmlFor={`propiedad-${elemento.id}`} className="sr-only">
+                        Propiedad de {elemento.nombre}
+                      </label>
+                      <Select
+                        id={`propiedad-${elemento.id}`}
+                        value={propiedad}
+                        onChange={(e) => setPropiedad(e.target.value as 'propio' | 'alquilado')}
+                        disabled={guardando}
+                        className="h-9 w-32 text-sm"
+                      >
+                        <option value="propio">Propio</option>
+                        <option value="alquilado">Alquilado</option>
+                      </Select>
                       <label htmlFor={`motivo-${elemento.id}`} className="sr-only">
                         Motivo del ajuste (opcional)
                       </label>
@@ -144,7 +172,7 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
                         disabled={guardando}
                         className="h-9 w-44 text-sm"
                       />
-                      <Button type="submit" size="icon" disabled={guardando} aria-label="Guardar cantidad" className="size-9">
+                      <Button type="submit" size="icon" disabled={guardando} aria-label="Guardar cambios" className="size-9">
                         {guardando ? <LoaderCircle className="animate-spin" /> : <Check />}
                       </Button>
                       <Button variant="ghost" size="icon" onClick={cancelar} disabled={guardando} aria-label="Cancelar" className="size-9">

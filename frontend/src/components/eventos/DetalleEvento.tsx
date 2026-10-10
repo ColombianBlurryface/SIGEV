@@ -84,9 +84,13 @@ function agruparRequerimientos(detalle: EventoDetalle) {
     const reparto = esMobiliario
       ? { propias: servicio.unidades_propias ?? 0, alquilar: servicio.unidades_alquilar ?? servicio.cantidad ?? 0 }
       : undefined
-    const origen = reparto
-      ? `${servicio.producto_id === null ? 'No está en el inventario · ' : ''}${describirReparto(reparto)}`
-      : null
+    const prefijoOrigen =
+      servicio.producto_id === null
+        ? 'No está en el inventario · '
+        : servicio.inventario_es_propio === false
+          ? 'Elemento alquilado · '
+          : ''
+    const origen = reparto ? `${prefijoOrigen}${describirReparto(reparto)}` : null
     grupos[esMobiliario ? 'mobiliario' : 'servicios'].push({
       id: `s-${servicio.id}`,
       nombre: esMobiliario
@@ -106,6 +110,7 @@ function agruparRequerimientos(detalle: EventoDetalle) {
   return {
     grupos,
     costos,
+    estadoAlquiler: detalle.estado_alquiler,
     total,
     unidadesAlquilar,
     vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0,
@@ -152,7 +157,12 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
         <span className="text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase">Requerimientos</span>
 
         {requerimientos && (
-          <AvisoAlquiler asistentes={evento.asistentes} unidadesAlquilar={requerimientos.unidadesAlquilar} className="text-[13px]" />
+          <AvisoAlquiler
+            superaUmbral={requerimientos.estadoAlquiler.umbral_superado}
+            umbral={requerimientos.estadoAlquiler.umbral}
+            unidadesAlquilar={requerimientos.unidadesAlquilar}
+            className="text-[13px]"
+          />
         )}
 
         {cargando && !requerimientos && (

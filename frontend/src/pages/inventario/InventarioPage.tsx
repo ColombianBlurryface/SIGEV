@@ -28,6 +28,8 @@ const MOVIMIENTOS_MAXIMOS = 200
 export function InventarioPage() {
   const { elementos, cargando, error, recargar, guardarLocal } = useInventario()
   const [filtro, setFiltro] = useState<Filtro>('todas')
+  // HU-12: segundo filtro, independiente de la categoría
+  const [propiedadFiltro, setPropiedadFiltro] = useState<'todas' | 'propio' | 'alquilado'>('todas')
   const [busqueda, setBusqueda] = useState('')
   const [modo, setModo] = useState<Modo>('elemento')
   // Elemento elegido con el botón "Adquisición" de una fila. "version" cambia en cada clic para que
@@ -39,9 +41,19 @@ export function InventarioPage() {
 
   const termino = normalizar(busqueda.trim())
   const visibles = elementos.filter(
-    (e) => (filtro === 'todas' || e.categoria_inventario === filtro) && (termino === '' || normalizar(e.nombre).includes(termino)),
+    (e) =>
+      (filtro === 'todas' || e.categoria_inventario === filtro) &&
+      (propiedadFiltro === 'todas' || e.es_propio === (propiedadFiltro === 'propio')) &&
+      (termino === '' || normalizar(e.nombre).includes(termino)),
   )
-  const totalUnidades = elementos.reduce((suma, e) => suma + e.cantidad_propia, 0)
+  // Las unidades de elementos alquilados no son de la organización, por eso no se suman como propias
+  const totalUnidades = elementos.filter((e) => e.es_propio).reduce((suma, e) => suma + e.cantidad_propia, 0)
+  const totalAlquilados = elementos.filter((e) => !e.es_propio).length
+  const opcionesPropiedad: { valor: 'todas' | 'propio' | 'alquilado'; etiqueta: string }[] = [
+    { valor: 'todas', etiqueta: 'Toda propiedad' },
+    { valor: 'propio', etiqueta: 'Propios' },
+    { valor: 'alquilado', etiqueta: 'Alquilados' },
+  ]
   const opciones: { valor: Filtro; etiqueta: string; cantidad: number }[] = [
     { valor: 'todas', etiqueta: 'Todas', cantidad: elementos.length },
     ...CATEGORIAS_INVENTARIO.map((c) => ({
@@ -75,7 +87,7 @@ export function InventarioPage() {
         <p className="text-[15px] text-subtle">
           {cargando
             ? 'Cargando inventario…'
-            : `${elementos.length} ${elementos.length === 1 ? 'elemento' : 'elementos'} · ${formatearNumero(totalUnidades)} unidades propias`}
+            : `${elementos.length} ${elementos.length === 1 ? 'elemento' : 'elementos'} · ${formatearNumero(totalUnidades)} unidades propias${totalAlquilados > 0 ? ` · ${totalAlquilados} ${totalAlquilados === 1 ? 'alquilado' : 'alquilados'}` : ''}`}
         </p>
       </header>
 
@@ -108,7 +120,7 @@ export function InventarioPage() {
               <h2 className="text-lg font-bold">{modo === 'elemento' ? 'Registrar elemento' : 'Registrar adquisición'}</h2>
               <p className="text-[13.5px] text-subtle">
                 {modo === 'elemento'
-                  ? 'Agrega un recurso propio de la organización.'
+                  ? 'Agrega un recurso propio de la organización o uno alquilado a un proveedor.'
                   : 'Suma unidades compradas a un elemento que ya está en el inventario.'}
               </p>
             </div>
@@ -163,6 +175,26 @@ export function InventarioPage() {
                 </button>
               )
             })}
+          </div>
+
+          <div role="group" aria-label="Filtrar por propiedad" className="-mt-1 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase">Propiedad</span>
+            {opcionesPropiedad.map(({ valor, etiqueta }) => (
+              <button
+                key={valor}
+                type="button"
+                aria-pressed={propiedadFiltro === valor}
+                onClick={() => setPropiedadFiltro(valor)}
+                className={cn(
+                  'h-8 cursor-pointer rounded-full border px-3 text-[12.5px] font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
+                  propiedadFiltro === valor
+                    ? 'border-foreground bg-foreground text-background dark:border-primary dark:bg-primary dark:text-primary-foreground'
+                    : 'border-border bg-card text-subtle hover:bg-muted',
+                )}
+              >
+                {etiqueta}
+              </button>
+            ))}
           </div>
 
           {error && (

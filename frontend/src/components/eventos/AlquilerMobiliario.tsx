@@ -5,7 +5,6 @@
 import { Alert } from '@/components/ui/alert'
 import { origenMobiliario, type OrigenMobiliario, type RepartoMobiliario } from '@/lib/alquiler'
 import { formatearNumero } from '@/lib/formato'
-import { superaUmbralAlquiler, UMBRAL_ALQUILER } from '@/lib/reglasEvento'
 import { cn } from '@/lib/utils'
 
 const ESTILO_ORIGEN: Record<OrigenMobiliario, { etiqueta: string; clases: string }> = {
@@ -24,29 +23,30 @@ export function OrigenBadge({ reparto, className }: { reparto: RepartoMobiliario
 }
 
 interface AvisoAlquilerProps {
-  asistentes: number
+  // true si los asistentes superan el umbral (RN-03); el umbral viene del backend (P-05)
+  superaUmbral: boolean
+  umbral: number
   unidadesAlquilar: number
   className?: string
 }
 
 /**
- * Aviso de alquiler (RN-03): sale siempre que el evento supera los 200 asistentes y,
- * aunque no los supere, cuando el inventario no alcanza para el mobiliario pedido.
+ * Aviso de alquiler (RN-03): sale siempre que el evento supera el umbral de asistentes (200 por
+ * defecto) y, aunque no lo supere, cuando el inventario propio no alcanza para el mobiliario pedido.
  */
-export function AvisoAlquiler({ asistentes, unidadesAlquilar, className }: AvisoAlquilerProps) {
-  const superaUmbral = superaUmbralAlquiler(asistentes)
+export function AvisoAlquiler({ superaUmbral, umbral, unidadesAlquilar, className }: AvisoAlquilerProps) {
   if (!superaUmbral && unidadesAlquilar === 0) return null
 
   const faltante =
     unidadesAlquilar > 0
-      ? `Con el inventario actual hay que alquilar ${formatearNumero(unidadesAlquilar)} ${unidadesAlquilar === 1 ? 'unidad' : 'unidades'} de mobiliario.`
+      ? `Hay que alquilar ${formatearNumero(unidadesAlquilar)} ${unidadesAlquilar === 1 ? 'unidad' : 'unidades'} de mobiliario (no hay stock propio suficiente).`
       : 'Con el mobiliario agregado hasta ahora el inventario propio alcanza.'
 
   return (
     <Alert variant="warning" className={className}>
       {superaUmbral ? (
         <>
-          <strong>Evento de más de {UMBRAL_ALQUILER} asistentes:</strong> es probable que se necesite alquilar
+          <strong>Evento de más de {umbral} asistentes:</strong> es probable que se necesite alquilar
           mobiliario (RN-03). {faltante}
         </>
       ) : (
