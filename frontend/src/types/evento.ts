@@ -24,6 +24,8 @@ export interface ProductoEventoPayload {
   producto_id: number
   porcion_por_persona: number
   componentes_menu?: string
+  // Valor unitario escrito en el evento (bebidas). Si no se envía, se usa el del catálogo.
+  precio_unitario?: number
 }
 
 export interface RequerimientoAdicionalPayload {

@@ -55,7 +55,14 @@ export function TablaCatalogo({ productos, mensajeVacio, cambiandoId, onEditar, 
                     <span className={cn('font-bold', !producto.activo && 'text-muted-foreground')}>{producto.nombre}</span>
                     <span className="text-[12.5px] text-subtle">{describirConsumo(producto)}</span>
                   </div>
-                  <span className="w-28 text-right font-semibold">{formatearMoneda(producto.precio_unitario)}</span>
+                  <span
+                    className={cn(
+                      'w-28 text-right',
+                      Number(producto.precio_unitario) > 0 ? 'font-semibold' : 'text-muted-foreground',
+                    )}
+                  >
+                    {Number(producto.precio_unitario) > 0 ? formatearMoneda(producto.precio_unitario) : 'Sin precio'}
+                  </span>
                   <span
                     className={cn(
                       'rounded-md px-2 py-0.5 text-[11px] font-bold',

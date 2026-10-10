@@ -187,7 +187,7 @@ Con `?incluir_inactivos=true` también llegan los productos desactivados (lo usa
 
 #### `POST /api/catalogo`
 
-Crea un producto. Los datos dependen de cómo se consume:
+Crea un producto. `precio_unitario` es opcional: sin precio queda en `0` y se escribe después (en la pantalla de Catálogo o al registrar el evento). Los datos dependen de cómo se consume:
 
 ```json
 { "nombre": "Cerveza Águila 330 ml", "clasificacion": "bebida_general",
@@ -245,6 +245,7 @@ Activa o desactiva un producto. Un producto desactivado deja de ofrecerse en los
 
 - `productos` y `servicios_adicionales` son opcionales.
 - `porcion_por_persona` es opcional: si no se envía, se usa la del catálogo.
+- `precio_unitario` es opcional: es el valor unitario (por unidad, por botella o por kg) escrito en el evento. Si no se envía, se usa el del catálogo. Debe ser un número mayor o igual a 0 (`400` si no). El costo guardado se calcula con ese valor, y el detalle del evento lo devuelve como el precio realmente usado.
 - El mobiliario se envía como servicio adicional con `tipo: "mobiliario"`. Con `producto_id` se relaciona con un elemento del inventario de categoría `Mobiliario` (HU-12); en ese caso la descripción se toma del inventario. Sin `producto_id`, el elemento no está en el inventario y todo se alquila.
 - Un mismo elemento del inventario no puede repetirse en el evento (`400`).
 - Todo se guarda en una transacción: si algo falla, no queda nada a medias.

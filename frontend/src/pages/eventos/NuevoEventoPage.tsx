@@ -88,7 +88,12 @@ export function NuevoEventoPage() {
             porcion_por_persona: a.porcion,
             componentes_menu: a.componentes || undefined,
           })),
-          ...requerimientos.bebidas.map((b) => ({ producto_id: b.producto.id, porcion_por_persona: b.porcion })),
+          ...requerimientos.bebidas.map((b) => ({
+            producto_id: b.producto.id,
+            porcion_por_persona: b.porcion,
+            // El valor unitario puede haberse escrito en el evento (QA-04); queda guardado con el costo
+            precio_unitario: Number(b.producto.precio_unitario),
+          })),
         ],
         servicios_adicionales: [
           ...requerimientos.mobiliario.map((m) => ({

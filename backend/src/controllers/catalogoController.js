@@ -59,7 +59,9 @@ const validarProducto = (body) => {
       error: `Para ${clasificacion} el tipo de cálculo debe ser uno de: ${TIPOS_POR_CLASIFICACION[clasificacion].join(', ')}.`
     };
   }
-  if (typeof precio_unitario !== 'number' || !Number.isFinite(precio_unitario) || precio_unitario < 0 || precio_unitario > LIMITE_PRECIO) {
+  // El precio es opcional: sin precio queda en 0 y se escribe después (desde el catálogo o al registrar el evento)
+  const precio = precio_unitario === undefined || precio_unitario === null ? 0 : precio_unitario;
+  if (typeof precio !== 'number' || !Number.isFinite(precio) || precio < 0 || precio > LIMITE_PRECIO) {
     return { error: 'El precio debe ser un número mayor o igual a 0.' };
   }
 
@@ -96,7 +98,7 @@ const validarProducto = (body) => {
       unidad: UNIDAD_POR_TIPO[tipo_calculo],
       volumen,
       tamano,
-      precio: precio_unitario
+      precio
     }
   };
 };

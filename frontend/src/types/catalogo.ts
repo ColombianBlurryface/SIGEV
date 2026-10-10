@@ -30,5 +30,6 @@ export interface DatosProducto {
   porcion_por_persona?: number
   volumen_botella_ml?: number
   tamano_porcion_ml?: number
-  precio_unitario: number
+  // Opcional: sin precio queda en 0 y se escribe después (en el catálogo o al registrar el evento)
+  precio_unitario?: number
 }
