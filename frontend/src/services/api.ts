@@ -19,6 +19,9 @@ export class ApiError extends Error {
   }
 }
 
+// Evento que avisa a la aplicación que el servidor rechazó la sesión (token vencido o inválido)
+export const EVENTO_SESION_RECHAZADA = 'sigev:sesion-rechazada'
+
 type Metodo = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 interface OpcionesPeticion {
@@ -48,6 +51,14 @@ export async function apiRequest<T>(ruta: string, { method = 'GET', body }: Opci
   }
 
   const datos = await respuesta.json().catch(() => null)
+
+  // 401 con una sesión guardada: el token venció o ya no es válido. Se cierra la sesión y la
+  // aplicación lleva al login. (Un 401 sin token es el login con contraseña incorrecta: no aplica.)
+  if (respuesta.status === 401 && token) {
+    sesionStorage.borrar()
+    window.dispatchEvent(new Event(EVENTO_SESION_RECHAZADA))
+    throw new ApiError('Tu sesión venció. Inicia sesión de nuevo.', 401)
+  }
 
   if (!respuesta.ok) {
     const { error, detalle } = (datos ?? {}) as { error?: string; detalle?: string }
