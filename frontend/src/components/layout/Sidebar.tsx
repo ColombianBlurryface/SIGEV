@@ -20,7 +20,7 @@ const navegacion: ItemNavegacion[] = [
   { etiqueta: 'Eventos', icono: CalendarDays, ruta: '/eventos' },
   { etiqueta: 'Nuevo evento', icono: CirclePlus, ruta: '/eventos/nuevo' },
   { etiqueta: 'Inventario', icono: Boxes, ruta: '/inventario' },
-  { etiqueta: 'Catálogo', icono: Package },
+  { etiqueta: 'Catálogo', icono: Package, ruta: '/catalogo' },
 ]
 
 const claseItem = 'flex h-11 items-center gap-3 rounded-[10px] px-3 text-[15px] font-semibold'

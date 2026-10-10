@@ -29,6 +29,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-07 | Validar que el evento tenga entre 40 y 600 asistentes, con aviso inmediato si está fuera de rango. | Nuevo evento · paso 1 |
 | HU-02 | Agregar alimentos del catálogo con su porción por persona y los componentes del menú. | Nuevo evento · paso 2 |
 | HU-03 | Agregar bebidas individuales (por persona) o compartidas (por botella). | Nuevo evento · paso 2 |
+| Catálogo | Crear, editar y activar o desactivar los alimentos y bebidas con los que se calculan los eventos, con sus datos de cálculo y su precio. Los productos nuevos aparecen enseguida al registrar un evento. | `/catalogo` |
 | HU-13 | Registrar por separado las bebidas generales y las del bar de coctelería: cada grupo tiene sus productos, su tabla y su subtotal, también en el resumen y el detalle del evento. En el inventario, las dos categorías se registran y consultan sin mezclarse. | Nuevo evento · paso 2 y 3, detalle del evento, `/inventario` |
 | HU-04 | Agregar el mobiliario del evento, elegido del inventario (o «Otro» si no está), con su cantidad. | Nuevo evento · paso 2 |
 | HU-05 | Agregar servicios adicionales (DJ, música, sonido, entretenimiento...). | Nuevo evento · paso 2 |
@@ -90,6 +91,12 @@ Si el número de asistentes está fuera del rango permitido, el campo lo avisa d
 **Paso 3 · Resumen.** Revisión final con el costo estimado antes de guardar.
 
 ![Paso 3 del registro](docs/imagenes/registro-paso3-resumen.png)
+
+### Catálogo
+
+Aquí se mantienen los productos que se ofrecen al registrar un evento. Cada uno lleva cómo se calcula (gramos por persona, unidades por persona o botella compartida) y su precio; mientras se escribe, una vista previa muestra cuánto saldría con 100 asistentes. Los productos no se borran: se desactivan, y los eventos ya guardados conservan sus cantidades y costos.
+
+![Pantalla de catálogo](docs/imagenes/catalogo.png)
 
 ### Inventario (HU-08 y HU-09)
 
@@ -227,4 +234,3 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 - **Proteger la API con el token de sesión:** hoy las rutas de eventos, catálogo e inventario responden sin token (el middleware `verificarToken` existe, pero no está aplicado). Con eso también se podrá registrar qué usuario hace cada movimiento.
 - **Desplegar** la aplicación (propuesta: frontend y backend en Vercel, base de datos en Supabase).
 - Editar los requerimientos y cambiar el estado de un evento ya creado.
-- Crear productos nuevos en el catálogo desde la aplicación.

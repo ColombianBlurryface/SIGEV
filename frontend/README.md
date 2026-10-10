@@ -68,6 +68,7 @@ Abre <http://localhost:5173> e inicia sesión con un usuario creado en el paso 1
 | `/login` | Inicio de sesión (sin registro público) | Login |
 | `/eventos` | Resumen, búsqueda, filtros y detalle del evento seleccionado (con el mobiliario propio y a alquilar). Acepta `?evento=ID` para abrir un evento concreto. | HU-06, HU-12 |
 | `/eventos/nuevo` | Asistente de registro en 3 pasos: datos, requerimientos y resumen. Las bebidas generales y las de coctelería se registran por separado; el mobiliario se elige del inventario y muestra qué se alquila. | HU-01 a HU-05, HU-07, HU-12, HU-13 |
+| `/catalogo` | Alimentos y bebidas con los que se calculan los eventos: crear, editar y activar o desactivar, con vista previa del cálculo | Catálogo |
 | `/inventario` | Elementos del inventario por categoría (Mobiliario, Bar/Bebidas, Bebidas de Coctelería y Vajilla) y por propiedad (propio o alquilado), adquisiciones, bajas por daño e historial de movimientos | HU-08, HU-09, HU-10, HU-12 |
 
 ![Registro de evento, paso 2](../docs/imagenes/registro-paso2-alimentos.png)
@@ -82,14 +83,15 @@ frontend/src/
 ├── config/                  Variables de entorno (URL de la API)
 ├── routes/                  Mapa de rutas y guardas (páginas privadas / solo públicas)
 ├── layouts/                 Estructura de las páginas privadas (menú lateral + contenido)
-├── pages/                   Una carpeta por módulo: auth, eventos, inventario, más la página 404
+├── pages/                   Una carpeta por módulo: auth, eventos, inventario, catálogo, más la página 404
 ├── components/
 │   ├── ui/                  Componentes base reutilizables (Button, Input, Select, Alert, Card...)
 │   ├── layout/              Menú lateral
 │   ├── brand/               Logo
 │   ├── eventos/             Tabla, filtros, detalle, campo de asistentes...
 │   │   └── registro/        Pasos y pestañas del asistente de registro
-│   └── inventario/          Formularios, tabla e historial de movimientos
+│   ├── inventario/          Formularios, tabla e historial de movimientos
+│   └── catalogo/            Formulario y lista de productos del catálogo
 ├── context/                 Estado global: sesión (AuthProvider) y tema (ThemeProvider)
 ├── hooks/                   Acceso al estado global y carga de datos (useEventos, useInventario...)
 ├── services/                Cliente HTTP (api.ts) y un servicio por recurso de la API
