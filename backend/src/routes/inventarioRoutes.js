@@ -11,8 +11,11 @@ const inventarioController = require('../controllers/inventarioController');
 // POST /api/inventario - HU-08 (RF-09): Registrar elemento de inventario
 router.post('/', inventarioController.registrarElemento);
 
-// GET /api/inventario?categoria= - HU-08: Consultar inventario
+// GET /api/inventario?categoria=&propiedad= - HU-08 y HU-12: Consultar inventario (filtros opcionales)
 router.get('/', inventarioController.consultarInventario);
+
+// PATCH /api/inventario/:id/propiedad - HU-12 (RF-14): Marcar un elemento como propio o alquilado
+router.patch('/:id/propiedad', inventarioController.actualizarPropiedad);
 
 // PATCH /api/inventario/:id/categoria - HU-09 (RF-10): Cambiar la categoría de un elemento
 router.patch('/:id/categoria', inventarioController.actualizarCategoria);

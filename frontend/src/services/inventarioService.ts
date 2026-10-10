@@ -19,6 +19,14 @@ export const inventarioService = {
     return apiRequest<ElementoInventario>('/inventario', { method: 'POST', body: elemento })
   },
 
+  // HU-12: marca un elemento como propio (true) o alquilado (false)
+  actualizarPropiedad(id: number, esPropio: boolean) {
+    return apiRequest<ElementoInventario>(`/inventario/${id}/propiedad`, {
+      method: 'PATCH',
+      body: { es_propio: esPropio },
+    })
+  },
+
   // HU-09: cambia la categoría de un elemento (el backend la valida contra las cuatro permitidas)
   actualizarCategoria(id: number, categoria: CategoriaInventario) {
     return apiRequest<ElementoInventario>(`/inventario/${id}/categoria`, {

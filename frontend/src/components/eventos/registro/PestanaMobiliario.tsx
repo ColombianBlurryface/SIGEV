@@ -17,6 +17,7 @@ import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { useInventario } from '@/hooks/useInventario'
+import { useUmbralAlquiler } from '@/hooks/useUmbralAlquiler'
 import { repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { formatearNumero } from '@/lib/formato'
 import type { MobiliarioAgregado } from '@/types/registro'
@@ -35,6 +36,7 @@ interface PestanaMobiliarioProps {
 
 export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar }: PestanaMobiliarioProps) {
   const inventario = useInventario()
+  const umbral = useUmbralAlquiler()
   const [seleccion, setSeleccion] = useState('')
   const [referencia, setReferencia] = useState('')
   const [cantidad, setCantidad] = useState('')
@@ -64,7 +66,9 @@ export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar 
       elemento: elegido ? elegido.nombre : referencia.trim(),
       referencia: elegido ? referencia.trim() : '',
       cantidad: cantidadNumero,
-      disponible: elegido?.cantidad_propia ?? null,
+      // Un elemento alquilado no suma stock propio: se registra con 0 disponibles y todo va a alquiler
+      disponible: elegido ? (elegido.es_propio ? elegido.cantidad_propia : 0) : null,
+      alquilado: elegido ? !elegido.es_propio : false,
     })
     setSeleccion('')
     setReferencia('')
@@ -74,7 +78,7 @@ export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar 
 
   return (
     <div className="flex flex-col gap-4">
-      <AvisoAlquiler asistentes={asistentes} unidadesAlquilar={unidadesAlquilar} />
+      <AvisoAlquiler superaUmbral={asistentes > umbral} umbral={umbral} unidadesAlquilar={unidadesAlquilar} />
 
       <Card className="p-5">
         <form onSubmit={agregar} noValidate className="flex flex-col gap-4">
@@ -106,7 +110,13 @@ export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar 
             <FormField
               id="mobiliario-elemento"
               label="Elemento"
-              hint={elegido ? `${formatearNumero(elegido.cantidad_propia)} unidades propias disponibles` : undefined}
+              hint={
+                elegido
+                  ? elegido.es_propio
+                    ? `${formatearNumero(elegido.cantidad_propia)} unidades propias disponibles`
+                    : 'Elemento alquilado a un proveedor: todo se cuenta como «a alquilar»'
+                  : undefined
+              }
               className="md:col-span-2"
             >
               <Select
@@ -122,7 +132,7 @@ export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar 
                   <optgroup label="Inventario propio">
                     {elementosMobiliario.map((e) => (
                       <option key={e.id} value={e.id}>
-                        {e.nombre} · {formatearNumero(e.cantidad_propia)} disp.
+                        {e.nombre} · {e.es_propio ? `${formatearNumero(e.cantidad_propia)} disp.` : 'alquilado'}
                       </option>
                     ))}
                   </optgroup>
@@ -195,7 +205,11 @@ export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar 
                       <OrigenBadge reparto={reparto} />
                     </span>
                     <span className="truncate text-xs text-muted-foreground">
-                      {item.productoId === null ? 'No está en el inventario' : `${formatearNumero(item.disponible ?? 0)} en inventario`}
+                      {item.productoId === null
+                        ? 'No está en el inventario'
+                        : item.alquilado
+                          ? 'Elemento alquilado a un proveedor'
+                          : `${formatearNumero(item.disponible ?? 0)} en inventario`}
                       {item.referencia && ` · ${item.referencia}`}
                     </span>
                   </span>

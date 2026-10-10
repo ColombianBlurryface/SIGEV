@@ -6,6 +6,7 @@ import { Info } from 'lucide-react'
 import { AvisoAlquiler } from '@/components/eventos/AlquilerMobiliario'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { useUmbralAlquiler } from '@/hooks/useUmbralAlquiler'
 import { describirReparto, repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { calcularProducto } from '@/lib/calculos'
 import { CATEGORIAS, etiquetaServicio, TIPOS_BEBIDA, type ConfigCategoria } from '@/lib/categorias'
@@ -38,6 +39,7 @@ interface PasoResumenProps {
 }
 
 export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenProps) {
+  const umbral = useUmbralAlquiler()
   const asistentes = validarAsistentes(valores.asistentes)
   const cantidad = asistentes.cantidad ?? 0
   const totales = calcularTotales(requerimientos, cantidad)
@@ -115,7 +117,7 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex min-w-0 flex-col gap-4">
-        <AvisoAlquiler asistentes={cantidad} unidadesAlquilar={totalAlquilar(repartos)} />
+        <AvisoAlquiler superaUmbral={cantidad > umbral} umbral={umbral} unidadesAlquilar={totalAlquilar(repartos)} />
 
         <Card className="flex flex-col gap-4 p-6">
           <div className="flex items-center justify-between">

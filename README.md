@@ -37,7 +37,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-09 | Registrar adquisiciones que suman al inventario, con historial de todos los movimientos. | `/inventario` |
 | HU-09 · clasificación | Clasificar el inventario en cuatro categorías cerradas: Mobiliario, Bar/Bebidas, Bebidas de Coctelería y Vajilla. No existe «Decoración». Se filtra por categoría y se puede cambiar la categoría de un elemento (por ahora solo en la API). | `/inventario` |
 | HU-10 | Retirar del inventario las unidades dañadas, con su motivo (por ahora solo en la API). | `POST /api/inventario/:id/baja` |
-| HU-12 | Diferenciar el mobiliario propio del que hay que alquilar: cada elemento del evento dice cuántas unidades son propias y cuántas se alquilan, y se avisa de alquiler cuando el evento supera 200 asistentes. | Nuevo evento · paso 2 y 3, detalle del evento |
+| HU-12 | Diferenciar lo propio de lo alquilado: cada elemento del inventario se registra como **Propio** o **Alquilado** (con filtro por propiedad), cada línea de mobiliario del evento dice cuántas unidades son propias y cuántas se alquilan, y se avisa de alquiler cuando el evento supera el umbral de asistentes (200 por defecto). | `/inventario`, nuevo evento · paso 2 y 3, detalle del evento |
 
 Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
 
@@ -98,6 +98,10 @@ Registro de elementos y adquisiciones, tabla con búsqueda y filtros por categor
 | Modo claro | Modo oscuro |
 | --- | --- |
 | ![Inventario en modo claro](docs/imagenes/inventario-claro.png) | ![Inventario en modo oscuro](docs/imagenes/inventario-oscuro.png) |
+
+Cada elemento es **propio** o **alquilado** a un proveedor (HU-12). Los alquilados se marcan con su etiqueta, se pueden filtrar y no suman a las unidades propias; en un evento, todo lo que se pida de ellos cuenta como «a alquilar».
+
+![Inventario filtrado por elementos alquilados](docs/imagenes/inventario-propiedad.png)
 
 Las categorías son un conjunto cerrado (Mobiliario, Bar/Bebidas, Bebidas de Coctelería y Vajilla); el filtro de cada una muestra solo sus elementos:
 
@@ -189,8 +193,9 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 
 - Un evento debe tener **entre 40 y 600 asistentes** (RN-01 / HU-07).
 - Con **más de 300 asistentes** el evento es de modalidad **buffet** (RN-02).
-- Con **más de 200 asistentes** se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).
-- El mobiliario de un evento se compara con el stock actual del inventario: lo que alcanza es **propio** y el resto se **alquila**. Lo que no está en el inventario se alquila completo (HU-12).
+- Con **más de 200 asistentes** (valor por defecto del umbral) se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).
+- El mobiliario de un evento se compara con el stock actual del inventario: lo que alcanza es **propio** y el resto se **alquila**. Lo que no está en el inventario, o está marcado como **alquilado**, se alquila completo (HU-12).
+- El umbral de 200 asistentes no está escrito en el código: se define con la variable `MAX_OWNED_CAPACITY_THRESHOLD` del backend (P-05). Si el cliente compra más inventario y el límite sube, solo se cambia el `.env` y se reinicia el servidor.
 - Las **bebidas generales** (cerveza, vino, champaña, gaseosa) y las del **bar de coctelería** (licores fuertes) se manejan por separado y un producto pertenece a un solo grupo (RN-08 / HU-13).
 - Todas las cantidades de alimentos y bebidas llevan un **margen de seguridad del 10%** (RN-09).
 - Cómo se calcula cada producto:

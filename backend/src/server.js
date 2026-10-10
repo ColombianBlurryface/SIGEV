@@ -13,6 +13,7 @@ const authRoutes = require('./routes/authRoutes');
 const eventosRoutes = require('./routes/eventosRoutes');
 const catalogoRoutes = require('./routes/catalogoRoutes');
 const inventarioRoutes = require('./routes/inventarioRoutes');
+const configuracionRoutes = require('./routes/configuracionRoutes');
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api/auth', authRoutes); // Inicio de sesión
 app.use('/api/eventos', eventosRoutes); // Registro y consulta de eventos
 app.use('/api/catalogo', catalogoRoutes); // Productos usados en el cálculo de eventos
 app.use('/api/inventario', inventarioRoutes); // Inventario propio y sus movimientos
+app.use('/api/configuracion', configuracionRoutes); // Parámetros del sistema (umbral de alquiler)
 
 // Ruta simple para comprobar que el servidor está encendido
 app.get('/api/health', (req, res) => {

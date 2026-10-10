@@ -18,7 +18,7 @@ export interface BebidaAgregada {
 /**
  * Mobiliario del evento (HU-04). Desde la HU-12 se elige un elemento del inventario:
  * productoId y disponible guardan cuál es y cuántas unidades propias había al agregarlo.
- * Si el elemento no está en el inventario, productoId es null y todo va a alquiler.
+ * Si el elemento no está en el inventario, o es un elemento alquilado, todo va a alquiler.
  */
 export interface MobiliarioAgregado {
   id: string
@@ -27,6 +27,8 @@ export interface MobiliarioAgregado {
   referencia: string
   cantidad: number
   disponible: number | null
+  // HU-12: true si el elemento del inventario es alquilado a un proveedor (todo cuenta como «a alquilar»)
+  alquilado: boolean
 }
 
 export interface ServicioAgregado {

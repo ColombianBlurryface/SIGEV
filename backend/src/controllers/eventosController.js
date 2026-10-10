@@ -13,8 +13,9 @@ const pool = require('../config/db');
 // Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
 const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
 
-// RN-03 (P-05): con más de 200 asistentes se avisa que probablemente haya que alquilar mobiliario.
-const UMBRAL_ALQUILER = 200;
+// RN-03 (P-05): con más asistentes que este umbral se avisa que probablemente haya que alquilar
+// mobiliario. No es un número fijo: sale de MAX_OWNED_CAPACITY_THRESHOLD (ver config/parametros.js).
+const { UMBRAL_ALQUILER } = require('../config/parametros');
 
 /**
  * POST /api/eventos
@@ -176,7 +177,7 @@ const crearEvento = async (req, res) => {
  * GET /api/eventos
  * Consulta la lista general de eventos registrados (RF-07), ordenada por fecha.
  * Incluye la bandera es_modalidad_buffet cuando hay más de 300 asistentes (RN-02)
- * y aviso_alquiler cuando hay más de 200 (RN-03).
+ * y aviso_alquiler cuando supera el umbral de alquiler, 200 por defecto (RN-03).
  */
 const listarEventos = async (req, res) => {
   try {
@@ -247,15 +248,20 @@ const obtenerDetalleEvento = async (req, res) => {
     // 3. Servicios adicionales y mobiliario (RF-06, RF-47, RF-48).
     //    HU-12 (RF-14): para el mobiliario se compara la cantidad pedida con el stock actual
     //    del inventario. Lo que alcanza son unidades propias y el resto hay que alquilarlo.
-    //    Si el mobiliario no está relacionado con el inventario, todo va a alquiler.
+    //    Si el mobiliario no está relacionado con el inventario, o el elemento está marcado como
+    //    alquilado (es_propio = false), todo va a alquiler: ese stock no es de la organización.
     const queryServicios = `
       SELECT
         r.id, r.tipo, r.descripcion, r.cantidad, r.notas, r.creado_en, r.producto_id,
         c.cantidad_propia AS disponible_inventario,
+        c.es_propio AS inventario_es_propio,
         CASE WHEN r.tipo = 'mobiliario'
-          THEN LEAST(COALESCE(r.cantidad, 0), COALESCE(c.cantidad_propia, 0)) END AS unidades_propias,
+          THEN LEAST(COALESCE(r.cantidad, 0), CASE WHEN c.es_propio IS FALSE THEN 0 ELSE COALESCE(c.cantidad_propia, 0) END)
+        END AS unidades_propias,
         CASE WHEN r.tipo = 'mobiliario'
-          THEN COALESCE(r.cantidad, 0) - LEAST(COALESCE(r.cantidad, 0), COALESCE(c.cantidad_propia, 0)) END AS unidades_alquilar
+          THEN COALESCE(r.cantidad, 0)
+            - LEAST(COALESCE(r.cantidad, 0), CASE WHEN c.es_propio IS FALSE THEN 0 ELSE COALESCE(c.cantidad_propia, 0) END)
+        END AS unidades_alquilar
       FROM requerimientos_adicionales r
       LEFT JOIN catalogo_productos c ON c.id = r.producto_id
       WHERE r.evento_id = $1
@@ -263,10 +269,26 @@ const obtenerDetalleEvento = async (req, res) => {
     `;
     const resServicios = await pool.query(queryServicios, [id]);
 
+    // RN-03: estado de alquiler del evento. requiere_alquiler sigue la regla de asistentes;
+    // inventario_insuficiente avisa además cuando el mobiliario pedido no alcanza con el stock propio.
+    const asistentes = resEvento.rows[0].asistentes;
+    const umbralSuperado = asistentes > UMBRAL_ALQUILER;
+    const unidadesAlquilar = resServicios.rows.reduce((suma, s) => suma + Number(s.unidades_alquilar || 0), 0);
+
     res.json({
       ...resEvento.rows[0],
-      es_modalidad_buffet: resEvento.rows[0].asistentes > 300,
-      aviso_alquiler: resEvento.rows[0].asistentes > UMBRAL_ALQUILER,
+      es_modalidad_buffet: asistentes > 300,
+      aviso_alquiler: umbralSuperado,
+      estado_alquiler: {
+        requiere_alquiler: umbralSuperado,
+        umbral_superado: umbralSuperado,
+        umbral: UMBRAL_ALQUILER,
+        inventario_insuficiente: unidadesAlquilar > 0,
+        unidades_alquilar: unidadesAlquilar,
+        motivo: umbralSuperado
+          ? `La cantidad de asistentes (${asistentes}) supera la capacidad propia (${UMBRAL_ALQUILER}).`
+          : `La cantidad de asistentes (${asistentes}) está dentro de la capacidad propia (${UMBRAL_ALQUILER}).`
+      },
       productos_calculados: resProductos.rows,
       servicios_adicionales: resServicios.rows
     });

@@ -82,11 +82,24 @@ export interface ServicioAdicional {
   // HU-12: solo en el mobiliario. Se comparan con el stock actual del inventario.
   producto_id: number | null
   disponible_inventario: number | null
+  inventario_es_propio: boolean | null
   unidades_propias: number | null
   unidades_alquilar: number | null
 }
 
+// RN-03 (HU-12): estado de alquiler que calcula el backend con el umbral de asistentes (P-05)
+export interface EstadoAlquiler {
+  requiere_alquiler: boolean
+  umbral_superado: boolean
+  umbral: number
+  // El mobiliario pedido no alcanza con el stock propio (aunque no se supere el umbral)
+  inventario_insuficiente: boolean
+  unidades_alquilar: number
+  motivo: string
+}
+
 export interface EventoDetalle extends EventoListado {
+  estado_alquiler: EstadoAlquiler
   productos_calculados: ProductoCalculado[]
   servicios_adicionales: ServicioAdicional[]
 }
