@@ -32,6 +32,8 @@ Completa `backend/.env` (pide los valores reales al equipo; **nunca subas este a
 | `PORT` | Puerto del backend (por defecto `3000`) |
 | `MAX_OWNED_CAPACITY_THRESHOLD` | Umbral de asistentes a partir del cual se avisa que hay que alquilar mobiliario (P-05, RN-03). Opcional: por defecto `200`. Hay que reiniciar el servidor al cambiarlo |
 | `JWT_SECRET` | Clave larga y aleatoria para firmar los tokens de sesión |
+| `CORS_ORIGIN` | Opcional. Sitios que pueden llamar a la API, separados por comas (por ejemplo la dirección del frontend). Sin definirla acepta cualquiera |
+| `DB_POOL_MAX` | Opcional. Máximo de conexiones por instancia (por defecto `5`) |
 
 > En Supabase usa la conexión del **pooler** (Connect → Direct → *Session/Transaction pooler*). La conexión directa (`db.<ref>.supabase.co`) solo funciona con IPv6 y en muchas redes no resuelve.
 
@@ -164,6 +166,8 @@ Respuesta `200`:
 ```
 
 El token vence a las 8 horas. El frontend lo envía en la cabecera `Authorization: Bearer <token>`.
+
+**Todas las rutas, excepto `POST /api/auth/login` y `GET /api/health`, exigen ese token.** Sin token, o con uno inválido, vencido o firmado con otra clave, responden `401`. Cuando el frontend recibe un `401` teniendo sesión, la cierra y lleva al login.
 
 ### Configuración
 

@@ -5,7 +5,8 @@
  * y que el token sea válido y no haya vencido. Si todo está bien, guarda los
  * datos del usuario en req.usuario y deja pasar la petición.
  *
- * Nota: por ahora no está aplicado a ninguna ruta (pendiente: proteger la API).
+ * Se aplica en server.js a eventos, catálogo, inventario y configuración. Solo el inicio
+ * de sesión y /api/health quedan públicos.
  */
 const jwt = require('jsonwebtoken');
 
