@@ -1,5 +1,6 @@
 /**
  * Carga los productos del catálogo, opcionalmente filtrados por clasificación.
+ * Con incluirInactivos también trae los desactivados (solo para la pantalla de administración).
  */
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '@/services/api'
@@ -13,17 +14,17 @@ interface Resultado {
   error: string | null
 }
 
-export function useCatalogo(clasificacion?: ClasificacionProducto) {
+export function useCatalogo(clasificacion?: ClasificacionProducto, incluirInactivos = false) {
   const [intento, setIntento] = useState(0)
   const [resultado, setResultado] = useState<Resultado | null>(null)
-  const clave = `${clasificacion ?? 'todos'}-${intento}`
+  const clave = `${clasificacion ?? 'todos'}-${incluirInactivos}-${intento}`
 
   useEffect(() => {
     let activo = true
-    const claveActual = `${clasificacion ?? 'todos'}-${intento}`
+    const claveActual = `${clasificacion ?? 'todos'}-${incluirInactivos}-${intento}`
 
     catalogoService
-      .listar(clasificacion)
+      .listar(clasificacion, incluirInactivos)
       .then((productos) => {
         if (activo) setResultado({ clave: claveActual, productos, error: null })
       })
@@ -36,7 +37,7 @@ export function useCatalogo(clasificacion?: ClasificacionProducto) {
     return () => {
       activo = false
     }
-  }, [clasificacion, intento])
+  }, [clasificacion, incluirInactivos, intento])
 
   const recargar = useCallback(() => setIntento((n) => n + 1), [])
   const listo = resultado?.clave === clave

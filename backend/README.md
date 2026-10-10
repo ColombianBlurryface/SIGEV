@@ -117,8 +117,11 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | GET | `/health` | Estado del servidor |
 | GET | `/configuracion` | Parámetros del sistema (umbral de alquiler) |
 | POST | `/auth/login` | Iniciar sesión |
-| GET | `/catalogo` | Productos del catálogo (filtro `?clasificacion=`) |
+| GET | `/catalogo` | Productos del catálogo (filtros `?clasificacion=` e `?incluir_inactivos=true`) |
 | GET | `/catalogo/:id` | Un producto del catálogo |
+| POST | `/catalogo` | Crear un producto del catálogo |
+| PUT | `/catalogo/:id` | Editar un producto del catálogo |
+| PATCH | `/catalogo/:id/estado` | Activar o desactivar un producto |
 | POST | `/eventos` | Registrar un evento con sus requerimientos |
 | GET | `/eventos` | Lista de eventos ordenada por fecha |
 | GET | `/eventos/:id` | Detalle de un evento con sus requerimientos |
@@ -179,6 +182,42 @@ Las bebidas generales (`bebida_general`) y las del bar de coctelería (`bar_coct
 ```
 
 > Los valores `NUMERIC` de PostgreSQL llegan como texto (`"200.00"`).
+
+Con `?incluir_inactivos=true` también llegan los productos desactivados (lo usa la pantalla de Catálogo; el registro de eventos pide solo los activos). Cada producto trae `activo`.
+
+#### `POST /api/catalogo`
+
+Crea un producto. Los datos dependen de cómo se consume:
+
+```json
+{ "nombre": "Cerveza Águila 330 ml", "clasificacion": "bebida_general",
+  "tipo_calculo": "unidad_persona", "porcion_por_persona": 2, "precio_unitario": 3500 }
+```
+
+```json
+{ "nombre": "Aguardiente Blanco del Valle 750 ml", "clasificacion": "bar_cocteleria",
+  "tipo_calculo": "botella_compartida", "volumen_botella_ml": 750, "tamano_porcion_ml": 50, "precio_unitario": 60000 }
+```
+
+| Grupo (`clasificacion`) | Tipos de cálculo permitidos | Datos |
+| --- | --- | --- |
+| `alimento` | `porcion_persona` | `porcion_por_persona` en gramos; el precio es por kg |
+| `bebida_general`, `bar_cocteleria` | `unidad_persona` | `porcion_por_persona` en unidades; el precio es por unidad |
+| `bebida_general`, `bar_cocteleria` | `botella_compartida` | `volumen_botella_ml` y `tamano_porcion_ml` (la porción no puede superar la botella); el precio es por botella |
+
+La unidad de medida se deduce del tipo. Los números deben enviarse como número (no como texto). Responde `201` con el producto, `400` si algo no cumple las reglas y `409` si ya hay otro producto del catálogo con ese nombre. El mobiliario no se crea aquí: vive en el inventario.
+
+#### `PUT /api/catalogo/:id`
+
+Edita un producto; se envían todos los campos, igual que al crearlo. Si el producto **ya se usó en algún evento**, no se puede cambiar su `clasificacion` ni su `tipo_calculo` (`409`); sí el nombre, las porciones y el precio. Los eventos ya guardados conservan sus cantidades y costos.
+
+#### `PATCH /api/catalogo/:id/estado`
+
+```json
+{ "activo": false }
+```
+
+Activa o desactiva un producto. Un producto desactivado deja de ofrecerse en los eventos nuevos, pero los eventos guardados lo conservan. Los productos no se borran.
 
 ### Eventos
 
