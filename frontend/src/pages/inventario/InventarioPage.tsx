@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useInventario } from '@/hooks/useInventario'
 import { useMovimientos } from '@/hooks/useMovimientos'
 import { formatearNumero, normalizar } from '@/lib/formato'
+import { etiquetaCategoria } from '@/lib/inventario'
 import { cn } from '@/lib/utils'
 import { CATEGORIAS_INVENTARIO, type CategoriaInventario, type ElementoInventario } from '@/types/inventario'
 
@@ -75,7 +76,7 @@ export function InventarioPage() {
     { valor: 'todas', etiqueta: 'Todas', cantidad: elementos.length },
     ...CATEGORIAS_INVENTARIO.map((c) => ({
       valor: c,
-      etiqueta: c,
+      etiqueta: etiquetaCategoria(c),
       cantidad: elementos.filter((e) => e.categoria_inventario === c).length,
     })),
   ]
@@ -115,18 +116,19 @@ export function InventarioPage() {
             <div role="group" aria-label="Acción" className="flex rounded-[10px] bg-chip p-[3px]">
               {(
                 [
-                  ['elemento', 'Nuevo'],
-                  ['adquisicion', 'Adquisición'],
-                  ['baja', 'Baja'],
+                  ['elemento', 'Nuevo elemento', 'flex-[1.6]'],
+                  ['adquisicion', 'Adquisición', 'flex-[1.2]'],
+                  ['baja', 'Baja', 'flex-1'],
                 ] as const
-              ).map(([valor, etiqueta]) => (
+              ).map(([valor, etiqueta, ancho]) => (
                 <button
                   key={valor}
                   type="button"
                   aria-pressed={modo === valor}
                   onClick={() => setModo(valor)}
                   className={cn(
-                    'h-9 flex-1 cursor-pointer rounded-lg text-[13.5px] font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
+                    'h-9 min-w-0 cursor-pointer rounded-lg px-1.5 text-[13px] font-bold whitespace-nowrap outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
+                    ancho,
                     modo === valor ? 'bg-card text-foreground shadow-sm dark:bg-input' : 'text-subtle',
                   )}
                 >

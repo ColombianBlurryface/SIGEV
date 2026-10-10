@@ -10,6 +10,7 @@ import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatearNumero } from '@/lib/formato'
+import { etiquetaCategoria } from '@/lib/inventario'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'
@@ -104,7 +105,7 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
           </option>
           {CATEGORIAS_INVENTARIO.map((c) => (
             <option key={c} value={c}>
-              {c}
+              {etiquetaCategoria(c)}
             </option>
           ))}
         </Select>

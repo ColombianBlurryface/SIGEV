@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatearNumero } from '@/lib/formato'
-import { ESTILO_CATEGORIA_INVENTARIO } from '@/lib/inventario'
+import { ESTILO_CATEGORIA_INVENTARIO, etiquetaCategoria } from '@/lib/inventario'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'
@@ -125,7 +125,7 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
                     )}
                   >
                     <Icono aria-hidden="true" className="size-3.5" />
-                    {elemento.categoria_inventario}
+                    {etiquetaCategoria(elemento.categoria_inventario)}
                   </span>
 
                   {editando ? (
