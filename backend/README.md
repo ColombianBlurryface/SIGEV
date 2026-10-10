@@ -6,50 +6,64 @@ API REST de SIGEV hecha con **Node.js + Express 5** y **PostgreSQL** (Supabase).
 
 ## Puesta en marcha
 
-### 1. Instalar dependencias
+> **Regla de oro: en tu computadora trabajas siempre contra la base de datos LOCAL.** Lo que crees mientras desarrollas se queda en tu computadora y nunca llega a QA ni a producción. El backend se niega a arrancar si `DB_HOST` apunta a una base remota (ver más abajo).
+
+### 1. Levantar la base de datos local
+
+Desde la **raíz del repositorio** (necesitas Docker):
+
+```bash
+docker compose up -d
+```
+
+La primera vez crea una base PostgreSQL en el puerto `5433` y le carga la estructura, el catálogo, el inventario base y un usuario de desarrollo (`dev` / `local1234`). Los datos que crees quedan en tu computadora.
+
+| Comando | Qué hace |
+| --- | --- |
+| `docker compose up -d` | Levanta la base (conserva tus datos) |
+| `docker compose down` | La apaga sin borrar nada |
+| `docker compose down -v` | La borra por completo; al volver a levantar queda como nueva |
+
+Si el puerto `5433` está ocupado: `SIGEV_DB_PORT=5434 docker compose up -d` y usa ese puerto en `DB_PORT`.
+
+### 2. Instalar dependencias y configurar el `.env`
 
 ```bash
 cd backend
 npm install
-```
-
-### 2. Configurar las variables de entorno
-
-```bash
 cp .env.example .env
 ```
 
-Completa `backend/.env` (pide los valores reales al equipo; **nunca subas este archivo al repositorio**):
+El `.env.example` ya apunta a la base local, así que solo tienes que cambiar `JWT_SECRET` por cualquier texto largo (por ejemplo `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`). **Nunca subas el `.env` al repositorio.**
 
 | Variable | Descripción |
 | --- | --- |
-| `DB_HOST` | Host del *pooler* de Supabase (`aws-0-<region>.pooler.supabase.com`) o `localhost` |
-| `DB_PORT` | `6543` (Supabase, *transaction pooler*) o el puerto de tu Postgres local |
-| `DB_NAME` | Nombre de la base (`postgres` en Supabase) |
-| `DB_USER` | Usuario (`postgres.<project-ref>` en Supabase) |
-| `DB_PASSWORD` | Contraseña de la base de datos |
-| `DB_SSL` | `true` para Supabase, `false` para un Postgres local |
+| `DB_HOST` | `localhost` (base local). Cualquier otro valor está bloqueado en tu computadora salvo con `PERMITIR_BASE_REMOTA=si` |
+| `DB_PORT` | `5433` (la del `docker compose`) |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `sigev_dev`, `sigev`, `sigev` en la base local |
+| `DB_SSL` | `false` en local; `true` en Supabase |
 | `PORT` | Puerto del backend (por defecto `3000`) |
-| `MAX_OWNED_CAPACITY_THRESHOLD` | Umbral de asistentes a partir del cual se avisa que hay que alquilar mobiliario (P-05, RN-03). Opcional: por defecto `200`. Hay que reiniciar el servidor al cambiarlo |
 | `JWT_SECRET` | Clave larga y aleatoria para firmar los tokens de sesión |
-| `CORS_ORIGIN` | Opcional. Sitios que pueden llamar a la API, separados por comas (por ejemplo la dirección del frontend). Sin definirla acepta cualquiera |
+| `MAX_OWNED_CAPACITY_THRESHOLD` | Umbral de asistentes a partir del cual se avisa que hay que alquilar mobiliario (P-05, RN-03). Opcional: por defecto `200`. Hay que reiniciar el servidor al cambiarlo |
+| `PERMITIR_BASE_REMOTA` | `si` para permitir, a propósito, una base remota (por ejemplo el Supabase de QA) desde tu computadora |
+| `CORS_ORIGIN` | Opcional (en Vercel). Sitios que pueden llamar a la API, separados por comas |
 | `DB_POOL_MAX` | Opcional. Máximo de conexiones por instancia (por defecto `5`) |
 
-> En Supabase usa la conexión del **pooler** (Connect → Direct → *Session/Transaction pooler*). La conexión directa (`db.<ref>.supabase.co`) solo funciona con IPv6 y en muchas redes no resuelve.
+### Qué base usa cada cosa
 
-### 3. Crear las tablas (solo si la base está vacía)
+| Qué estás usando | Base de datos |
+| --- | --- |
+| Tu backend local (`node src/server.js`) con el `.env.example` | **Local** (Docker). No toca nada compartido |
+| `sigev-qa.vercel.app` | Supabase de **QA** |
+| `sigev-nine.vercel.app` | Supabase de **producción** |
 
-Ejecuta en orden `src/db/schema.sql` y `src/db/seeds.sql`, en el SQL Editor de Supabase o con `psql`:
+Para usar el **Supabase de QA** desde tu computadora, escribe en el `.env` los datos de QA que te dé el equipo por privado y agrega `PERMITIR_BASE_REMOTA=si`. **Los datos de producción no van en el `.env` de nadie:** viven solo en las variables de entorno de Vercel.
 
-```bash
-psql -d sigev_db -f src/db/schema.sql
-```
+> En Supabase usa la conexión del **pooler** (Connect → Transaction pooler). La conexión directa (`db.<ref>.supabase.co`) solo funciona con IPv6 y en muchas redes no resuelve.
 
-```bash
-psql -d sigev_db -f src/db/seeds.sql
-```
+### 3. Crear las tablas en una base remota (QA)
 
-Los dos archivos se pueden volver a ejecutar sin error.
+La base local se carga sola con `docker compose`. Para una base **remota nueva** (por ejemplo un Supabase de QA), pega en su SQL Editor el SQL de arranque que genera `src/scripts/generarSqlQA.js` (ver `docs/entorno-de-qa.md`). Todos los archivos SQL se pueden volver a ejecutar sin error.
 
 ### 4. Crear un usuario
 
@@ -59,7 +73,7 @@ No hay registro público: los usuarios se crean con este script. Escribe la cont
 node src/scripts/crearUsuario.js <usuario> '<contraseña>' "<Nombre Completo>" admin
 ```
 
-Si el usuario ya existe, solo cambia su contraseña.
+Si el usuario ya existe, solo cambia su contraseña. En la base local ya existe `dev` / `local1234`. Para crear usuarios en una base remota hay que tener `PERMITIR_BASE_REMOTA=si` en el entorno.
 
 ### 5. Iniciar el servidor
 

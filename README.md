@@ -183,9 +183,12 @@ cd SIGEV
 git switch develop
 ```
 
-1. **Backend:** sigue [`backend/README.md`](backend/README.md). En resumen: `cd backend`, `npm install`, copiar `.env.example` a `.env` con los datos de Supabase y ejecutar `node src/server.js`.
-2. **Frontend:** sigue [`frontend/README.md`](frontend/README.md). En resumen: `cd frontend`, `npm install`, copiar `.env.example` a `.env` y ejecutar `npm run dev`.
-3. Abre <http://localhost:5173> e inicia sesión con un usuario creado con el script `crearUsuario.js`.
+1. **Base de datos local:** `docker compose up -d` (carga sola la estructura, el catálogo y un usuario `dev` / `local1234`). Lo que crees en tu computadora **no toca QA ni producción**.
+2. **Backend:** sigue [`backend/README.md`](backend/README.md). En resumen: `cd backend`, `npm install`, `cp .env.example .env` (ya apunta a la base local) y `node src/server.js`.
+3. **Frontend:** sigue [`frontend/README.md`](frontend/README.md). En resumen: `cd frontend`, `npm install`, copiar `.env.example` a `.env` y ejecutar `npm run dev`.
+4. Abre <http://localhost:5173> e inicia sesión con `dev` / `local1234`.
+
+> **Seguridad:** el backend se niega a arrancar en tu computadora si el `.env` apunta a una base remota (QA o producción). Para usar la de QA a propósito hay que definir `PERMITIR_BASE_REMOTA=si`.
 
 ---
 

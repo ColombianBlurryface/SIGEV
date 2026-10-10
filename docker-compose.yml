@@ -1,0 +1,36 @@
+# =============================================================================
+# SIGEV: base de datos LOCAL para desarrollar sin tocar QA ni producción
+# =============================================================================
+# Levantar:   docker compose up -d
+# Apagar:     docker compose down            (los datos se conservan)
+# Reiniciar:  docker compose down -v         (borra los datos y los vuelve a cargar al levantar)
+#
+# La primera vez que arranca, carga solo la estructura, el catálogo, el inventario base y el usuario
+# de desarrollo (dev / local1234). Los datos que crees en tu computadora se quedan aquí.
+# =============================================================================
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sigev-db-local
+    environment:
+      POSTGRES_USER: sigev
+      POSTGRES_PASSWORD: sigev
+      POSTGRES_DB: sigev_dev
+    ports:
+      # Puerto 5433 de tu computadora (para no chocar con un PostgreSQL propio en el 5432).
+      # Si el 5433 está ocupado: SIGEV_DB_PORT=5434 docker compose up -d
+      - "${SIGEV_DB_PORT:-5433}:5432"
+    volumes:
+      - sigev-db-data:/var/lib/postgresql/data
+      - ./backend/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./backend/src/db/seeds.sql:/docker-entrypoint-initdb.d/02-seeds.sql:ro
+      - ./backend/src/db/carga-catalogo-mercado-colombiano.sql:/docker-entrypoint-initdb.d/03-catalogo-e-inventario.sql:ro
+      - ./backend/src/db/local/usuario-local.sql:/docker-entrypoint-initdb.d/04-usuario-local.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sigev -d sigev_dev"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  sigev-db-data:
