@@ -41,3 +41,6 @@ export interface RegistrarAdquisicionResponse {
   elemento: ElementoInventario
   movimiento: Omit<MovimientoInventario, 'nombre' | 'categoria_inventario'>
 }
+
+// La baja por daño responde igual que una adquisición: el elemento actualizado y el movimiento creado
+export type RegistrarBajaResponse = RegistrarAdquisicionResponse

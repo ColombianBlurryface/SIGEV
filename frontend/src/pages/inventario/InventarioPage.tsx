@@ -5,6 +5,7 @@
 import { RotateCw, Search } from 'lucide-react'
 import { useState } from 'react'
 import { FormularioAdquisicion } from '@/components/inventario/FormularioAdquisicion'
+import { FormularioBaja } from '@/components/inventario/FormularioBaja'
 import { FormularioElemento } from '@/components/inventario/FormularioElemento'
 import { HistorialMovimientos } from '@/components/inventario/HistorialMovimientos'
 import { TablaInventario } from '@/components/inventario/TablaInventario'
@@ -20,7 +21,23 @@ import { cn } from '@/lib/utils'
 import { CATEGORIAS_INVENTARIO, type CategoriaInventario, type ElementoInventario } from '@/types/inventario'
 
 type Filtro = CategoriaInventario | 'todas'
-type Modo = 'elemento' | 'adquisicion'
+type Modo = 'elemento' | 'adquisicion' | 'baja'
+
+// Título y explicación del formulario según la acción elegida
+const TEXTOS_MODO: Record<Modo, { titulo: string; descripcion: string }> = {
+  elemento: {
+    titulo: 'Registrar elemento',
+    descripcion: 'Agrega un recurso propio de la organización o uno alquilado a un proveedor.',
+  },
+  adquisicion: {
+    titulo: 'Registrar adquisición',
+    descripcion: 'Suma unidades compradas a un elemento que ya está en el inventario.',
+  },
+  baja: {
+    titulo: 'Dar de baja elementos dañados',
+    descripcion: 'Escribe solo cuántas unidades se dañaron; el sistema hace la resta y deja el registro.',
+  },
+}
 
 const MOVIMIENTOS_POR_PAGINA = 20
 const MOVIMIENTOS_MAXIMOS = 200
@@ -63,8 +80,9 @@ export function InventarioPage() {
     })),
   ]
 
-  function adquirir(elemento: ElementoInventario) {
-    setModo('adquisicion')
+  // Los botones «Adquisición» y «Baja» de cada fila abren el formulario con ese elemento ya elegido
+  function abrirFormulario(destino: 'adquisicion' | 'baja', elemento: ElementoInventario) {
+    setModo(destino)
     setPreseleccion((anterior) => ({ id: elemento.id, version: (anterior?.version ?? 0) + 1 }))
     document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -97,8 +115,9 @@ export function InventarioPage() {
             <div role="group" aria-label="Acción" className="flex rounded-[10px] bg-chip p-[3px]">
               {(
                 [
-                  ['elemento', 'Nuevo elemento'],
+                  ['elemento', 'Nuevo'],
                   ['adquisicion', 'Adquisición'],
+                  ['baja', 'Baja'],
                 ] as const
               ).map(([valor, etiqueta]) => (
                 <button
@@ -117,19 +136,22 @@ export function InventarioPage() {
             </div>
 
             <div className="flex flex-col gap-1">
-              <h2 className="text-lg font-bold">{modo === 'elemento' ? 'Registrar elemento' : 'Registrar adquisición'}</h2>
-              <p className="text-[13.5px] text-subtle">
-                {modo === 'elemento'
-                  ? 'Agrega un recurso propio de la organización o uno alquilado a un proveedor.'
-                  : 'Suma unidades compradas a un elemento que ya está en el inventario.'}
-              </p>
+              <h2 className="text-lg font-bold">{TEXTOS_MODO[modo].titulo}</h2>
+              <p className="text-[13.5px] text-subtle">{TEXTOS_MODO[modo].descripcion}</p>
             </div>
 
             {/* La "key" hace que React cree un formulario nuevo al cambiar la preselección */}
-            {modo === 'elemento' ? (
-              <FormularioElemento onRegistrado={cambioDeInventario} />
-            ) : (
+            {modo === 'elemento' && <FormularioElemento onRegistrado={cambioDeInventario} />}
+            {modo === 'adquisicion' && (
               <FormularioAdquisicion
+                key={preseleccion ? `${preseleccion.id}-${preseleccion.version}` : 'sin-seleccion'}
+                elementos={elementos}
+                elementoInicialId={preseleccion?.id}
+                onRegistrada={cambioDeInventario}
+              />
+            )}
+            {modo === 'baja' && (
+              <FormularioBaja
                 key={preseleccion ? `${preseleccion.id}-${preseleccion.version}` : 'sin-seleccion'}
                 elementos={elementos}
                 elementoInicialId={preseleccion?.id}
@@ -219,7 +241,8 @@ export function InventarioPage() {
                     : 'Ningún elemento coincide con la búsqueda o el filtro.'
                 }
                 onActualizado={cambioDeInventario}
-                onAdquirir={adquirir}
+                onAdquirir={(elemento) => abrirFormulario('adquisicion', elemento)}
+                onDarDeBaja={(elemento) => abrirFormulario('baja', elemento)}
               />
             )
           )}

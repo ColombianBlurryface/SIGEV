@@ -7,6 +7,7 @@ import type {
   MovimientoInventario,
   NuevoElementoInventario,
   RegistrarAdquisicionResponse,
+  RegistrarBajaResponse,
 } from '@/types/inventario'
 import { apiRequest } from './api'
 
@@ -46,6 +47,14 @@ export const inventarioService = {
     return apiRequest<RegistrarAdquisicionResponse>(`/inventario/${id}/adquisiciones`, {
       method: 'POST',
       body: { cantidad, notas },
+    })
+  },
+
+  // HU-10: da de baja unidades dañadas; el backend resta la cantidad y deja el movimiento en el historial
+  registrarBaja(id: number, cantidad: number, motivo?: string) {
+    return apiRequest<RegistrarBajaResponse>(`/inventario/${id}/baja`, {
+      method: 'POST',
+      body: { cantidad, motivo },
     })
   },
 
