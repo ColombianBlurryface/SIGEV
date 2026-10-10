@@ -14,6 +14,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 - [Estructura del repositorio](#estructura-del-repositorio)
 - [Puesta en marcha](#puesta-en-marcha)
 - [Despliegue en Vercel](#despliegue-en-vercel)
+- [Pruebas y entorno de QA](#pruebas-y-entorno-de-qa)
 - [Base de datos](#base-de-datos)
 - [Reglas de negocio](#reglas-de-negocio)
 - [Flujo de trabajo del equipo](#flujo-de-trabajo-del-equipo)
@@ -212,6 +213,17 @@ La aplicación se publica como **dos proyectos de Vercel** que salen del mismo r
 **Comprobación rápida:** abrir `https://<proyecto-api>/api/health` debe responder `{"status":"ok",...}`; después, iniciar sesión desde el frontend.
 
 > Todas las rutas de la API, excepto el inicio de sesión y `/api/health`, exigen el token de sesión. Si el token vence o es rechazado, la aplicación cierra la sesión y lleva al login.
+
+---
+
+## Pruebas y entorno de QA
+
+El proyecto trae pruebas automáticas en [`qa/`](qa) (72 pruebas de los checklists y 36 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+
+- [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
+- [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.
+
+Las pruebas se niegan a ejecutarse contra producción.
 
 ---
 
