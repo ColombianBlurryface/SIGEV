@@ -415,10 +415,14 @@ const consultarMovimientos = async (req, res) => {
     }
 };
 
+// Texto que queda en el historial cuando la baja se registra sin motivo
+const MOTIVO_BAJA_POR_DEFECTO = 'Baja por daño';
+
 /**
  * POST /api/inventario/:id/baja - HU-10 (RF-12)
- * Retira unidades dañadas { cantidad, motivo } de un elemento: las resta de la cantidad
+ * Retira unidades dañadas { cantidad, motivo? } de un elemento: las resta de la cantidad
  * disponible, las suma a cantidad_danada y deja un movimiento de tipo "baja" en el historial.
+ * Basta con indicar la cantidad dañada; el motivo es opcional (QA-02).
  */
 const retirarDanado = async (req, res) => {
     const id = Number(req.params.id);
@@ -431,8 +435,8 @@ const retirarDanado = async (req, res) => {
     if (!Number.isInteger(cantidad) || cantidad < 1) {
         return datosInvalidos(res, 'La cantidad a retirar debe ser un número entero mayor a 0.');
     }
-    if (!motivo || motivo.length > 300) {
-        return datosInvalidos(res, 'El motivo del daño es obligatorio y admite máximo 300 caracteres.');
+    if (motivo.length > 300) {
+        return datosInvalidos(res, 'El motivo admite máximo 300 caracteres.');
     }
 
     const client = await pool.connect();
@@ -472,7 +476,7 @@ const retirarDanado = async (req, res) => {
             tipo: 'baja',
             cantidad: -cantidad,
             cantidadResultante: elemento.cantidad_propia,
-            notas: motivo
+            notas: motivo || MOTIVO_BAJA_POR_DEFECTO
         });
 
         await client.query('COMMIT');

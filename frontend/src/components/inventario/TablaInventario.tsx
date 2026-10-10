@@ -1,9 +1,10 @@
 /**
  * Tabla de elementos del inventario. Permite actualizar la cantidad en la misma fila (HU-08),
- * marcar el elemento como propio o alquilado (HU-12) y abrir el formulario de adquisición (HU-09).
+ * marcar el elemento como propio o alquilado (HU-12) y abrir los formularios de adquisición (HU-09)
+ * y de baja por daño (HU-10).
  * En pantallas medianas cada fila se muestra como tarjeta.
  */
-import { Check, LoaderCircle, PackagePlus, Pencil, X } from 'lucide-react'
+import { Check, LoaderCircle, PackageMinus, PackagePlus, Pencil, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -24,9 +25,10 @@ interface TablaInventarioProps {
   mensajeVacio: string
   onActualizado: (elemento: ElementoInventario) => void
   onAdquirir: (elemento: ElementoInventario) => void
+  onDarDeBaja: (elemento: ElementoInventario) => void
 }
 
-export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdquirir }: TablaInventarioProps) {
+export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdquirir, onDarDeBaja }: TablaInventarioProps) {
   // Solo una fila se edita a la vez: la del id guardado aquí
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [valor, setValor] = useState('')
@@ -183,14 +185,21 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
                     <span className="flex flex-wrap items-center gap-2 lg:justify-end">
                       <span className="font-display text-lg font-bold">{formatearNumero(elemento.cantidad_propia)}</span>
                       <span className="text-muted-foreground">und</span>
+                      {elemento.cantidad_danada > 0 && (
+                        <span className="text-xs text-muted-foreground" title="Unidades dadas de baja por daño">
+                          · {formatearNumero(elemento.cantidad_danada)} de baja
+                        </span>
+                      )}
+                      {/* Solo ícono para dejar espacio al nombre; el texto va en el título y en el aria-label */}
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => empezarEdicion(elemento)}
                         aria-label={`Actualizar cantidad de ${elemento.nombre}`}
+                        title="Actualizar cantidad"
+                        className="px-2.5"
                       >
                         <Pencil aria-hidden="true" className="!size-4" />
-                        Actualizar
                       </Button>
                       <Button
                         variant="secondary"
@@ -200,6 +209,16 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
                       >
                         <PackagePlus aria-hidden="true" className="!size-4" />
                         Adquisición
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onDarDeBaja(elemento)}
+                        disabled={elemento.cantidad_propia === 0}
+                        aria-label={`Dar de baja unidades dañadas de ${elemento.nombre}`}
+                      >
+                        <PackageMinus aria-hidden="true" className="!size-4" />
+                        Baja
                       </Button>
                     </span>
                   )}

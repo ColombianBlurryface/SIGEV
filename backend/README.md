@@ -309,7 +309,7 @@ Suma la cantidad al elemento (entero de 1 a 100.000) y registra un movimiento de
 { "cantidad": 5, "motivo": "Manchas de vino que no salieron" }
 ```
 
-Retira unidades dañadas (HU-10): las resta de `cantidad_propia`, las suma a `cantidad_danada` y registra un movimiento de tipo `baja` con la cantidad en negativo. El motivo es obligatorio (máximo 300 caracteres) y no se puede retirar más de lo disponible. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
+Retira unidades dañadas (HU-10): las resta de `cantidad_propia`, las suma a `cantidad_danada` y registra un movimiento de tipo `baja` con la cantidad en negativo. Basta con la cantidad: el `motivo` es opcional (máximo 300 caracteres) y, si no se envía, el historial guarda «Baja por daño». No se puede retirar más de lo disponible (`400`). Como se resta de `cantidad_propia`, lo dado de baja deja de contarse como disponible en los eventos. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
 
 #### `GET /api/inventario/movimientos?elemento_id=12&tipo=adquisicion&limite=20`
 
