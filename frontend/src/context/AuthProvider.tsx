@@ -2,9 +2,10 @@
  * Proveedor de la sesión: guarda quién inició sesión y ofrece iniciarSesion / cerrarSesion
  * a toda la aplicación.
  */
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { tokenExpirado } from '@/lib/jwt'
 import { sesionStorage } from '@/lib/storage'
+import { EVENTO_SESION_RECHAZADA } from '@/services/api'
 import { authService } from '@/services/authService'
 import type { Credenciales, Sesion } from '@/types/auth'
 import { AuthContext, type AuthContextValue } from './auth-context'
@@ -32,6 +33,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const cerrarSesion = useCallback(() => {
     sesionStorage.borrar()
     setSesion(null)
+  }, [])
+
+  // Si el servidor rechaza el token (venció o se invalidó), la sesión se cierra sola y la aplicación
+  // vuelve al login. apiRequest avisa con un evento porque vive fuera de React.
+  useEffect(() => {
+    const alRechazar = () => setSesion(null)
+    window.addEventListener(EVENTO_SESION_RECHAZADA, alRechazar)
+    return () => window.removeEventListener(EVENTO_SESION_RECHAZADA, alRechazar)
   }, [])
 
   const value = useMemo<AuthContextValue>(

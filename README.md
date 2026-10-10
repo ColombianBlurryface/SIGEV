@@ -13,6 +13,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 - [Arquitectura](#arquitectura)
 - [Estructura del repositorio](#estructura-del-repositorio)
 - [Puesta en marcha](#puesta-en-marcha)
+- [Despliegue en Vercel](#despliegue-en-vercel)
 - [Base de datos](#base-de-datos)
 - [Reglas de negocio](#reglas-de-negocio)
 - [Flujo de trabajo del equipo](#flujo-de-trabajo-del-equipo)
@@ -187,6 +188,33 @@ git switch develop
 
 ---
 
+## Despliegue en Vercel
+
+La aplicación se publica como **dos proyectos de Vercel** que salen del mismo repositorio (rama `main`), con la base de datos en Supabase:
+
+| Proyecto | Root Directory | Qué es | Archivo de configuración |
+| --- | --- | --- | --- |
+| `sigev` | `frontend` | La interfaz (Vite) | [`frontend/vercel.json`](frontend/vercel.json): redirige todas las rutas a `index.html` para que recargar una página interna no dé 404 |
+| `sigev-api` | `backend` | La API (Express como función serverless) | [`backend/vercel.json`](backend/vercel.json) y [`backend/api/index.js`](backend/api/index.js) |
+
+**Variables de entorno del proyecto `sigev-api`** (Settings → Environment Variables; los valores salen de `backend/.env`, nunca se suben al repositorio):
+
+| Variable | Valor |
+| --- | --- |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Datos del *pooler* de Supabase |
+| `DB_SSL` | `true` |
+| `JWT_SECRET` | La misma clave larga y aleatoria del `.env` |
+| `CORS_ORIGIN` | La dirección del frontend, por ejemplo `https://sigev-nine.vercel.app` |
+| `MAX_OWNED_CAPACITY_THRESHOLD` | Opcional (por defecto `200`) |
+
+**Variable del proyecto `sigev`:** `VITE_API_URL` = la dirección del proyecto de la API terminada en `/api`, por ejemplo `https://sigev-api.vercel.app/api`. Vite la incorpora al construir, así que después de cambiarla hay que **volver a desplegar** (Redeploy).
+
+**Comprobación rápida:** abrir `https://<proyecto-api>/api/health` debe responder `{"status":"ok",...}`; después, iniciar sesión desde el frontend.
+
+> Todas las rutas de la API, excepto el inicio de sesión y `/api/health`, exigen el token de sesión. Si el token vence o es rechazado, la aplicación cierra la sesión y lleva al login.
+
+---
+
 ## Base de datos
 
 La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/schema.sql) y los productos iniciales del catálogo en [`backend/src/db/seeds.sql`](backend/src/db/seeds.sql).
@@ -235,6 +263,6 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 
 ## Pendientes y próximos pasos
 
-- **Proteger la API con el token de sesión:** hoy las rutas de eventos, catálogo e inventario responden sin token (el middleware `verificarToken` existe, pero no está aplicado). Con eso también se podrá registrar qué usuario hace cada movimiento.
-- **Desplegar** la aplicación (propuesta: frontend y backend en Vercel, base de datos en Supabase).
+- **Registrar qué usuario hace cada movimiento del inventario:** la API ya exige sesión y el token trae el usuario; falta guardarlo en el historial.
+- **Validaciones de entrada en eventos:** algunos datos inválidos enviados directamente a la API (porciones o cantidades negativas, fechas inválidas, productos inexistentes) responden 500 o se aceptan; la interfaz los evita, pero la API debe rechazarlos con un 400 claro.
 - Editar los requerimientos y cambiar el estado de un evento ya creado.
