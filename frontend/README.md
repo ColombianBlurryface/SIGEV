@@ -82,14 +82,15 @@ frontend/src/
 ├── config/                  Variables de entorno (URL de la API)
 ├── routes/                  Mapa de rutas y guardas (páginas privadas / solo públicas)
 ├── layouts/                 Estructura de las páginas privadas (menú lateral + contenido)
-├── pages/                   Una carpeta por módulo: auth, eventos, inventario, más la página 404
+├── pages/                   Una carpeta por módulo: auth, eventos, inventario, catálogo, más la página 404
 ├── components/
 │   ├── ui/                  Componentes base reutilizables (Button, Input, Select, Alert, Card...)
 │   ├── layout/              Menú lateral
 │   ├── brand/               Logo
 │   ├── eventos/             Tabla, filtros, detalle, campo de asistentes...
 │   │   └── registro/        Pasos y pestañas del asistente de registro
-│   └── inventario/          Formularios, tabla e historial de movimientos
+│   ├── inventario/          Formularios, tabla e historial de movimientos
+│   └── catalogo/            Formulario y lista de productos del catálogo
 ├── context/                 Estado global: sesión (AuthProvider) y tema (ThemeProvider)
 ├── hooks/                   Acceso al estado global y carga de datos (useEventos, useInventario...)
 ├── services/                Cliente HTTP (api.ts) y un servicio por recurso de la API
