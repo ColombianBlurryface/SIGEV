@@ -245,7 +245,7 @@ Las unidades propias se calculan con el inventario **al momento de consultar**, 
 
 ### Inventario
 
-Categorías válidas (conjunto cerrado, HU-09 / RF-10): `Mobiliario`, `Bar/Bebidas` (bebidas de consumo directo), `Bebidas de Coctelería` (licores fuertes) y `Vajilla`. Hay que escribirlas exactamente así. Cada elemento tiene una sola categoría y el filtro `?categoria=` devuelve solo esa (HU-13). Cualquier otro valor, como `Decoración`, `null` o un texto en minúsculas, responde `400`: `La categoría «Decoración» no es válida. Debe ser una de: ...`. La base de datos también lo rechaza con una restricción, y hay un índice sobre la categoría porque se filtra muy seguido.
+Categorías válidas (conjunto cerrado, HU-09 / RF-10): `Mobiliario`, `Bar/Bebidas` (bebidas de consumo directo), `Bebidas de Coctelería` (licores fuertes) y `Vajilla`. Esos son los valores de la API y de la base; en la pantalla se muestran como «Bebidas Generales» y «Licores para Cócteles» (ver el README del frontend). Hay que escribirlas exactamente así. Cada elemento tiene una sola categoría y el filtro `?categoria=` devuelve solo esa (HU-13). Cualquier otro valor, como `Decoración`, `null` o un texto en minúsculas, responde `400`: `La categoría «Decoración» no es válida. Debe ser una de: ...`. La base de datos también lo rechaza con una restricción, y hay un índice sobre la categoría porque se filtra muy seguido.
 
 #### `POST /api/inventario`
 

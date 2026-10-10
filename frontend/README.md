@@ -68,7 +68,7 @@ Abre <http://localhost:5173> e inicia sesión con un usuario creado en el paso 1
 | `/login` | Inicio de sesión (sin registro público) | Login |
 | `/eventos` | Resumen, búsqueda, filtros y detalle del evento seleccionado (con el mobiliario propio y a alquilar). Acepta `?evento=ID` para abrir un evento concreto. | HU-06, HU-12 |
 | `/eventos/nuevo` | Asistente de registro en 3 pasos: datos, requerimientos y resumen. Las bebidas generales y las de coctelería se registran por separado; el mobiliario se elige del inventario y muestra qué se alquila. | HU-01 a HU-05, HU-07, HU-12, HU-13 |
-| `/inventario` | Elementos del inventario por categoría (Mobiliario, Bar/Bebidas, Bebidas de Coctelería y Vajilla) y por propiedad (propio o alquilado), adquisiciones, bajas por daño e historial de movimientos | HU-08, HU-09, HU-10, HU-12 |
+| `/inventario` | Elementos del inventario por categoría (Mobiliario, Bebidas Generales, Licores para Cócteles y Vajilla) y por propiedad (propio o alquilado), adquisiciones, bajas por daño e historial de movimientos | HU-08, HU-09, HU-10, HU-12 |
 
 ![Registro de evento, paso 2](../docs/imagenes/registro-paso2-alimentos.png)
 
@@ -111,6 +111,17 @@ Reglas para mantener el orden:
 1. Todas las llamadas pasan por `apiRequest` en [`src/services/api.ts`](src/services/api.ts), que arma la URL con `VITE_API_URL`, agrega el token de sesión y convierte los errores del servidor en mensajes claros.
 2. Cada recurso tiene su servicio (`eventosService`, `inventarioService`...) y, cuando hace falta cargar datos en una página, un hook (`useEventos`, `useInventario`...) que expone `cargando`, `error` y `recargar`.
 3. La sesión se guarda en el `localStorage` del navegador y se cierra sola cuando vence el token (8 horas).
+
+## Nombres de las categorías del inventario
+
+El valor que viaja por la API y se guarda en la base es una clave estable; el nombre que ve la persona de logística se define aparte, en [`src/lib/inventario.ts`](src/lib/inventario.ts) (`ETIQUETA_CATEGORIA_INVENTARIO`). Si un nombre vuelve a cambiar, se ajusta ahí, sin tocar el backend ni la base de datos.
+
+| Valor guardado (API y base de datos) | Nombre en pantalla |
+| --- | --- |
+| `Mobiliario` | Mobiliario |
+| `Bar/Bebidas` | Bebidas Generales |
+| `Bebidas de Coctelería` | Licores para Cócteles |
+| `Vajilla` | Vajilla |
 
 ## Temas claro y oscuro
 

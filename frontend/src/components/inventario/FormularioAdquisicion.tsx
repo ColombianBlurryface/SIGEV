@@ -10,6 +10,7 @@ import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatearNumero } from '@/lib/formato'
+import { etiquetaCategoria } from '@/lib/inventario'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'
 import { CATEGORIAS_INVENTARIO, type ElementoInventario } from '@/types/inventario'
@@ -109,7 +110,7 @@ export function FormularioAdquisicion({ elementos, elementoInicialId, onRegistra
             const deCategoria = elementos.filter((e) => e.categoria_inventario === categoria)
             if (deCategoria.length === 0) return null
             return (
-              <optgroup key={categoria} label={categoria}>
+              <optgroup key={categoria} label={etiquetaCategoria(categoria)}>
                 {deCategoria.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.nombre} ({formatearNumero(e.cantidad_propia)} und)
