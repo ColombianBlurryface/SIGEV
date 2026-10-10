@@ -33,6 +33,22 @@ SET nombre = 'Champaña',
 WHERE nombre = 'Champaña Brut 750ml' AND categoria_inventario IS NULL
   AND NOT EXISTS (SELECT 1 FROM catalogo_productos WHERE nombre = 'Champaña' AND categoria_inventario IS NULL);
 
+-- Licores que antes se cargaban con la presentación en el nombre («… 750ml»): se dejan con el nombre
+-- simple, igual que el resto. Va antes del INSERT para que, al repetir este archivo, el INSERT no
+-- vuelva a crear los nombres viejos.
+UPDATE catalogo_productos SET nombre = 'Vodka Absolut'
+WHERE nombre = 'Vodka Absolut 750ml' AND categoria_inventario IS NULL
+  AND NOT EXISTS (SELECT 1 FROM catalogo_productos WHERE nombre = 'Vodka Absolut' AND categoria_inventario IS NULL);
+UPDATE catalogo_productos SET nombre = 'Ron Viejo de Caldas'
+WHERE nombre = 'Ron Viejo de Caldas 750ml' AND categoria_inventario IS NULL
+  AND NOT EXISTS (SELECT 1 FROM catalogo_productos WHERE nombre = 'Ron Viejo de Caldas' AND categoria_inventario IS NULL);
+UPDATE catalogo_productos SET nombre = 'Ginebra Tanqueray'
+WHERE nombre = 'Ginebra Tanqueray 750ml' AND categoria_inventario IS NULL
+  AND NOT EXISTS (SELECT 1 FROM catalogo_productos WHERE nombre = 'Ginebra Tanqueray' AND categoria_inventario IS NULL);
+UPDATE catalogo_productos SET nombre = 'Tequila José Cuervo Especial'
+WHERE nombre = 'Tequila José Cuervo Especial 750ml' AND categoria_inventario IS NULL
+  AND NOT EXISTS (SELECT 1 FROM catalogo_productos WHERE nombre = 'Tequila José Cuervo Especial' AND categoria_inventario IS NULL);
+
 INSERT INTO catalogo_productos 
 (nombre, clasificacion, tipo_calculo, porcion_por_persona, unidad_medida, volumen_botella_ml, tamano_porcion_ml, precio_unitario)
 VALUES
@@ -61,8 +77,8 @@ VALUES
 -- Bar de coctelería (HU-13, RF-16): licores fuertes que se sirven por trago o como base de cócteles.
 -- Se manejan aparte de las bebidas generales (RN-08). Porción de 50 ml por trago.
 ('Whisky 12 Años 1000ml', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 1000, 50, 160000),
-('Vodka Absolut 750ml', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 750, 50, 95000),
-('Ron Viejo de Caldas 750ml', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 750, 50, 70000),
-('Ginebra Tanqueray 750ml', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 750, 50, 120000),
-('Tequila José Cuervo Especial 750ml', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 750, 50, 110000)
+('Vodka Absolut', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 750, 50, 95000),
+('Ron Viejo de Caldas', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 750, 50, 70000),
+('Ginebra Tanqueray', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 750, 50, 120000),
+('Tequila José Cuervo Especial', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 750, 50, 110000)
 ON CONFLICT (nombre) WHERE categoria_inventario IS NULL DO NOTHING;
