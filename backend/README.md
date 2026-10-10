@@ -69,6 +69,18 @@ Comprueba que responde en <http://localhost:3000/api/health>.
 
 ---
 
+## Carga del catálogo y el inventario base
+
+[`src/db/carga-catalogo-mercado-colombiano.sql`](src/db/carga-catalogo-mercado-colombiano.sql) carga de una vez, en el SQL Editor de Supabase:
+
+- **77 productos del catálogo** con las marcas del mercado colombiano: cervezas nacionales, importadas y artesanales; gaseosas, aguas y maltas; vinos y espumosos; aguardientes, rones, whisky, vodka, ginebra y tequila; y acompañantes del bar.
+- **34 elementos de inventario base** (mobiliario y vajilla) con cantidad 0, para registrar las cantidades reales con «Actualizar» o «Adquisición».
+- Renombra productos que ya existían para no duplicarlos.
+
+Se puede ejecutar varias veces: no duplica nada y no pisa precios escritos desde la pantalla Catálogo. **Todos los productos nuevos quedan sin precio**; las porciones y presentaciones son las habituales y se ajustan desde el Catálogo. Incluye, comentada, una limpieza opcional de los datos de prueba marcados con «(borrar)».
+
+---
+
 ## Estructura
 
 ```text
