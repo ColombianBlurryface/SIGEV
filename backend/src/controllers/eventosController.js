@@ -71,6 +71,21 @@ const crearEvento = async (req, res) => {
       }
 
       const prod = resProd.rows[0];
+
+      // QA-04: el valor unitario puede escribirse al registrar el evento. Si no viene, se usa el del catálogo.
+      let precioUnitario = Number(prod.precio_unitario);
+      if (item.precio_unitario !== undefined && item.precio_unitario !== null) {
+        const p = item.precio_unitario;
+        if (typeof p !== 'number' || !Number.isFinite(p) || p < 0 || p > 100000000) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Datos inválidos',
+            detalle: `El valor unitario de «${prod.nombre}» debe ser un número mayor o igual a 0.`
+          });
+        }
+        precioUnitario = p;
+      }
+
       const porcion = Number(item.porcion_por_persona || prod.porcion_por_persona);
       let cantidadNeta = 0;
       let cantidadConMargen = 0;
@@ -96,7 +111,7 @@ const crearEvento = async (req, res) => {
       }
 
       // El costo se calcula sobre la cantidad con margen (lo que realmente se compra)
-      const costoEstimado = cantidadConMargen * Number(prod.precio_unitario);
+      const costoEstimado = cantidadConMargen * precioUnitario;
 
       const queryProdEvento = `
         INSERT INTO evento_productos 
@@ -236,7 +251,11 @@ const obtenerDetalleEvento = async (req, res) => {
         ep.cantidad_neta,
         ep.cantidad_con_margen,
         ep.unidad_entrega,
-        cp.precio_unitario,
+        -- Precio realmente usado en este evento: el costo guardado entre la cantidad con margen. Así el
+        -- detalle no cambia si después se edita el precio del catálogo ni cuando se escribió en el evento.
+        CASE WHEN ep.cantidad_con_margen > 0
+          THEN ROUND(ep.costo_estimado / ep.cantidad_con_margen, 2)
+          ELSE cp.precio_unitario END AS precio_unitario,
         ep.costo_estimado
       FROM evento_productos ep
       JOIN catalogo_productos cp ON ep.producto_id = cp.id

@@ -61,8 +61,9 @@ function validar(v: Valores): Errores {
     errores.porcion = v.tipo === 'porcion_persona' ? 'Indica los gramos por persona.' : 'Indica las unidades por persona.'
   }
 
-  if (v.precio.trim() === '' || !Number.isFinite(Number(v.precio)) || Number(v.precio) < 0) {
-    errores.precio = 'Indica el precio (0 o más).'
+  // El precio es opcional: vacío = sin precio. Si se escribe, debe ser 0 o más.
+  if (v.precio.trim() !== '' && (!Number.isFinite(Number(v.precio)) || Number(v.precio) < 0)) {
+    errores.precio = 'El precio debe ser 0 o más.'
   }
   return errores
 }
@@ -79,7 +80,8 @@ function valoresIniciales(producto: ProductoCatalogo | null): Valores {
     porcion: tipo === 'botella_compartida' ? '' : String(Number(producto.porcion_por_persona)),
     volumen: tipo === 'botella_compartida' ? String(Number(producto.volumen_botella_ml)) : '',
     tamano: tipo === 'botella_compartida' ? String(Number(producto.tamano_porcion_ml)) : '',
-    precio: String(Number(producto.precio_unitario)),
+    // Un precio en 0 es «sin precio»: el campo queda vacío
+    precio: Number(producto.precio_unitario) > 0 ? String(Number(producto.precio_unitario)) : '',
   }
 }
 
@@ -148,7 +150,8 @@ export function FormularioProducto({ producto, onGuardado, onCancelar }: Formula
       nombre: valores.nombre.trim(),
       clasificacion: valores.grupo,
       tipo_calculo: valores.tipo,
-      precio_unitario: Number(valores.precio),
+      // Si se deja vacío no se envía y el backend lo guarda como 0 (sin precio)
+      ...(valores.precio.trim() !== '' && { precio_unitario: Number(valores.precio) }),
       ...(valores.tipo === 'botella_compartida'
         ? { volumen_botella_ml: Number(valores.volumen), tamano_porcion_ml: Number(valores.tamano) }
         : { porcion_por_persona: Number(valores.porcion) }),
@@ -278,8 +281,13 @@ export function FormularioProducto({ producto, onGuardado, onCancelar }: Formula
           <FormField
             id="catalogo-precio"
             label={tipo ? ETIQUETA_PRECIO[tipo] : 'Precio'}
+            opcional
             error={errores.precio}
-            hint={tipo === 'porcion_persona' ? 'Los alimentos se compran por kilo, por eso el precio es por kg.' : undefined}
+            hint={
+              tipo === 'porcion_persona'
+                ? 'Los alimentos se compran por kilo, por eso el precio es por kg.'
+                : 'Si lo dejas vacío, el valor se escribe al registrar cada evento.'
+            }
           >
             <div className="relative">
               <span aria-hidden="true" className="pointer-events-none absolute top-3.5 left-3.5 text-sm text-muted-foreground">
@@ -307,7 +315,7 @@ export function FormularioProducto({ producto, onGuardado, onCancelar }: Formula
           >
             <Calculator aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             {vistaPrevia
-              ? `Con ${ASISTENTES_VISTA_PREVIA} asistentes: ${formatearNumero(vistaPrevia.conMargen)} ${vistaPrevia.unidad} (con margen del 10%) · ${formatearMoneda(vistaPrevia.costo)}`
+              ? `Con ${ASISTENTES_VISTA_PREVIA} asistentes: ${formatearNumero(vistaPrevia.conMargen)} ${vistaPrevia.unidad} (con margen del 10%)${Number(valores.precio) > 0 ? ` · ${formatearMoneda(vistaPrevia.costo)}` : ' · sin precio'}`
               : `Completa los datos para ver cuánto se calcularía con ${ASISTENTES_VISTA_PREVIA} asistentes.`}
           </div>
         </>

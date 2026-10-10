@@ -28,7 +28,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-01 | Registrar un evento: nombre, tipo, fecha, duración, asistentes y observaciones. | Nuevo evento · paso 1 |
 | HU-07 | Validar que el evento tenga entre 40 y 600 asistentes, con aviso inmediato si está fuera de rango. | Nuevo evento · paso 1 |
 | HU-02 | Agregar alimentos del catálogo con su porción por persona y los componentes del menú. | Nuevo evento · paso 2 |
-| HU-03 | Agregar bebidas individuales (por persona) o compartidas (por botella). | Nuevo evento · paso 2 |
+| HU-03 | Agregar bebidas individuales (por persona) o compartidas (por botella). El catálogo trae las cervezas nacionales (Poker, Club Colombia, Águila, Águila Light, Costeña y Sol, 2 unidades por persona) y vinos y champaña (botella de 750 ml, porción de 125 ml). El valor unitario no viene precargado: se escribe al registrar el evento o en el Catálogo. | Nuevo evento · paso 2 |
 | Catálogo | Crear, editar y activar o desactivar los alimentos y bebidas con los que se calculan los eventos, con sus datos de cálculo y su precio. Los productos nuevos aparecen enseguida al registrar un evento. | `/catalogo` |
 | HU-13 | Registrar por separado las bebidas generales y las del bar de coctelería: cada grupo tiene sus productos, su tabla y su subtotal, también en el resumen y el detalle del evento. En el inventario, las dos categorías se registran y consultan sin mezclarse. | Nuevo evento · paso 2 y 3, detalle del evento, `/inventario` |
 | HU-04 | Agregar el mobiliario del evento, elegido del inventario (o «Otro» si no está), con su cantidad. | Nuevo evento · paso 2 |
@@ -84,6 +84,10 @@ Si el número de asistentes está fuera del rango permitido, el campo lo avisa d
 
 ![Pestaña de servicios adicionales](docs/imagenes/registro-paso2-servicios.png)
 
+**Valor unitario de las bebidas.** Las bebidas del catálogo pueden venir sin precio; el campo «Valor unitario» (o «Valor por botella») se escribe en el evento y es lo que se usa para calcular el costo. Una bebida sin valor se muestra como «Sin valor» y suma $0.
+
+![Bebidas con valor unitario escrito en el evento](docs/imagenes/registro-bebidas-valor.png)
+
 **Mobiliario propio y alquilado (HU-12).** El mobiliario se elige del inventario. Cada línea indica cuántas unidades son propias y cuántas hay que alquilar; lo que no está en el inventario va todo a alquiler. Con más de 200 asistentes aparece el aviso de alquiler (RN-03).
 
 ![Pestaña de mobiliario con unidades propias y a alquilar](docs/imagenes/registro-paso2-mobiliario.png)
@@ -94,7 +98,7 @@ Si el número de asistentes está fuera del rango permitido, el campo lo avisa d
 
 ### Catálogo
 
-Aquí se mantienen los productos que se ofrecen al registrar un evento. Cada uno lleva cómo se calcula (gramos por persona, unidades por persona o botella compartida) y su precio; mientras se escribe, una vista previa muestra cuánto saldría con 100 asistentes. Los productos no se borran: se desactivan, y los eventos ya guardados conservan sus cantidades y costos.
+Aquí se mantienen los productos que se ofrecen al registrar un evento. Cada uno lleva cómo se calcula (gramos por persona, unidades por persona o botella compartida) y, opcionalmente, su precio; mientras se escribe, una vista previa muestra cuánto saldría con 100 asistentes. Los productos no se borran: se desactivan, y los eventos ya guardados conservan sus cantidades y costos.
 
 ![Pantalla de catálogo](docs/imagenes/catalogo.png)
 

@@ -11,6 +11,28 @@
 --   botella_compartida -> porciones por botella = volumen_botella_ml / tamano_porcion_ml
 -- =============================================================================
 
+-- QA-04 (HU-03): bebidas con las que trabaja la encargada. Primero se actualizan los productos que ya
+-- existían con otro nombre (para no duplicarlos). Los precios solo se ponen en 0 si siguen siendo los
+-- valores de ejemplo del seed anterior: así no se pisa un precio que ya se haya escrito desde la app.
+UPDATE catalogo_productos
+SET nombre = 'Club Colombia',
+    precio_unitario = CASE WHEN precio_unitario = 6000 THEN 0 ELSE precio_unitario END
+WHERE nombre = 'Cerveza Club Colombia 330ml' AND categoria_inventario IS NULL
+  AND NOT EXISTS (SELECT 1 FROM catalogo_productos WHERE nombre = 'Club Colombia' AND categoria_inventario IS NULL);
+
+UPDATE catalogo_productos
+SET nombre = 'Vino tinto',
+    tamano_porcion_ml = CASE WHEN tamano_porcion_ml = 150 THEN 125 ELSE tamano_porcion_ml END,
+    precio_unitario = CASE WHEN precio_unitario = 65000 THEN 0 ELSE precio_unitario END
+WHERE nombre = 'Vino Tinto Cabernet Sauvignon 750ml' AND categoria_inventario IS NULL
+  AND NOT EXISTS (SELECT 1 FROM catalogo_productos WHERE nombre = 'Vino tinto' AND categoria_inventario IS NULL);
+
+UPDATE catalogo_productos
+SET nombre = 'Champaña',
+    precio_unitario = CASE WHEN precio_unitario = 85000 THEN 0 ELSE precio_unitario END
+WHERE nombre = 'Champaña Brut 750ml' AND categoria_inventario IS NULL
+  AND NOT EXISTS (SELECT 1 FROM catalogo_productos WHERE nombre = 'Champaña' AND categoria_inventario IS NULL);
+
 INSERT INTO catalogo_productos 
 (nombre, clasificacion, tipo_calculo, porcion_por_persona, unidad_medida, volumen_botella_ml, tamano_porcion_ml, precio_unitario)
 VALUES
@@ -20,13 +42,21 @@ VALUES
 ('Arroz Verde con Almendras', 'alimento', 'porcion_persona', 120, 'g', 0, 0, 12000),
 ('Ensalada César', 'alimento', 'porcion_persona', 100, 'g', 0, 0, 10000),
 
--- Bebidas generales individuales (HU-13, RF-17: consumo directo)
-('Cerveza Club Colombia 330ml', 'bebida_general', 'unidad_persona', 2, 'unidades', 0, 0, 6000),
+-- Bebidas generales individuales (HU-13, RF-17: consumo directo; QA-04): 2 unidades por persona.
+-- Sin precio (0): lo escribe la encargada al registrar el evento o desde la pantalla Catálogo.
+('Poker', 'bebida_general', 'unidad_persona', 2, 'unidades', 0, 0, 0),
+('Club Colombia', 'bebida_general', 'unidad_persona', 2, 'unidades', 0, 0, 0),
+('Águila', 'bebida_general', 'unidad_persona', 2, 'unidades', 0, 0, 0),
+('Águila Light', 'bebida_general', 'unidad_persona', 2, 'unidades', 0, 0, 0),
+('Costeña', 'bebida_general', 'unidad_persona', 2, 'unidades', 0, 0, 0),
+('Sol', 'bebida_general', 'unidad_persona', 2, 'unidades', 0, 0, 0),
 ('Gaseosa individual 250ml', 'bebida_general', 'unidad_persona', 1, 'unidades', 0, 0, 3500),
 
--- Bebidas generales compartidas por botella
-('Vino Tinto Cabernet Sauvignon 750ml', 'bebida_general', 'botella_compartida', 0, 'botellas', 750, 150, 65000),
-('Champaña Brut 750ml', 'bebida_general', 'botella_compartida', 0, 'botellas', 750, 125, 85000),
+-- Bebidas generales compartidas por botella (QA-04): botella de 750 ml y porción de 125 ml, sin precio.
+('Vino tinto', 'bebida_general', 'botella_compartida', 0, 'botellas', 750, 125, 0),
+('Vino blanco', 'bebida_general', 'botella_compartida', 0, 'botellas', 750, 125, 0),
+('Vino rosado', 'bebida_general', 'botella_compartida', 0, 'botellas', 750, 125, 0),
+('Champaña', 'bebida_general', 'botella_compartida', 0, 'botellas', 750, 125, 0),
 
 -- Bar de coctelería (HU-13, RF-16): licores fuertes que se sirven por trago o como base de cócteles.
 -- Se manejan aparte de las bebidas generales (RN-08). Porción de 50 ml por trago.
