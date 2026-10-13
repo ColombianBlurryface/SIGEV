@@ -154,21 +154,28 @@ flowchart LR
 ```text
 SIGEV/
 ├── backend/                 API REST (Node.js + Express)
+│   ├── api/index.js         Entrada de la función serverless en Vercel
 │   ├── src/
 │   │   ├── server.js        Punto de entrada: configura Express y registra las rutas
-│   │   ├── config/          Conexión a PostgreSQL
+│   │   ├── config/          Conexión a PostgreSQL (con el seguro contra bases remotas) y parámetros
 │   │   ├── routes/          Rutas de cada módulo (auth, eventos, catálogo, inventario)
 │   │   ├── controllers/     Lógica de cada ruta: validaciones, cálculos y consultas SQL
 │   │   ├── middlewares/     Validaciones previas y verificación del token
-│   │   ├── scripts/         Script para crear usuarios
-│   │   └── db/              schema.sql (estructura) y seeds.sql (datos iniciales)
-│   ├── .env.example         Plantilla de variables de entorno
+│   │   ├── scripts/         Crear usuarios y generar el SQL del entorno de QA
+│   │   └── db/              schema.sql, seeds.sql, catálogo del mercado colombiano y usuario local
+│   ├── .env.example         Plantilla de variables de entorno (apunta a la base local)
+│   ├── vercel.json          Configuración del despliegue de la API
 │   └── README.md            Documentación de la API
 ├── frontend/                Aplicación web (React + Vite)
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
+│   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-└── docs/
-    └── imagenes/            Capturas usadas en la documentación
+├── qa/                      Pruebas automáticas (72 de regresión y 36 casos límite)
+├── docs/
+│   ├── imagenes/            Capturas usadas en la documentación
+│   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
+│   └── entorno-de-qa.md           Cómo montar y usar el entorno de QA compartido
+└── docker-compose.yml       Base de datos PostgreSQL local para desarrollar
 ```
 
 ---
@@ -194,7 +201,17 @@ git switch develop
 
 ## Despliegue en Vercel
 
-La aplicación se publica como **dos proyectos de Vercel** que salen del mismo repositorio (rama `main`), con la base de datos en Supabase:
+Hay **tres entornos**, cada uno con su propia base de datos, para que lo que se pruebe nunca toque lo real:
+
+| Entorno | Para qué | Base de datos | Cómo se actualiza |
+| --- | --- | --- | --- |
+| **Local** | Desarrollar en tu computadora | PostgreSQL en Docker (`docker compose up -d`) | Tú, con `git pull` |
+| **QA** | Que todo el equipo pruebe antes de publicar | Supabase de QA | Solo con la rama `develop` |
+| **Producción** | Lo que usa el cliente | Supabase de producción | Solo con la rama `main`, mediante un PR de `develop` a `main` |
+
+El paso a paso del proceso está en [`docs/proceso-de-despliegue.md`](docs/proceso-de-despliegue.md) y el entorno de QA en [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md).
+
+Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del mismo repositorio, con la base de datos en Supabase:
 
 | Proyecto | Root Directory | Qué es | Archivo de configuración |
 | --- | --- | --- | --- |
@@ -280,4 +297,6 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 
 - **Registrar qué usuario hace cada movimiento del inventario:** la API ya exige sesión y el token trae el usuario; falta guardarlo en el historial.
 - **Validaciones de entrada en eventos:** algunos datos inválidos enviados directamente a la API (porciones o cantidades negativas, fechas inválidas, productos inexistentes) responden 500 o se aceptan; la interfaz los evita, pero la API debe rechazarlos con un 400 claro.
+- **Diseño responsive:** la interfaz está pensada para escritorio; la adaptación a celular y tablet (menú de cajón y tablas en tarjetas) está lista en el PR #32, pendiente de mezclar.
+- **Conectar Vercel directamente a este repositorio:** hoy se publica desde una copia y la sincronización es manual (ver la guía del proceso de despliegue).
 - Editar los requerimientos y cambiar el estado de un evento ya creado.
