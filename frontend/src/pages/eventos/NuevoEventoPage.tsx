@@ -134,7 +134,7 @@ export function NuevoEventoPage() {
 
       <header className="flex flex-wrap items-end justify-between gap-6">
         <div className="flex flex-col gap-1.5">
-          <h1 className="font-display text-4xl font-extrabold tracking-tight">{titulo}</h1>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">{titulo}</h1>
           <p className="text-[15px] text-subtle">
             {paso === 1
               ? descripcion
@@ -179,13 +179,17 @@ export function NuevoEventoPage() {
           )}
           {paso === 1 && (
             <Button size="lg" onClick={avanzarDesdeDatos} disabled={asistentesFueraDeRango}>
-              Siguiente: Requerimientos
+              <span>
+                Siguiente<span className="hidden sm:inline">: Requerimientos</span>
+              </span>
               <ChevronRight aria-hidden="true" />
             </Button>
           )}
           {paso === 2 && (
             <Button size="lg" onClick={() => irAPaso(3)}>
-              Siguiente: Resumen
+              <span>
+                Siguiente<span className="hidden sm:inline">: Resumen</span>
+              </span>
               <ChevronRight aria-hidden="true" />
             </Button>
           )}
