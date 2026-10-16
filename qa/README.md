@@ -42,6 +42,7 @@ npm run todo
 | `QA_API_URL` | Dirección de la API, terminada en `/api` | `http://localhost:3011/api` |
 | `QA_USUARIO` | Usuario de QA | `qa` |
 | `QA_PASSWORD` | Contraseña de ese usuario (**obligatoria**) | — |
+| `QA_VIEWPORT` | Tamaño de pantalla `ANCHOxALTO`. Con menos de 1024 de ancho el menú es un cajón y la suite lo abre sola (ej. `390x844` celular, `768x1024` tablet) | `1440x1000` |
 
 En local, con el backend y el frontend corriendo contra una base de pruebas, basta con `QA_PASSWORD`.
 

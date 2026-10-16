@@ -59,7 +59,7 @@ export function EventosPage() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
-          <h1 className="font-display text-4xl font-extrabold tracking-tight">Eventos</h1>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">Eventos</h1>
           <p className="text-[15px] text-subtle">
             {cargando
               ? 'Cargando eventos…'

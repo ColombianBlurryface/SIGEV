@@ -124,6 +124,21 @@ El valor que viaja por la API y se guarda en la base es una clave estable; el no
 | `Bebidas de Coctelería` | Licores para Cócteles |
 | `Vajilla` | Vajilla |
 
+## Diseño responsive
+
+La interfaz se adapta a celular, tablet y escritorio con los puntos de corte de Tailwind (`sm` 640 px, `md` 768 px, `lg` 1024 px, `xl` 1280 px). Se diseña primero para pantalla pequeña y se amplía con `md:`, `lg:`...
+
+| Pieza | Pantalla pequeña (menos de 1024 px) | Pantalla grande |
+| --- | --- | --- |
+| Menú lateral | Barra superior con botón de menú; el menú se abre como cajón (`AppLayout` + `Sidebar`) | Menú fijo a la izquierda |
+| Lista de eventos | Cada evento es una fila con fecha y asistentes bajo el nombre | Tabla de columnas |
+| Alimentos, bebidas y mobiliario del registro | Cada elemento es una tarjeta con sus datos etiquetados | Tabla de columnas |
+| Pasos del registro | Solo se escribe el nombre del paso actual | Los tres nombres |
+
+Para probarlo: abre las herramientas de desarrollo del navegador y activa la vista de dispositivo móvil, o corre la suite de QA con `QA_VIEWPORT=390x844` (ver [`qa/README.md`](../qa/README.md)).
+
+Al agregar una tabla nueva, evita anchos fijos en píxeles sin una alternativa para pantallas pequeñas: usa `grid-cols-[minmax(0,1fr)_auto]` en celular y las columnas fijas solo desde `md:`.
+
 ## Temas claro y oscuro
 
 Los colores de cada tema están en `src/index.css` como variables CSS: `:root` para el modo claro (índigo) y `.dark` para el oscuro (negro y dorado). El usuario cambia de tema desde el menú lateral o desde el login, y la preferencia se guarda en el navegador.

@@ -102,7 +102,7 @@ export function InventarioPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1.5">
-        <h1 className="font-display text-4xl font-extrabold tracking-tight">Inventario</h1>
+        <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">Inventario</h1>
         <p className="text-[15px] text-subtle">
           {cargando
             ? 'Cargando inventario…'
