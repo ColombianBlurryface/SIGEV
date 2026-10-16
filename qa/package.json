@@ -1,0 +1,17 @@
+{
+  "name": "sigev-qa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pruebas de regresión y de casos límite de SIGEV (se ejecutan contra un entorno de QA)",
+  "type": "module",
+  "scripts": {
+    "instalar-navegador": "playwright install chromium",
+    "regresion": "node pruebas/regresion.mjs",
+    "casos-limite": "node pruebas/casos-limite.mjs",
+    "todo": "node pruebas/casos-limite.mjs && node pruebas/regresion.mjs"
+  },
+  "devDependencies": {
+    "jsonwebtoken": "^9.0.3",
+    "playwright": "1.63.0"
+  }
+}

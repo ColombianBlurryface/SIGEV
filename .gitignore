@@ -23,3 +23,8 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# QA: dependencias, resultados de corridas y SQL generado (contiene hashes de contraseñas)
+qa/node_modules/
+qa/resultados/
+qa/*.generado.sql

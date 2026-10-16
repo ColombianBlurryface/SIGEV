@@ -8,6 +8,23 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+// SEGURO: fuera de Vercel (en una computadora), el backend solo se conecta a una base LOCAL. Así, un
+// .env que apunte por error a QA o a producción no puede llenarlas de datos de prueba. Para usar
+// una base remota a propósito hay que definir PERMITIR_BASE_REMOTA=si (ver backend/.env.example).
+const ES_VERCEL = Boolean(process.env.VERCEL);
+const HOSTS_LOCALES = ['localhost', '127.0.0.1', '::1', 'host.docker.internal'];
+const esBaseLocal = HOSTS_LOCALES.includes(String(process.env.DB_HOST || 'localhost'));
+
+if (!ES_VERCEL && !esBaseLocal && process.env.PERMITIR_BASE_REMOTA !== 'si') {
+  console.error(
+    `\nBase de datos remota bloqueada: DB_HOST=${process.env.DB_HOST}\n` +
+      'Por seguridad, en tu computadora el backend solo usa la base LOCAL (docker compose up -d).\n' +
+      'Si de verdad quieres usar el Supabase de QA, define PERMITIR_BASE_REMOTA=si en backend/.env.\n' +
+      'Si ves esto con datos de producción: cámbialos por los de la base local (backend/.env.example).\n'
+  );
+  process.exit(1);
+}
+
 const pool = new Pool({
   user: process.env.DB_USER,
   host: process.env.DB_HOST,
