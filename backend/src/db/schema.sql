@@ -58,6 +58,12 @@ CREATE TABLE IF NOT EXISTS eventos (
     CONSTRAINT chk_asistentes_rango CHECK (asistentes >= 40 AND asistentes <= 600),
     CONSTRAINT chk_duracion_positiva CHECK (duracion_horas > 0)
 );
+-- COR-01 (HU-01, RF-02, RN-14): Asegurar de forma repetible que la duración esté entre 3 y 8 horas
+-- (por si la tabla ya existía con la restricción antigua chk_duracion_positiva)
+ALTER TABLE eventos DROP CONSTRAINT IF EXISTS chk_duracion_positiva;
+ALTER TABLE eventos DROP CONSTRAINT IF EXISTS chk_duracion_rango;
+ALTER TABLE eventos ADD CONSTRAINT chk_duracion_rango
+    CHECK (duracion_horas >= 3 AND duracion_horas <= 8);
 
 -- 3. Catálogo de Alimentos y Bebidas Predeterminadas (RF-18, RF-19, RF-20)
 CREATE TABLE IF NOT EXISTS catalogo_productos (

@@ -7,7 +7,8 @@
 export const ASISTENTES_MIN = 40
 export const ASISTENTES_MAX = 600
 export const BUFFET_DESDE = 301
-export const DURACION_MAX_HORAS = 99
+export const DURACION_MAX_HORAS = 8
+export const DURACION_MIN_HORAS = 3
 
 export type EstadoAsistentes = 'vacio' | 'bajo' | 'alto' | 'valido'
 
@@ -69,9 +70,9 @@ export function validarEvento(valores: ValoresEvento): ErroresEvento {
 
   const duracion = Number(valores.duracion)
   if (!valores.duracion.trim()) errores.duracion = 'Indica la duración en horas.'
-  else if (!Number.isFinite(duracion) || duracion <= 0) errores.duracion = 'La duración debe ser mayor a 0.'
-  else if (duracion > DURACION_MAX_HORAS) errores.duracion = `La duración máxima es ${DURACION_MAX_HORAS} horas.`
-
+ else if (!Number.isFinite(duracion) || duracion < DURACION_MIN_HORAS || duracion > DURACION_MAX_HORAS) {
+    errores.duracion = `La duración en horas debe estar entre ${DURACION_MIN_HORAS} y ${DURACION_MAX_HORAS} horas.`
+  }
   const asistentes = validarAsistentes(valores.asistentes)
   if (asistentes.estado !== 'valido') errores.asistentes = asistentes.mensaje ?? undefined
 

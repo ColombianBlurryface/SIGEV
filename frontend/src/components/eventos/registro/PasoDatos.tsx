@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { ErroresEvento, ValoresEvento } from '@/lib/reglasEvento'
 import { TIPOS_EVENTO } from '@/types/evento'
-
+import { hoyIso } from '@/lib/formato'
 interface PasoDatosProps {
   valores: ValoresEvento
   errores: ErroresEvento
@@ -55,6 +55,7 @@ export function PasoDatos({ valores, errores, mostrarVacio, onCambio }: PasoDato
           <Input
             id="fecha"
             type="date"
+            min={hoyIso()}
             value={valores.fecha}
             onChange={(e) => onCambio('fecha', e.target.value)}
             {...propsError('fecha')}
@@ -66,8 +67,8 @@ export function PasoDatos({ valores, errores, mostrarVacio, onCambio }: PasoDato
             <Input
               id="duracion"
               type="number"
-              min={0.5}
-              max={99}
+              min={3}
+              max={8}
               step={0.5}
               inputMode="decimal"
               value={valores.duracion}

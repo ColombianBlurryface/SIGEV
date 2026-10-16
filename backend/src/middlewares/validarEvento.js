@@ -14,7 +14,14 @@ const validarCreacionEvento = (req, res, next) => {
       detalle: 'nombre_evento, fecha_evento, tipo_evento, duracion_horas y asistentes son obligatorios.'
     });
   }
-
+// NUEVO: Regla de negocio: la fecha debe ser el día actual o posterior (RF-02, RN-14)
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }); // Formato 'AAAA-MM-DD'
+  if (fecha_evento < hoy) {
+    return res.status(400).json({
+      error: 'Regla de negocio no cumplida (RN-14 / RF-02)',
+      detalle: 'La fecha del evento debe ser el día actual o posterior.'
+    });
+  }
   // Regla de negocio: un evento debe tener entre 40 y 600 asistentes (RF-08, RN-01)
   const cantAsistentes = parseInt(asistentes, 10);
   if (isNaN(cantAsistentes) || cantAsistentes < 40 || cantAsistentes > 600) {
@@ -24,14 +31,15 @@ const validarCreacionEvento = (req, res, next) => {
     });
   }
 
+
+// AJUSTADO: la duración debe estar entre 3 y 8 horas (RF-02, RN-14)
   const duracion = parseFloat(duracion_horas);
-  if (isNaN(duracion) || duracion <= 0) {
+  if (isNaN(duracion) || duracion < 3 || duracion > 8) {
     return res.status(400).json({
       error: 'Duración inválida',
-      detalle: 'La duración en horas debe ser mayor a 0.'
+      detalle: 'La duración en horas debe estar entre 3 y 8 horas.'
     });
   }
-
   next();
 };
 
