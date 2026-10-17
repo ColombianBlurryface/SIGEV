@@ -9,6 +9,7 @@ export const ASISTENTES_MAX = 600
 export const BUFFET_DESDE = 301
 export const DURACION_MAX_HORAS = 8
 export const DURACION_MIN_HORAS = 3
+export const MAX_EVENTOS_POR_FECHA = 3 // para la correcion 2 
 
 export type EstadoAsistentes = 'vacio' | 'bajo' | 'alto' | 'valido'
 
@@ -59,14 +60,18 @@ export type ErroresEvento = Partial<Record<keyof ValoresEvento, string>>
  * Valida todos los datos del paso 1 del registro.
  * Devuelve un objeto con un mensaje por cada campo con error; si está vacío, todo está bien.
  */
-export function validarEvento(valores: ValoresEvento): ErroresEvento {
+export function validarEvento(valores: ValoresEvento, eventosEnFecha=0): ErroresEvento {
   const errores: ErroresEvento = {}
 
   if (!valores.nombre.trim()) errores.nombre = 'Escribe el nombre del evento.'
   else if (valores.nombre.trim().length > 150) errores.nombre = 'El nombre admite máximo 150 caracteres.'
 
   if (!valores.tipo) errores.tipo = 'Selecciona el tipo de evento.'
-  if (!valores.fecha) errores.fecha = 'Selecciona la fecha del evento.'
+  if (!valores.fecha) {
+    errores.fecha = 'Selecciona la fecha del evento.'
+  } else if (eventosEnFecha >= MAX_EVENTOS_POR_FECHA) {
+    errores.fecha = `Ya hay ${MAX_EVENTOS_POR_FECHA} eventos registrados en esta fecha (máximo permitido).`
+  }
 
   const duracion = Number(valores.duracion)
   if (!valores.duracion.trim()) errores.duracion = 'Indica la duración en horas.'
