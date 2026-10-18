@@ -170,7 +170,7 @@ SIGEV/
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
 │   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-├── qa/                      Pruebas automáticas (72 de regresión y 36 casos límite)
+├── qa/                      Pruebas automáticas (105 de regresión y 36 casos límite)
 ├── docs/
 │   ├── imagenes/            Capturas usadas en la documentación
 │   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
@@ -238,7 +238,7 @@ Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del m
 
 ## Pruebas y entorno de QA
 
-El proyecto trae pruebas automáticas en [`qa/`](qa) (72 pruebas de los checklists y 36 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+El proyecto trae pruebas automáticas en [`qa/`](qa) (105 pruebas de los checklists y 36 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
 
 - [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
 - [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.
