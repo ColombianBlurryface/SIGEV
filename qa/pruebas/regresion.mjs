@@ -580,14 +580,17 @@ await t('El historial muestra «Baja por daño» con la nota por defecto', async
 // ============ Corrección: máximos de inventario por categoría (HU-08, HU-11 · RF-11, RF-13, RN-16) ============
 grupo = 'Cor. máximos de inventario (RN-16)'
 const MAXIMOS = { 'Mobiliario': 2000, 'Vajilla': 6000, 'Bar/Bebidas': 4000, 'Bebidas de Coctelería': 4000 }
+// Los elementos de prueba no llevan en el nombre la clave interna de la categoría («Bar/Bebidas»): si no, la
+// prueba de «ningún nombre viejo en pantalla» fallaría en la segunda corrida, con los restos de la primera.
+const NOMBRE_CORTO = { 'Mobiliario': 'mobiliario', 'Vajilla': 'vajilla', 'Bar/Bebidas': 'generales', 'Bebidas de Coctelería': 'licores' }
 const crearElemento = (nombre, categoria, cantidad) => api('/inventario', { method: 'POST', body: { nombre, categoria_inventario: categoria, cantidad_propia: cantidad } })
 const adquirir = (id, cantidad) => api(`/inventario/${id}/adquisiciones`, { method: 'POST', body: { cantidad } })
 
 await t('Registrar (API): el valor exacto del máximo se acepta y uno más se rechaza, en las 4 categorías', async () => {
   for (const [cat, max] of Object.entries(MAXIMOS)) {
-    const justo = await crearElemento(`Máx ${cat} ${max}` + sufijo, cat, max)
+    const justo = await crearElemento(`Máx ${NOMBRE_CORTO[cat]} ${max}` + sufijo, cat, max)
     igual(justo.estado, 201, `${cat} ${max}:`)
-    const pasado = await crearElemento(`Máx ${cat} ${max + 1}` + sufijo, cat, max + 1)
+    const pasado = await crearElemento(`Máx ${NOMBRE_CORTO[cat]} ${max + 1}` + sufijo, cat, max + 1)
     igual(pasado.estado, 400, `${cat} ${max + 1}:`)
     cierto(String(pasado.cuerpo.detalle).includes('máximo'), `mensaje ${cat}: ` + pasado.cuerpo.detalle)
   }
@@ -687,9 +690,9 @@ const eventoConMobiliario = (asistentes, lineas) => api('/eventos', { method: 'P
 
 await t('Registrar (API): una bebida no se puede registrar como alquilada; mobiliario y vajilla sí', async () => {
   for (const cat of ['Bar/Bebidas', 'Bebidas de Coctelería']) {
-    const r = await crearAlquilable(`Bebida alquilada ${cat}` + sufijo, cat, 100, false)
+    const r = await crearAlquilable(`Bebida alquilada ${NOMBRE_CORTO[cat]}` + sufijo, cat, 100, false)
     igual(r.estado, 400, `${cat}:`); cierto(String(r.cuerpo.detalle).includes('Solo se alquila mobiliario y vajilla'), 'mensaje: ' + r.cuerpo.detalle)
-    igual((await crearAlquilable(`Bebida propia ${cat}` + sufijo, cat, 100, true)).estado, 201, `${cat} propia:`)
+    igual((await crearAlquilable(`Bebida propia ${NOMBRE_CORTO[cat]}` + sufijo, cat, 100, true)).estado, 201, `${cat} propia:`)
   }
   igual((await crearAlquilable('Mobiliario alquilado' + sufijo, 'Mobiliario', 10, false)).estado, 201, 'Mobiliario:')
   igual((await crearAlquilable('Vajilla alquilada' + sufijo, 'Vajilla', 10, false)).estado, 201, 'Vajilla:')
@@ -774,7 +777,7 @@ await t('Inventario (UI): al elegir una bebida no se ofrece «Alquilado»; con m
 })
 await t('Inventario (UI): al editar una bebida el selector de propiedad no trae «Alquilado»', async () => {
   await page.reload()
-  const beb = (await api('/inventario')).cuerpo.find((x) => x.nombre === 'Bebida propia Bar/Bebidas' + sufijo)
+  const beb = (await api('/inventario')).cuerpo.find((x) => x.nombre === 'Bebida propia generales' + sufijo)
   const mob = (await api('/inventario')).cuerpo.find((x) => x.nombre === 'Mobiliario alquilado' + sufijo)
   await page.fill('#buscar-inventario', beb.nombre)
   await page.getByRole('button', { name: `Actualizar cantidad de ${beb.nombre}` }).click()
