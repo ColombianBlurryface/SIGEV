@@ -1,6 +1,8 @@
 /**
  * Pestaña "Servicios adicionales" (HU-05): DJ, música, sonido, etc.
  * Sin cálculo automático; se guardan como requerimientos adicionales.
+ *
+ * RN-18: cada servicio admite de 1 a 5 unidades y sus horas no pueden superar la duración del evento.
  */
 import { Info, Music, Plus, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
@@ -12,35 +14,60 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { etiquetaServicio, TIPOS_SERVICIO } from '@/lib/categorias'
 import { formatearNumero } from '@/lib/formato'
+import {
+  describirHoras,
+  errorHoras,
+  esUnidadesServicioValida,
+  leerHoras,
+  MENSAJE_UNIDADES_SERVICIO,
+  UNIDADES_SERVICIO_MAX,
+  UNIDADES_SERVICIO_MIN,
+} from '@/lib/reglasServicios'
 import type { ServicioAgregado } from '@/types/registro'
 
 interface PestanaServiciosProps {
   servicios: ServicioAgregado[]
+  // Duración del evento en horas (NaN si todavía no es válida): tope de las horas de cada servicio
+  duracionHoras: number
   onAgregar: (servicio: ServicioAgregado) => void
   onQuitar: (id: string) => void
 }
 
-export function PestanaServicios({ servicios, onAgregar, onQuitar }: PestanaServiciosProps) {
+export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar }: PestanaServiciosProps) {
+  // Por defecto el servicio dura todo el evento (se puede bajar)
+  const horasPorDefecto = Number.isFinite(duracionHoras) ? String(duracionHoras) : ''
   const [tipo, setTipo] = useState('')
   const [descripcion, setDescripcion] = useState('')
-  const [cantidad, setCantidad] = useState('')
+  const [unidades, setUnidades] = useState('1')
+  const [horas, setHoras] = useState('')
   const [notas, setNotas] = useState('')
   const [errorForm, setErrorForm] = useState<string | null>(null)
 
+  // Los errores de unidades y horas se avisan apenas se escriben, sin esperar a «Agregar»
+  const errorUnidades = unidades.trim() !== '' && !esUnidadesServicioValida(unidades) ? MENSAJE_UNIDADES_SERVICIO : undefined
+  const horasMostradas = horas === '' ? horasPorDefecto : horas
+  const errorDeHoras = horas.trim() !== '' ? errorHoras(horas, duracionHoras) : undefined
+
   function agregar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault()
-    const cantidadNumero = cantidad.trim() === '' ? null : Number(cantidad)
-
     if (!tipo) return setErrorForm('Selecciona el tipo de servicio.')
     if (!descripcion.trim()) return setErrorForm('Escribe una descripción del servicio.')
-    if (cantidadNumero !== null && (!Number.isInteger(cantidadNumero) || cantidadNumero < 1)) {
-      return setErrorForm('La cantidad u horas debe ser un número entero mayor a 0, o dejarse vacía.')
-    }
+    if (!esUnidadesServicioValida(unidades)) return setErrorForm(MENSAJE_UNIDADES_SERVICIO)
+    const mensajeHoras = errorHoras(horasMostradas, duracionHoras)
+    if (mensajeHoras) return setErrorForm(mensajeHoras)
 
-    onAgregar({ id: crypto.randomUUID(), tipo, descripcion: descripcion.trim(), cantidad: cantidadNumero, notas: notas.trim() })
+    onAgregar({
+      id: crypto.randomUUID(),
+      tipo,
+      descripcion: descripcion.trim(),
+      cantidad: Number(unidades),
+      horas: leerHoras(horasMostradas) as number,
+      notas: notas.trim(),
+    })
     setTipo('')
     setDescripcion('')
-    setCantidad('')
+    setUnidades('1')
+    setHoras('')
     setNotas('')
     setErrorForm(null)
   }
@@ -81,19 +108,47 @@ export function PestanaServicios({ servicios, onAgregar, onQuitar }: PestanaServ
               />
             </FormField>
 
-            <FormField id="servicio-cantidad" label="Cantidad u horas" opcional>
+            <FormField
+              id="servicio-cantidad"
+              label="Unidades"
+              hint={`De ${UNIDADES_SERVICIO_MIN} a ${UNIDADES_SERVICIO_MAX}`}
+              error={errorUnidades}
+            >
               <Input
                 id="servicio-cantidad"
-                type="number"
-                min={1}
-                step={1}
+                type="text"
                 inputMode="numeric"
-                value={cantidad}
-                onChange={(e) => setCantidad(e.target.value)}
+                maxLength={3}
+                value={unidades}
+                onChange={(e) => {
+                  setUnidades(e.target.value)
+                  setErrorForm(null)
+                }}
+                aria-invalid={Boolean(errorUnidades)}
               />
             </FormField>
 
-            <FormField id="servicio-notas" label="Notas" opcional className="md:col-span-3">
+            <FormField
+              id="servicio-horas"
+              label="Horas de servicio"
+              hint={Number.isFinite(duracionHoras) ? `Máximo ${formatearNumero(duracionHoras)} h: lo que dura el evento` : 'Indica primero la duración del evento'}
+              error={errorDeHoras}
+            >
+              <Input
+                id="servicio-horas"
+                type="text"
+                inputMode="decimal"
+                maxLength={5}
+                value={horasMostradas}
+                onChange={(e) => {
+                  setHoras(e.target.value)
+                  setErrorForm(null)
+                }}
+                aria-invalid={Boolean(errorDeHoras)}
+              />
+            </FormField>
+
+            <FormField id="servicio-notas" label="Notas" opcional className="md:col-span-2">
               <Input
                 id="servicio-notas"
                 value={notas}
@@ -119,38 +174,44 @@ export function PestanaServicios({ servicios, onAgregar, onQuitar }: PestanaServ
         </Card>
       ) : (
         <ul aria-label="Servicios agregados" className="flex flex-col gap-2.5">
-          {servicios.map((servicio) => (
-            <li key={servicio.id}>
-              <Card className="flex items-center gap-3.5 rounded-[14px] px-[18px] py-3.5">
-                <span
-                  aria-hidden="true"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-servicios-soft text-servicios"
-                >
-                  <Music className="size-5" />
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-[14.5px] font-bold">
-                    {etiquetaServicio(servicio.tipo)} · {servicio.descripcion}
+          {servicios.map((servicio) => {
+            const excede = Number.isFinite(duracionHoras) && servicio.horas > duracionHoras
+            return (
+              <li key={servicio.id}>
+                <Card className="flex items-center gap-3.5 rounded-[14px] px-[18px] py-3.5">
+                  <span
+                    aria-hidden="true"
+                    className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-servicios-soft text-servicios"
+                  >
+                    <Music className="size-5" />
                   </span>
-                  <span className="truncate text-[13px] text-muted-foreground">{servicio.notas || 'Sin notas'}</span>
-                </div>
-                {servicio.cantidad !== null && (
-                  <span className="rounded-full bg-chip px-2.5 py-1 text-[12.5px] font-bold text-subtle">
-                    {formatearNumero(servicio.cantidad)}
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate text-[14.5px] font-bold">
+                      {etiquetaServicio(servicio.tipo)} · {servicio.descripcion}
+                    </span>
+                    <span className="truncate text-[13px] text-muted-foreground">{servicio.notas || 'Sin notas'}</span>
+                    {excede && (
+                      <span className="text-[12.5px] font-semibold text-destructive">
+                        Dura más que el evento ({formatearNumero(duracionHoras)} h): corrige las horas o quita el servicio.
+                      </span>
+                    )}
+                  </div>
+                  <span className="rounded-full bg-chip px-2.5 py-1 text-[12.5px] font-bold whitespace-nowrap text-subtle">
+                    {formatearNumero(servicio.cantidad)} und · {describirHoras(servicio.horas)}
                   </span>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onQuitar(servicio.id)}
-                  aria-label={`Quitar ${etiquetaServicio(servicio.tipo)}: ${servicio.descripcion}`}
-                  className="size-8 text-muted-foreground"
-                >
-                  <Trash2 className="!size-4" />
-                </Button>
-              </Card>
-            </li>
-          ))}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onQuitar(servicio.id)}
+                    aria-label={`Quitar ${etiquetaServicio(servicio.tipo)}: ${servicio.descripcion}`}
+                    className="size-8 text-muted-foreground"
+                  >
+                    <Trash2 className="!size-4" />
+                  </Button>
+                </Card>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

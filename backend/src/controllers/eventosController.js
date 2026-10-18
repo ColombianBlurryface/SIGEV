@@ -10,6 +10,7 @@
 const pool = require('../config/db');
 const { esUnidadesPorPersonaValida } = require('../config/reglasBebidas');
 const { MAXIMO_POR_CATEGORIA, formatearCantidad } = require('../config/limitesInventario');
+const { LIMITES } = require('../config/reglasEvento');
 
 // Redondea hacia arriba evitando errores de precisión decimal de JavaScript.
 // Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
@@ -43,7 +44,10 @@ const crearEvento = async (req, res) => {
 
     // Inicia la transacción: a partir de aquí todo se confirma junto (COMMIT) o se deshace (ROLLBACK)
     await client.query('BEGIN');
-const resConteoFecha = await client.query(
+    // Un candado por fecha dentro de la transacción: dos registros simultáneos para el mismo día se turnan, así el
+    // conteo de abajo es exacto y nunca entran más de 3 (RN-13)
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`eventos-fecha-${fecha_evento}`]);
+    const resConteoFecha = await client.query(
       `SELECT COUNT(*)::int AS total
        FROM eventos
        WHERE fecha_evento = $1 AND estado <> 'cancelado'`,
@@ -64,12 +68,12 @@ const resConteoFecha = await client.query(
       RETURNING *;
     `;
     const resEvento = await client.query(queryEvento, [
-      nombre_evento,
+      nombre_evento.trim(),
       fecha_evento,
       tipo_evento,
       duracion_horas,
       asistentes,
-      observaciones_generales || null
+      (typeof observaciones_generales === 'string' && observaciones_generales.trim()) || null
     ]);
     const nuevoEvento = resEvento.rows[0];
 
@@ -82,7 +86,11 @@ const resConteoFecha = await client.query(
       );
 
       if (resProd.rows.length === 0) {
-        throw new Error(`El producto con ID ${item.producto_id} no existe en el catálogo.`);
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: 'Datos inválidos',
+          detalle: `El producto con ID ${item.producto_id} no existe en el catálogo o está desactivado.`
+        });
       }
 
       const prod = resProd.rows[0];
@@ -101,7 +109,22 @@ const resConteoFecha = await client.query(
         precioUnitario = p;
       }
 
-      let porcion = Number(item.porcion_por_persona || prod.porcion_por_persona);
+      // La porción: la enviada en el evento o, si no se envía, la del catálogo. Un valor enviado se revisa tal cual
+      // (un 0 o un negativo no se reemplazan en silencio por el del catálogo).
+      let porcion = Number(prod.porcion_por_persona);
+      if (prod.tipo_calculo === 'porcion_persona') {
+        // Alimentos: gramos por persona, de 1 a 1.000 (un alimento no pasa de 1 kg por persona)
+        const enviadaAlimento = item.porcion_por_persona;
+        if (enviadaAlimento !== undefined && enviadaAlimento !== null) porcion = Number(enviadaAlimento);
+        if (!Number.isFinite(porcion) || porcion < 1 || porcion > LIMITES.gramosPorPersonaMax) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Datos inválidos',
+            detalle: `La porción de «${prod.nombre}» debe ser un número de 1 a ${formatearCantidad(LIMITES.gramosPorPersonaMax)} gramos por persona.`
+          });
+        }
+      }
+      // Bebida compartida (por botella): la porción es la del catálogo (tamaño del trago), no se cambia en el evento.
       if (prod.tipo_calculo === 'unidad_persona') {
         // RF-22, RN-15: las unidades por persona de una bebida individual son un entero de 1 a 10.
         // El valor enviado se valida tal cual (un 0 no se reemplaza por el del catálogo).
@@ -205,16 +228,19 @@ const resConteoFecha = await client.query(
         descripcion = resElemento.rows[0].nombre; // Se guarda el nombre actual del inventario
       }
 
+      // El mobiliario no tiene horas; los demás servicios sí (ya validadas contra la duración del evento)
+      const horas = esMobiliario ? null : servicio.horas;
       const queryServicio = `
-        INSERT INTO requerimientos_adicionales (evento_id, tipo, descripcion, cantidad, notas, producto_id)
-        VALUES ($1, $2, $3, $4, $5, $6);
+        INSERT INTO requerimientos_adicionales (evento_id, tipo, descripcion, cantidad, horas, notas, producto_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7);
       `;
       await client.query(queryServicio, [
         nuevoEvento.id,
-        servicio.tipo || 'servicio_opcional',
-        descripcion,
-        servicio.cantidad || null,
-        servicio.notas || null,
+        servicio.tipo,
+        typeof descripcion === 'string' ? descripcion.trim() : descripcion,
+        servicio.cantidad ?? null,
+        horas ?? null,
+        typeof servicio.notas === 'string' && servicio.notas.trim() ? servicio.notas.trim() : null,
         productoId
       ]);
     }
@@ -277,7 +303,11 @@ const listarEventos = async (req, res) => {
  */
 const obtenerDetalleEvento = async (req, res) => {
   try {
-    const { id } = req.params;
+    // El id debe ser un entero válido: «abc» o un número gigante daban un error 500 de la base de datos
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1 || id > 2147483647) {
+      return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del evento no es válido.' });
+    }
 
     // 1. Datos básicos del evento
     const queryEvento = `SELECT * FROM eventos WHERE id = $1;`;
@@ -318,7 +348,7 @@ const obtenerDetalleEvento = async (req, res) => {
     //    alquilado (es_propio = false), todo va a alquiler: ese stock no es de la organización.
     const queryServicios = `
       SELECT
-        r.id, r.tipo, r.descripcion, r.cantidad, r.notas, r.creado_en, r.producto_id,
+        r.id, r.tipo, r.descripcion, r.cantidad, r.horas, r.notas, r.creado_en, r.producto_id,
         c.cantidad_propia AS disponible_inventario,
         c.es_propio AS inventario_es_propio,
         CASE WHEN r.tipo = 'mobiliario'

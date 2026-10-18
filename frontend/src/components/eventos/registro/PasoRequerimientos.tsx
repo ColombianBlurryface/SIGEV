@@ -16,6 +16,10 @@ import type {
 import { PestanaAlimentos } from './PestanaAlimentos'
 import { PestanaBebidas } from './PestanaBebidas'
 import { PestanaMobiliario } from './PestanaMobiliario'
+import { Alert } from '@/components/ui/alert'
+import { etiquetaServicio } from '@/lib/categorias'
+import { formatearNumero } from '@/lib/formato'
+import { describirHoras, serviciosFueraDeDuracion } from '@/lib/reglasServicios'
 import { PestanaServicios } from './PestanaServicios'
 import { ResumenRequerimientos } from './ResumenRequerimientos'
 
@@ -30,11 +34,13 @@ const LINEA_ACTIVA: Record<Categoria, string> = {
 
 interface PasoRequerimientosProps {
   asistentes: number
+  // Duración del evento en horas (NaN si todavía no es válida): tope de las horas de cada servicio (RN-18)
+  duracionHoras: number
   requerimientos: RequerimientosEvento
   onCambio: (requerimientos: RequerimientosEvento) => void
 }
 
-export function PasoRequerimientos({ asistentes, requerimientos, onCambio }: PasoRequerimientosProps) {
+export function PasoRequerimientos({ asistentes, duracionHoras, requerimientos, onCambio }: PasoRequerimientosProps) {
   const [activa, setActiva] = useState<Categoria>('alimentos')
   const conteo: Record<Categoria, number> = {
     alimentos: requerimientos.alimentos.length,
@@ -70,6 +76,15 @@ export function PasoRequerimientos({ asistentes, requerimientos, onCambio }: Pas
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex min-w-0 flex-col gap-4">
+        {serviciosFueraDeDuracion(requerimientos.servicios, duracionHoras).length > 0 && (
+          <Alert variant="warning">
+            <strong>Hay servicios que duran más que el evento ({formatearNumero(duracionHoras)} h).</strong>{' '}
+            {serviciosFueraDeDuracion(requerimientos.servicios, duracionHoras)
+              .map((s) => `${etiquetaServicio(s.tipo)} (${describirHoras(s.horas)})`)
+              .join(', ')}
+            . Corrige sus horas o quítalos en la pestaña Servicios adicionales para poder continuar.
+          </Alert>
+        )}
         <div role="tablist" aria-label="Tipo de requerimiento" className="flex flex-wrap gap-1 border-b border-border">
           {PESTANAS.map((categoria) => {
             const { etiqueta, icono: Icono, clases } = CATEGORIAS[categoria]
@@ -126,7 +141,12 @@ export function PasoRequerimientos({ asistentes, requerimientos, onCambio }: Pas
             />
           )}
           {activa === 'servicios' && (
-            <PestanaServicios servicios={requerimientos.servicios} onAgregar={agregarServicio} onQuitar={quitarServicio} />
+            <PestanaServicios
+              servicios={requerimientos.servicios}
+              duracionHoras={duracionHoras}
+              onAgregar={agregarServicio}
+              onQuitar={quitarServicio}
+            />
           )}
         </div>
       </div>

@@ -102,12 +102,14 @@ Se puede ejecutar varias veces: no duplica nada y no pisa precios escritos desde
 Para que ningún módulo se vea vacío al abrirlo en el entorno publicado (por ejemplo, en una sustentación), [`src/db/datos-de-prueba.sql`](src/db/datos-de-prueba.sql) carga, en el SQL Editor de Supabase (primero QA, luego producción):
 
 - **Inventario de las cuatro categorías** (mobiliario, vajilla, bebidas generales y licores para cócteles) con cantidades de ejemplo y movimientos de cada tipo (registro inicial, adquisición y retiro), para que el historial tenga algo que mostrar.
-- **4 eventos de ejemplo con mobiliario requerido**, con alimentos, bebidas y servicios: uno de 250 asistentes que supera el umbral de alquiler (se ven las unidades propias y las que se alquilan), uno de 480 en modalidad buffet, uno de 120 y uno de 90 que el inventario propio cubre completo. Las fechas son «hoy + 30, 45, 60 y 75 días», así que siempre salen como próximos.
+- **6 eventos de ejemplo con mobiliario requerido**, con alimentos, bebidas y servicios, en los cuatro estados: uno de 250 asistentes que supera el umbral de alquiler (se ven las unidades propias y las que se alquilan), uno de 480 en modalidad buffet y confirmado, uno de 120 y uno de 90 que el inventario propio cubre completo, uno ya realizado y uno cancelado (para probar el filtro por estado). Los próximos van a «hoy + 30, 45, 60 y 75 días», así que siempre salen como próximos. El costo usa el precio del catálogo cuando ya lo tiene.
 - Los productos del catálogo que esos eventos usan, solo si faltan.
 
 **Se identifican como prueba:** los eventos empiezan por «[Demo] » y sus observaciones dicen «Datos de prueba»; cada cantidad de ejemplo del inventario deja un movimiento con la nota «Datos de prueba…» (se ve en el historial de `/inventario`), y los elementos de bebidas que crea el script terminan en « (demo)».
 
 **Es seguro repetirlo:** no duplica nada y **no toca ningún elemento que ya tenga unidades**, así que no pisa inventario real. Solo agrega datos; no cambia la estructura de la base.
+
+Los precios de referencia del catálogo están en [`src/db/precios-catalogo.sql`](src/db/precios-catalogo.sql): son estimaciones aproximadas del mercado colombiano, solo se aplican a productos que están en 0 y nunca pisan un precio ya escrito. Para empezar QA de cero está [`../../qa/reiniciar-datos-qa.sql`](../../qa/reiniciar-datos-qa.sql) (ver `docs/entorno-de-qa.md`).
 
 Cuando empiecen los datos reales, [`src/db/datos-de-prueba-quitar.sql`](src/db/datos-de-prueba-quitar.sql) los quita: borra los eventos «[Demo]», devuelve cada elemento a la cantidad que tenía antes y borra los elementos « (demo)». Si ya hubo movimientos reales sobre un elemento de ejemplo, ese elemento se salta y el script lo avisa al final.
 
@@ -284,7 +286,7 @@ Activa o desactiva un producto. Un producto desactivado deja de ofrecerse en los
   "servicios_adicionales": [
     { "tipo": "mobiliario", "descripcion": "Sillas Tiffany doradas", "cantidad": 250, "producto_id": 10 },
     { "tipo": "mobiliario", "descripcion": "Carpa 10 × 20 m", "cantidad": 1 },
-    { "tipo": "dj", "descripcion": "DJ para recepción y fiesta", "cantidad": 6 }
+    { "tipo": "dj", "descripcion": "DJ para recepción y fiesta", "cantidad": 1, "horas": 6 }
   ]
 }
 ```
@@ -299,7 +301,23 @@ Activa o desactiva un producto. Un producto desactivado deja de ofrecerse en los
 
 Respuesta `201`: `{ "mensaje": "...", "evento": { "id": 4, "estado": "planificacion", ... } }`
 
-Validaciones (`400`): campos obligatorios, asistentes entre 40 y 600, duración mayor a 0 y `producto_id` de mobiliario existente y sin repetir.
+**Validaciones.** Todo lo que no cumple responde `400` con el motivo y **no se guarda nada** (antes varios casos daban un error 500). Las reglas viven en `src/config/reglasEvento.js` y se revisan en `src/middlewares/validarEvento.js`:
+
+| Dato | Regla |
+| --- | --- |
+| Nombre | Texto con contenido, máximo 150 caracteres |
+| Tipo de evento | Uno de: Boda, Corporativo, Quinceañero, Gala, Cumpleaños, Otro |
+| Fecha | Día real `AAAA-MM-DD`, desde hoy (hora de Colombia) hasta 5 años adelante, y máximo 3 eventos activos por día (RN-13) |
+| Duración | Número de 3 a 8 horas (RN-14); un texto como «4 horas» no vale |
+| Asistentes | Entero de 40 a 600 (RN-01) |
+| Observaciones | Texto de máximo 2.000 caracteres |
+| Productos | Lista de máximo 100; `producto_id` entero que exista y esté activo; sin repetir un producto; alimentos de 1 a 1.000 g por persona; bebidas individuales de 1 a 10 unidades por persona (RN-15); el valor unitario, mayor o igual a 0 |
+| Mobiliario | Entero de 1 a 2.000 por línea (RN-17); «Otro» exige descripción |
+| Servicios (DJ, música en vivo, sonido, iluminación, entretenimiento, otro) | **RN-18:** `cantidad` (unidades) entera de 1 a 5 y `horas` en horas completas o medias horas, mayores a 0 y **sin superar la duración del evento**; tipo de la lista; descripción obligatoria (máximo 300 caracteres); notas de máximo 300 |
+
+El registro de un evento toma un candado por fecha dentro de la transacción: con varias peticiones simultáneas para el mismo día entran 3 como máximo, no más. Las horas de cada servicio se guardan en la columna `horas` de `requerimientos_adicionales` (opcional, por eso los servicios guardados antes de esta regla no la tienen). Si se crea la base de cero con `schema.sql` ya viene incluida; en una base existente hay que agregarla (ver `docs/despliegue-y-sql-pendiente.md`).
+
+También devuelven `400` (antes `500`): un `id` que no es un número entero en `GET /api/eventos/:id` y `GET /api/catalogo/:id`, y un `?clasificacion=` que no existe en `GET /api/catalogo`. En el catálogo, los gramos por persona de un alimento van de 1 a 1.000 y la botella de una bebida compartida no pasa de 5.000 ml.
 
 #### `GET /api/eventos`
 

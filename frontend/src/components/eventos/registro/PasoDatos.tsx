@@ -3,22 +3,25 @@
  */
 import { CampoAsistentes } from '@/components/eventos/CampoAsistentes'
 import { VistaPreviaEvento } from '@/components/eventos/VistaPreviaEvento'
+import { Alert } from '@/components/ui/alert'
 import { Card } from '@/components/ui/card'
 import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import type { ErroresEvento, ValoresEvento } from '@/lib/reglasEvento'
+import { fechaMaxima, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
 import { TIPOS_EVENTO } from '@/types/evento'
 import { hoyIso } from '@/lib/formato'
 interface PasoDatosProps {
   valores: ValoresEvento
   errores: ErroresEvento
   mostrarVacio: boolean
+  // Aviso cuando la duración escrita es menor que las horas de algún servicio ya agregado (RN-18)
+  avisoDuracion?: string | null
   onCambio: (campo: keyof ValoresEvento, valor: string) => void
 }
 
-export function PasoDatos({ valores, errores, mostrarVacio, onCambio }: PasoDatosProps) {
+export function PasoDatos({ valores, errores, mostrarVacio, avisoDuracion, onCambio }: PasoDatosProps) {
   const propsError = (campo: keyof ValoresEvento) => ({
     'aria-invalid': Boolean(errores[campo]),
     'aria-describedby': errores[campo] ? `${campo}-error` : undefined,
@@ -27,6 +30,11 @@ export function PasoDatos({ valores, errores, mostrarVacio, onCambio }: PasoDato
   return (
     <div className="flex flex-col items-start gap-6 xl:flex-row">
       <Card className="grid w-full flex-1 gap-x-6 gap-y-5 p-7 md:grid-cols-2">
+        {avisoDuracion && (
+          <Alert variant="warning" className="md:col-span-2">
+            <strong>La duración no alcanza para los servicios agregados.</strong> {avisoDuracion}
+          </Alert>
+        )}
         <FormField id="nombre" label="Nombre del evento" error={errores.nombre} className="md:col-span-2">
           <Input
             id="nombre"
@@ -56,6 +64,7 @@ export function PasoDatos({ valores, errores, mostrarVacio, onCambio }: PasoDato
             id="fecha"
             type="date"
             min={hoyIso()}
+            max={fechaMaxima()}
             value={valores.fecha}
             onChange={(e) => onCambio('fecha', e.target.value)}
             {...propsError('fecha')}
@@ -101,6 +110,7 @@ export function PasoDatos({ valores, errores, mostrarVacio, onCambio }: PasoDato
             rows={3}
             value={valores.observaciones}
             onChange={(e) => onCambio('observaciones', e.target.value)}
+            maxLength={2000}
             placeholder="Ej. Ceremonia y recepción en el mismo salón."
           />
         </FormField>

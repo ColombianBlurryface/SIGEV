@@ -22,6 +22,7 @@ import {
   type TipoBebida,
 } from '@/lib/categorias'
 import { capitalizar, formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
+import { describirHoras } from '@/lib/reglasServicios'
 import { cn } from '@/lib/utils'
 import type { EventoDetalle, EventoListado } from '@/types/evento'
 import { AvisoAlquiler, OrigenBadge } from './AlquilerMobiliario'
@@ -96,10 +97,15 @@ function agruparRequerimientos(detalle: EventoDetalle) {
       nombre: esMobiliario
         ? servicio.descripcion
         : `${etiquetaServicio(servicio.tipo)}${servicio.descripcion ? ` · ${servicio.descripcion}` : ''}`,
-      nota: [origen, servicio.notas].filter(Boolean).join(' · ') || undefined,
+      nota:
+        [origen, servicio.horas !== null && servicio.horas !== undefined ? describirHoras(Number(servicio.horas)) : null, servicio.notas]
+          .filter(Boolean)
+          .join(' · ') || undefined,
       reparto,
       cantidad:
-        servicio.cantidad === null ? '—' : `${formatearNumero(servicio.cantidad)}${esMobiliario ? ' und' : ''}`,
+        servicio.cantidad === null
+          ? '—'
+          : `${formatearNumero(servicio.cantidad)}${esMobiliario || (servicio.horas !== null && servicio.horas !== undefined) ? ' und' : ''}`,
       costo: null,
     })
   }
