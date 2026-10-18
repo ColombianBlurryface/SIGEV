@@ -43,7 +43,20 @@ const crearEvento = async (req, res) => {
 
     // Inicia la transacción: a partir de aquí todo se confirma junto (COMMIT) o se deshace (ROLLBACK)
     await client.query('BEGIN');
+const resConteoFecha = await client.query(
+      `SELECT COUNT(*)::int AS total
+       FROM eventos
+       WHERE fecha_evento = $1 AND estado <> 'cancelado'`,
+      [fecha_evento]
+    );
 
+    if (resConteoFecha.rows[0].total >= 3) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Regla de negocio no cumplida (RN-13 / RF-51)',
+        detalle: 'Ya existen 3 eventos programados para esta fecha. El máximo permitido por día es 3.'
+      });
+    }
     // 1. Insertar el evento base (RF-01, RF-02)
     const queryEvento = `
       INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales)

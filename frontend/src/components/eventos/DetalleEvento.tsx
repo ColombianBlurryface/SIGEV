@@ -107,12 +107,14 @@ function agruparRequerimientos(detalle: EventoDetalle) {
   // El costo estimado solo incluye alimentos y bebidas; mobiliario y servicios se cotizan aparte
   const total = detalle.productos_calculados.reduce((suma, p) => suma + Number(p.costo_estimado || 0), 0)
   const unidadesAlquilar = grupos.mobiliario.reduce((suma, item) => suma + (item.reparto?.alquilar ?? 0), 0)
+  const unidadesPedidas = grupos.mobiliario.reduce((suma, item) => suma + (item.reparto ? item.reparto.propias + item.reparto.alquilar : 0), 0)
   return {
     grupos,
     costos,
     estadoAlquiler: detalle.estado_alquiler,
     total,
     unidadesAlquilar,
+    unidadesPedidas,
     vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0,
   }
 }
@@ -161,6 +163,7 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
             superaUmbral={requerimientos.estadoAlquiler.umbral_superado}
             umbral={requerimientos.estadoAlquiler.umbral}
             unidadesAlquilar={requerimientos.unidadesAlquilar}
+            unidadesPedidas={requerimientos.unidadesPedidas}
             className="text-[13px]"
           />
         )}

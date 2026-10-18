@@ -84,7 +84,7 @@ export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar 
 
   return (
     <div className="flex flex-col gap-4">
-      <AvisoAlquiler superaUmbral={asistentes > umbral} umbral={umbral} unidadesAlquilar={unidadesAlquilar} />
+      <AvisoAlquiler superaUmbral={asistentes > umbral} umbral={umbral} unidadesAlquilar={unidadesAlquilar} unidadesPedidas={totalUnidades} />
 
       <Card className="p-5">
         <form onSubmit={agregar} noValidate className="flex flex-col gap-4">

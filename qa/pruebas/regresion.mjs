@@ -380,12 +380,12 @@ await t('RN-03: 150 sin aviso; 200 sin aviso; 201 con aviso (estado_alquiler)', 
 await t('P-05: el umbral viene de la configuración (no está fijo)', async () => {
   const c = await api('/configuracion'); igual(c.cuerpo.umbral_alquiler, 200, 'umbral:')
 })
-await t('Con 180 asistentes y stock insuficiente avisa «el inventario no alcanza»', async () => {
+await t('Con 180 asistentes y stock insuficiente avisa que hay que alquilar y que el inventario no alcanza', async () => {
   await nuevoEvento('Faltante' + sufijo, 180); await aRequerimientos(); await pestana('Mobiliario')
   await page.waitForSelector('#mobiliario-elemento option[value]', { state: 'attached' })
   await page.selectOption('#mobiliario-elemento', String(sillaP.id)); await page.fill('#mobiliario-cantidad', '150')
   await page.getByRole('button', { name: 'Agregar', exact: true }).click()
-  await page.waitForSelector('text=El inventario no alcanza')
+  await page.waitForSelector('text=El inventario propio no alcanza para este evento')
 })
 
 // ============ F. HU-05 servicios ============
