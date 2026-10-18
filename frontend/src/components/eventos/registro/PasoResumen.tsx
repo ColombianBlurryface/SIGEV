@@ -11,6 +11,7 @@ import { describirReparto, repartirMobiliario, totalAlquilar } from '@/lib/alqui
 import { calcularProducto } from '@/lib/calculos'
 import { CATEGORIAS, etiquetaServicio, TIPOS_BEBIDA, type ConfigCategoria } from '@/lib/categorias'
 import { formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
+import { calcularMeseros, relacionMeseros } from '@/lib/reglasPersonal'
 import { describirHoras } from '@/lib/reglasServicios'
 import { validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
 import { cn } from '@/lib/utils'
@@ -106,6 +107,7 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
     { etiqueta: 'Duración', valor: `${formatearNumero(valores.duracion)} horas` },
     { etiqueta: 'Asistentes', valor: formatearNumero(cantidad) },
     { etiqueta: 'Modalidad', valor: asistentes.esBuffet ? 'Buffet' : 'Servida a la mesa' },
+    { etiqueta: 'Meseros requeridos', valor: `${formatearNumero(calcularMeseros(cantidad))} (${relacionMeseros})` },
     { etiqueta: 'Estado inicial', valor: 'Planificación' },
   ]
 

@@ -40,8 +40,16 @@ const call = async (ruta, op = {}) => {
   try { c = await r.json() } catch { /* sin cuerpo */ }
   return { s: r.status, c }
 }
-// Cada evento de prueba va en una fecha distinta y lejana (2028-2030), por el tope de eventos por día
-const fechaLibre = () => new Date(Date.UTC(2028, 0, 1) + Math.floor(Math.random() * 1000) * 86400000).toISOString().slice(0, 10)
+// Cada evento de prueba va en una fecha al azar entre 1 mes y 4 años adelante (dentro del tope de 5 años), por el tope de eventos por día
+// Días que ya tienen eventos de corridas anteriores (se cargan después de iniciar sesión): se evitan, porque con 3 el día se llena
+let DIAS_OCUPADOS = new Set()
+const fechaLibre = () => {
+  for (let i = 0; i < 50; i++) {
+    const f = new Date(Date.now() + (30 + Math.floor(Math.random() * 1500)) * 86400000).toISOString().slice(0, 10)
+    if (!DIAS_OCUPADOS.has(f)) return f
+  }
+  return new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+}
 const ev = (o = {}) => ({ nombre_evento: n('Explo'), fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 4, asistentes: 100, ...o })
 const m = (r) => ({ s: r.s, nota: r.c?.error || r.c?.detalle || '' })
 
@@ -73,6 +81,7 @@ await caso('Token inválido', [401], async () => ({ s: (await call('/eventos', {
 await caso('Health es público', [200], async () => ({ s: (await call('/health')).s }))
 
 TOKEN = tokenValido
+DIAS_OCUPADOS = new Set((await call('/eventos')).c.map((e) => String(e.fecha_evento).slice(0, 10)))
 
 console.log('\n== Entradas de eventos')
 await caso('Asistentes decimales (100.5)', [400], async () => m(await call('/eventos', { method: 'POST', body: ev({ asistentes: 100.5 }) })))
@@ -151,7 +160,10 @@ await caso('Catálogo: botella de 100 litros', [400], async () => m(await call('
 
 console.log('\n== Concurrencia en el registro de eventos')
 await caso('30 registros simultáneos en la misma fecha: entran 3 como máximo', [3], async () => {
-  const f = fechaLibre()
+  // Una fecha sin ningún evento todavía (si ya hubiera uno de otra corrida, entrarían menos de 3 y la prueba confundiría)
+  const ocupadas = new Set((await call('/eventos')).c.map((e) => String(e.fecha_evento).slice(0, 10)))
+  let f = fechaLibre()
+  while (ocupadas.has(f)) f = fechaLibre()
   const rs = await Promise.all(Array.from({ length: 30 }, () => call('/eventos', { method: 'POST', body: ev({ fecha_evento: f }) })))
   const ok = rs.filter((r) => r.s === 201).length
   return { s: ok, nota: `entraron ${ok}` }

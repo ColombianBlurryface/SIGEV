@@ -11,6 +11,7 @@ const pool = require('../config/db');
 const { esUnidadesPorPersonaValida } = require('../config/reglasBebidas');
 const { MAXIMO_POR_CATEGORIA, formatearCantidad } = require('../config/limitesInventario');
 const { LIMITES } = require('../config/reglasEvento');
+const { ASISTENTES_POR_MESERO, calcularMeseros } = require('../config/reglasPersonal');
 
 // Redondea hacia arriba evitando errores de precisión decimal de JavaScript.
 // Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
@@ -384,6 +385,12 @@ const obtenerDetalleEvento = async (req, res) => {
         motivo: umbralSuperado
           ? `La cantidad de asistentes (${asistentes}) supera la capacidad propia (${UMBRAL_ALQUILER}).`
           : `La cantidad de asistentes (${asistentes}) está dentro de la capacidad propia (${UMBRAL_ALQUILER}).`
+      },
+      // Personal de servicio (HU-21 · RF-28, RN-04, RN-12): se calcula al consultar, no se guarda
+      logistica: {
+        meseros_requeridos: calcularMeseros(asistentes),
+        asistentes_por_mesero: ASISTENTES_POR_MESERO,
+        relacion_meseros: `1 por cada ${ASISTENTES_POR_MESERO} asistentes`
       },
       productos_calculados: resProductos.rows,
       servicios_adicionales: resServicios.rows

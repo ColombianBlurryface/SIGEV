@@ -85,6 +85,16 @@ Comprueba que responde en <http://localhost:3000/api/health>.
 
 ---
 
+## Pruebas unitarias
+
+```bash
+npm test
+```
+
+Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros de la HU-21. Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
+
+---
+
 ## Carga del catálogo y el inventario base
 
 [`src/db/carga-catalogo-mercado-colombiano.sql`](src/db/carga-catalogo-mercado-colombiano.sql) carga de una vez, en el SQL Editor de Supabase:
@@ -330,6 +340,13 @@ Datos del evento más:
 - `productos_calculados`: nombre, clasificación, porción, `cantidad_neta`, `cantidad_con_margen`, `unidad_entrega`, `precio_unitario`, `costo_estimado` y `componentes_menu`.
 - `servicios_adicionales`: `tipo`, `descripcion`, `cantidad` y `notas` (incluye el mobiliario).
 - En el mobiliario, además (HU-12): `producto_id`, `disponible_inventario` (stock actual), `unidades_propias` y `unidades_alquilar`. En los demás servicios esos campos llegan en `null`.
+- `logistica` (HU-21 · RF-28, RN-04, RN-12): el personal de servicio, calculado al consultar (no se guarda). Hoy solo trae los meseros:
+
+```json
+{ "meseros_requeridos": 3, "asistentes_por_mesero": 20, "relacion_meseros": "1 por cada 20 asistentes" }
+```
+
+  `meseros_requeridos` es el techo de asistentes ÷ 20: 45 → 2,25 → **3**; 60 → **3**; 12 → 0,6 → **1**; 0 → **0**. El cálculo vive en [`src/config/reglasPersonal.js`](src/config/reglasPersonal.js) y se prueba con `npm test` (los cuatro escenarios de la historia; los de 12 y 0 asistentes solo se pueden probar ahí porque un evento real exige 40 a 600, RN-01).
 - `aviso_alquiler`: `true` si el evento supera el umbral de asistentes (200 por defecto).
 - `estado_alquiler` (RN-03):
 

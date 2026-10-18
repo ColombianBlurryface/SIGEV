@@ -132,6 +132,18 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 
 ---
 
+## 11. Personal de servicio · meseros (HU-21)
+
+> Módulo nuevo que se construye **una historia a la vez**; esta sección crece con cada una.
+
+- [ ] 🤖 **1 mesero por cada 20 asistentes, redondeado hacia arriba (RN-04, RN-12).** 45 → 3; 60 → 3; 40 → 2; 41 → 3; 100 → 5; 300 → 15; 301 → 16; 600 → 30.
+- [ ] 🤖 Escenarios 3 y 4 de la historia (12 asistentes → 1; 0 → 0): solo a nivel de cálculo, porque un evento real exige 40 a 600 asistentes. Se prueban con `cd backend && npm test`.
+- [ ] 🤖👀 **Se muestra dentro del evento:** en el detalle, el recuadro «Meseros requeridos · 1 por cada 20 asistentes» con el número grande y la cuenta («45 ÷ 20 = 2,25 → se redondea hacia arriba a 3»; en un múltiplo exacto, «60 ÷ 20 = 3»).
+- [ ] 🤖👀 **También antes de guardar:** en el paso 1 la vista previa cambia en vivo al escribir los asistentes (45 → 3, 61 → 4) y muestra «—» con asistentes fuera de rango; el resumen del paso 3 dice «Meseros requeridos: 3 (1 por cada 20 asistentes)».
+- [ ] 🤖 La API trae `logistica.meseros_requeridos`, `asistentes_por_mesero` y `relacion_meseros`; el número de la pantalla coincide con el de la API.
+
+---
+
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)
 
 | Parte | Resultado |
