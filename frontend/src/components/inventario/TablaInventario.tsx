@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatearNumero } from '@/lib/formato'
-import { ESTILO_CATEGORIA_INVENTARIO, etiquetaCategoria, maximoCategoria } from '@/lib/inventario'
+import { esAlquilable, ESTILO_CATEGORIA_INVENTARIO, etiquetaCategoria, maximoCategoria } from '@/lib/inventario'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'
@@ -168,7 +168,10 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
                         className="h-9 w-32 text-sm"
                       >
                         <option value="propio">Propio</option>
-                        <option value="alquilado">Alquilado</option>
+                        {/* RN-17: solo se alquila mobiliario y vajilla (un elemento que ya estaba alquilado conserva su opción para poder cambiarlo) */}
+                        {(esAlquilable(elemento.categoria_inventario) || !elemento.es_propio) && (
+                          <option value="alquilado">Alquilado</option>
+                        )}
                       </Select>
                       <label htmlFor={`motivo-${elemento.id}`} className="sr-only">
                         Motivo del ajuste (opcional)

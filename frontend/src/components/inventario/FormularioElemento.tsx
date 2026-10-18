@@ -10,7 +10,7 @@ import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatearNumero } from '@/lib/formato'
-import { etiquetaCategoria, maximoCategoria } from '@/lib/inventario'
+import { esAlquilable, etiquetaCategoria, maximoCategoria } from '@/lib/inventario'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'
@@ -57,6 +57,13 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
     if (aviso) errores.cantidad = aviso
   }
   const maximo = categoria ? maximoCategoria(categoria as CategoriaInventario) : null
+  // RN-17: solo se alquila mobiliario y vajilla; en las bebidas no se ofrece «Alquilado»
+  const puedeAlquilar = !categoria || esAlquilable(categoria as CategoriaInventario)
+
+  function elegirCategoria(valor: string) {
+    setCategoria(valor)
+    if (!esAlquilable(valor as CategoriaInventario)) setEsPropio(true)
+  }
   const propsError = (campo: keyof Errores, id: string) => ({
     'aria-invalid': Boolean(errores[campo]),
     'aria-describedby': errores[campo] ? `${id}-error` : undefined,
@@ -112,7 +119,7 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
         <Select
           id="inventario-categoria"
           value={categoria}
-          onChange={(e) => setCategoria(e.target.value)}
+          onChange={(e) => elegirCategoria(e.target.value)}
           disabled={enviando}
           {...propsError('categoria', 'inventario-categoria')}
         >
@@ -143,9 +150,10 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
               type="button"
               aria-pressed={esPropio === valor}
               onClick={() => setEsPropio(valor)}
-              disabled={enviando}
+              disabled={enviando || (!valor && !puedeAlquilar)}
+              title={!valor && !puedeAlquilar ? 'Solo se alquila mobiliario y vajilla' : undefined}
               className={cn(
-                'h-9 flex-1 cursor-pointer rounded-lg text-[13.5px] font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
+                'h-9 flex-1 cursor-pointer rounded-lg text-[13.5px] font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40',
                 esPropio === valor ? 'bg-card text-foreground shadow-sm dark:bg-input' : 'text-subtle',
               )}
             >
@@ -154,7 +162,11 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
           ))}
         </div>
         <span className="text-[12.5px] text-muted-foreground">
-          {esPropio ? 'Pertenece a la organización.' : 'Se alquila a un proveedor: en un evento siempre cuenta como «a alquilar».'}
+          {!puedeAlquilar
+            ? 'Solo se alquila mobiliario y vajilla: las bebidas siempre son propias.'
+            : esPropio
+              ? 'Pertenece a la organización.'
+              : 'Se alquila a un proveedor: en un evento siempre cuenta como «a alquilar».'}
         </span>
       </div>
 

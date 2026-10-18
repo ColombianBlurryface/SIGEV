@@ -8,7 +8,7 @@ Pruebas automáticas que recorren los checklists de todas las historias contra l
 
 | Comando | Qué prueba | Duración |
 | --- | --- | --- |
-| `npm run regresion` | **72 pruebas** de los checklists: acceso, datos y asistentes, alimentos, bebidas, mobiliario y alquiler, servicios, consulta de eventos, inventario, adquisiciones, categorías, baja de dañados, catálogo y transversales | ~3 min |
+| `npm run regresion` | **105 pruebas** de los checklists: acceso, datos y asistentes, alimentos, bebidas, mobiliario y alquiler, servicios, consulta de eventos, inventario, adquisiciones, categorías, retiro de elementos, catálogo, las correcciones (unidades por persona, máximos de inventario, alquiler solo de mobiliario y vajilla) y transversales | ~3 min |
 | `npm run casos-limite` | **36 casos** de la API: datos inválidos, inyección SQL, acceso sin sesión y concurrencia | segundos |
 | `npm run todo` | Las dos | ~3 min |
 

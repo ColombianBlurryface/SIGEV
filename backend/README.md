@@ -343,6 +343,8 @@ Máximo de unidades **por elemento** según su categoría (RF-11, RF-13, RN-16).
 | `Bar/Bebidas` (Bebidas Generales) | 4.000 |
 | `Bebidas de Coctelería` (Licores para Cócteles) | 4.000 |
 
+**Alquiler (RF-14, RN-17):** solo se alquila mobiliario y vajilla. Marcar un elemento de bebidas como alquilado (`es_propio: false`) responde `400` al registrarlo y al cambiar su propiedad, y un elemento alquilado no puede pasar a una categoría de bebidas. En los eventos, lo que se pide de mobiliario (`servicios_adicionales[].cantidad` con `tipo: "mobiliario"`) debe ser un entero de 1 a 2.000 (`400` si no); lo que se alquila se calcula al consultar el evento y es, como máximo, lo requerido menos lo propio disponible. Si ya había bebidas alquiladas en la base, [`src/db/cor-08-bebidas-no-alquilables.sql`](src/db/cor-08-bebidas-no-alquilables.sql) las revisa y las pasa a propias.
+
 Las cantidades deben ser enteros: no se aceptan negativos, decimales ni texto. Una adquisición que haría pasar el máximo se rechaza y el mensaje dice cuánto se puede adquirir como mucho (por ejemplo, con 1.800 sillas y 2.000 de máximo: «como mucho se pueden adquirir 200»).
 
 #### `POST /api/inventario`
