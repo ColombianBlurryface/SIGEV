@@ -29,7 +29,11 @@ import type { BebidaAgregada } from '@/types/registro'
 
 type ModoConsumo = 'individual' | 'compartida'
 
-const COLUMNAS = 'grid grid-cols-[minmax(0,1fr)_92px_104px_80px_92px_104px_36px] items-center gap-2.5'
+// Tabla en pantallas medianas y grandes; en celular cada bebida es una tarjeta con sus datos etiquetados
+const COLUMNAS =
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1.5 md:grid-cols-[minmax(0,1fr)_92px_104px_80px_92px_104px_36px]'
+const CELDA =
+  'before:mr-1 before:text-muted-foreground before:content-[attr(data-etiqueta)] md:text-right md:before:content-none'
 
 const modoDe = (p: ProductoCatalogo): ModoConsumo => (p.tipo_calculo === 'botella_compartida' ? 'compartida' : 'individual')
 const porcionesPorBotella = (p: ProductoCatalogo) => Number(p.volumen_botella_ml) / Number(p.tamano_porcion_ml)
@@ -306,7 +310,7 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
 
       <Card className="overflow-hidden rounded-[14px]">
         <div
-          className={`${COLUMNAS} border-b border-border bg-muted px-[18px] py-3 text-[11.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase`}
+          className={`${COLUMNAS} hidden border-b border-border bg-muted px-[18px] py-3 text-[11.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase md:grid`}
         >
           <span>Bebida</span>
           <span>Tipo</span>
@@ -331,23 +335,32 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
                   <span className="truncate font-bold" title={bebida.producto.nombre}>
                     {bebida.producto.nombre}
                   </span>
-                  <span className="text-subtle">{modoDe(bebida.producto) === 'compartida' ? 'Compartida' : 'Individual'}</span>
-                  <span className="text-subtle">{describirConsumo(bebida)}</span>
-                  <span className="text-right">
-                    {formatearNumero(calculo.neto)} {unidadCorta}
-                  </span>
-                  <span className="text-right font-bold">
-                    {formatearNumero(calculo.conMargen)} {unidadCorta}
-                  </span>
-                  <span className={cn('text-right', Number(bebida.producto.precio_unitario) === 0 && 'text-muted-foreground')}>
-                    {Number(bebida.producto.precio_unitario) === 0 ? 'Sin valor' : formatearMoneda(calculo.costo)}
+                  <span className="col-span-2 row-start-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] md:contents md:text-sm">
+                    <span data-etiqueta="Tipo:" className={cn(CELDA, 'text-subtle md:text-left')}>
+                      {modoDe(bebida.producto) === 'compartida' ? 'Compartida' : 'Individual'}
+                    </span>
+                    <span data-etiqueta="Consumo:" className={cn(CELDA, 'text-subtle md:text-left')}>
+                      {describirConsumo(bebida)}
+                    </span>
+                    <span data-etiqueta="Neto:" className={CELDA}>
+                      {formatearNumero(calculo.neto)} {unidadCorta}
+                    </span>
+                    <span data-etiqueta="Con margen:" className={`${CELDA} font-bold`}>
+                      {formatearNumero(calculo.conMargen)} {unidadCorta}
+                    </span>
+                    <span
+                      data-etiqueta="Costo:"
+                      className={cn(CELDA, Number(bebida.producto.precio_unitario) === 0 && 'text-muted-foreground')}
+                    >
+                      {Number(bebida.producto.precio_unitario) === 0 ? 'Sin valor' : formatearMoneda(calculo.costo)}
+                    </span>
                   </span>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => onQuitar(bebida.producto.id)}
                     aria-label={`Quitar ${bebida.producto.nombre}`}
-                    className="size-8 text-muted-foreground"
+                    className="col-start-2 row-start-1 size-8 text-muted-foreground md:col-start-auto md:row-start-auto"
                   >
                     <Trash2 className="!size-4" />
                   </Button>

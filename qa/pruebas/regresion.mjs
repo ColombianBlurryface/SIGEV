@@ -36,7 +36,7 @@ if (!esEntornoDePruebas && process.env.QA_FORZAR !== 'si') {
   console.error(`No se ejecutan: la API (${host}) no parece un entorno de pruebas. Define QA_FORZAR=si solo si estás seguro.`)
   process.exit(2)
 }
-console.log(`QA contra: frontend ${URL} · API ${API} · usuario ${USUARIO}`)
+console.log(`QA contra: frontend ${URL} · API ${API} · usuario ${USUARIO} · pantalla ${process.env.QA_VIEWPORT || '1440x1000'}`)
 
 const R = []
 const erroresConsola = []
@@ -64,7 +64,9 @@ const api = async (ruta, op = {}) => {
 }
 
 const navegador = await chromium.launch()
-const ctx = await navegador.newContext({ viewport: { width: 1440, height: 1000 } })
+// Tamaño de pantalla: por defecto escritorio. En celular: QA_VIEWPORT=390x844 (el menú pasa a ser un cajón).
+const [ANCHO, ALTO] = (process.env.QA_VIEWPORT || '1440x1000').split('x').map(Number)
+const ctx = await navegador.newContext({ viewport: { width: ANCHO, height: ALTO }, hasTouch: ANCHO < 800, isMobile: ANCHO < 800 })
 const page = await ctx.newPage()
 page.setDefaultTimeout(9000)
 page.on('pageerror', (e) => erroresConsola.push('pageerror: ' + e.message))
@@ -76,6 +78,14 @@ const entrar = async (p, usuario = USUARIO, pw = clave) => {
   await p.fill('input[type=password]', pw)
   await p.keyboard.press('Enter')
 }
+// En pantallas pequeñas el menú lateral es un cajón: hay que abrirlo antes de usar sus opciones
+const abrirMenu = async () => {
+  if (ANCHO >= 1024) return
+  if (!(await page.getByRole('navigation', { name: 'Navegación principal' }).isVisible())) {
+    await page.getByRole('button', { name: 'Abrir menú' }).click()
+    await page.getByRole('navigation', { name: 'Navegación principal' }).waitFor()
+  }
+}
 const optVal = async (p, sel, texto) => p.locator(`${sel} option`).filter({ hasText: new RegExp(`^${texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$|\\()`) }).first().getAttribute('value')
 const nuevoEvento = async (nombre, asistentes, tipo = 'Boda') => {
   await page.goto(`${URL}/eventos/nuevo`)
@@ -86,12 +96,12 @@ const nuevoEvento = async (nombre, asistentes, tipo = 'Boda') => {
   await page.getByLabel('Número de asistentes').fill(String(asistentes))
 }
 const aRequerimientos = async () => {
-  await page.getByRole('button', { name: /Siguiente: Requerimientos/ }).click()
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
   await page.getByRole('tab', { name: /Alimentos/ }).waitFor()
 }
 const pestana = async (n) => page.getByRole('tab', { name: new RegExp(n) }).click()
 const guardarEvento = async () => {
-  await page.getByRole('button', { name: /Siguiente: Resumen/ }).click()
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
   await page.getByRole('button', { name: 'Guardar evento' }).click()
   await page.waitForURL('**/eventos?evento=*')
   return Number(new globalThis.URL(page.url()).searchParams.get('evento'))
@@ -165,7 +175,7 @@ await t('No existe registro público de usuarios', async () => {
 grupo = 'HU-01/07 Datos y asistentes'
 await t('Campos vacíos: no deja avanzar y muestra errores', async () => {
   await page.goto(`${URL}/eventos/nuevo`)
-  await page.getByRole('button', { name: /Siguiente: Requerimientos/ }).click()
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
   await page.waitForSelector('text=Escribe el nombre del evento')
   cierto(await page.getByText('Datos del evento').first().isVisible(), 'avanzó')
 })
@@ -173,7 +183,7 @@ for (const [n, texto] of [[39, 'El mínimo es 40'], [601, 'El máximo es 600']])
   await t(`${n} asistentes se rechaza («${texto}»)`, async () => {
     await nuevoEvento('Rango' + sufijo, n)
     await page.waitForSelector(`text=${texto}`)
-    igual(await page.getByRole('button', { name: /Siguiente: Requerimientos/ }).isDisabled(), true, 'botón deshabilitado:')
+    igual(await page.getByRole('button', { name: /^Siguiente/ }).isDisabled(), true, 'botón deshabilitado:')
     cierto(!(await page.getByRole('tab', { name: /Alimentos/ }).count()), 'avanzó con asistentes fuera de rango')
   })
 }
@@ -767,6 +777,7 @@ await t('Aviso (detalle): un evento de 150 asistentes con todo cubierto no muest
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {
+  await abrirMenu()
   await page.getByRole('link', { name: 'Catálogo' }).click(); await page.waitForURL('**/catalogo')
 })
 await t('Crear producto sin precio: vista previa y queda «Sin precio»', async () => {
@@ -904,16 +915,19 @@ await t('Las bebidas ya registradas siguen abriéndose sin error (catálogo y ev
 grupo = 'Transversales'
 await t('Modo oscuro se activa y se recuerda al recargar', async () => {
   await page.goto(`${URL}/eventos`)
+  await abrirMenu()
   await page.getByRole('switch', { name: /Modo oscuro/ }).click()
   cierto(await page.evaluate(() => document.documentElement.classList.contains('dark')), 'no activó')
-  await page.reload(); await page.waitForSelector('nav')
+  await page.reload(); await page.waitForSelector('nav', { state: 'attached' })
   cierto(await page.evaluate(() => document.documentElement.classList.contains('dark')), 'no se recordó')
+  await abrirMenu()
   await page.getByRole('switch', { name: /Modo oscuro/ }).click()
 })
 await t('Sin errores de JavaScript en consola durante todo el recorrido', async () => {
   cierto(erroresConsola.length === 0, erroresConsola.slice(0, 3).join(' | '))
 })
 await t('Cerrar sesión vuelve al login', async () => {
+  await abrirMenu()
   await page.getByRole('button', { name: 'Cerrar sesión' }).click(); await page.waitForURL('**/login**')
 })
 await t('Navegación a una ruta inexistente muestra la página 404', async () => {

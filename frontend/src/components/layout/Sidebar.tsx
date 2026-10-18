@@ -2,7 +2,7 @@
  * Menú lateral: logo, navegación entre módulos, interruptor de modo oscuro,
  * datos del usuario y botón para cerrar sesión.
  */
-import { Boxes, CalendarDays, CirclePlus, LogOut, Package, type LucideIcon } from 'lucide-react'
+import { Boxes, CalendarDays, CirclePlus, LogOut, Package, X, type LucideIcon } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { Logo } from '@/components/brand/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -25,75 +25,108 @@ const navegacion: ItemNavegacion[] = [
 
 const claseItem = 'flex h-11 items-center gap-3 rounded-[10px] px-3 text-[15px] font-semibold'
 
-export function Sidebar() {
+interface SidebarProps {
+  /** En pantallas pequeñas el menú es un cajón: indica si está abierto. En pantallas grandes siempre se ve. */
+  abierto: boolean
+  onCerrar: () => void
+}
+
+export function Sidebar({ abierto, onCerrar }: SidebarProps) {
   const { usuario, cerrarSesion } = useAuth()
 
   return (
-    <nav
-      aria-label="Navegación principal"
-      className="flex h-screen w-62 shrink-0 flex-col gap-8 border-r border-border bg-card px-4 pt-7 pb-6"
-    >
-      <Logo className="px-2" wordmarkClassName="text-foreground dark:text-panel-accent" />
-
-      <div className="flex flex-col gap-1">
-        <span className="px-3 pb-1.5 text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
-          Gestión
-        </span>
-        {navegacion.map(({ etiqueta, icono: Icono, ruta }) =>
-          ruta ? (
-            <NavLink
-              key={etiqueta}
-              to={ruta}
-              end
-              className={({ isActive }) =>
-                cn(
-                  claseItem,
-                  'outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
-                  isActive ? 'bg-accent text-accent-foreground' : 'text-subtle hover:bg-muted',
-                )
-              }
-            >
-              <Icono aria-hidden="true" className="size-5" />
-              {etiqueta}
-            </NavLink>
-          ) : (
-            <div key={etiqueta} aria-disabled="true" className={cn(claseItem, 'text-faint')}>
-              <Icono aria-hidden="true" className="size-5" />
-              <span className="flex-1 whitespace-nowrap">{etiqueta}</span>
-              <span className="rounded-full bg-chip px-1.5 py-0.5 text-[10.5px] font-bold text-subtle">Pronto</span>
-            </div>
-          ),
+    <>
+      {/* Fondo oscuro detrás del cajón (solo pantallas pequeñas); tocarlo cierra el menú */}
+      <div
+        aria-hidden="true"
+        onClick={onCerrar}
+        className={cn(
+          'fixed inset-0 z-40 bg-black/50 transition-opacity duration-200 lg:hidden',
+          abierto ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
-      </div>
+      />
 
-      <div className="mt-auto flex flex-col gap-2 border-t border-border pt-4">
-        <ThemeToggle variant="row" />
-        {usuario && (
-          <div className="flex items-center gap-3 px-2 py-1">
-            <span
-              aria-hidden="true"
-              className="flex size-10 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-foreground"
-            >
-              {iniciales(usuario.nombre_completo)}
-            </span>
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-bold">{usuario.nombre_completo}</span>
-              <span className="text-xs text-muted-foreground capitalize">{usuario.rol}</span>
-            </div>
-          </div>
+      <nav
+        aria-label="Navegación principal"
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex h-dvh w-62 shrink-0 flex-col gap-8 overflow-y-auto border-r border-border bg-card px-4 pt-7 pb-6 transition-[transform,visibility] duration-200',
+          'lg:static lg:z-auto lg:h-screen lg:translate-x-0 lg:overflow-visible lg:visible',
+          abierto ? 'translate-x-0' : 'invisible -translate-x-full',
         )}
-        <button
-          type="button"
-          onClick={cerrarSesion}
-          className={cn(
-            claseItem,
-            'cursor-pointer text-sm text-subtle outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring',
+      >
+        <div className="flex items-center justify-between">
+          <Logo className="px-2" wordmarkClassName="text-foreground dark:text-panel-accent" />
+          <button
+            type="button"
+            onClick={onCerrar}
+            aria-label="Cerrar menú"
+            className="flex size-10 cursor-pointer items-center justify-center rounded-[10px] text-subtle outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring lg:hidden"
+          >
+            <X aria-hidden="true" className="size-5" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <span className="px-3 pb-1.5 text-[11px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
+            Gestión
+          </span>
+          {navegacion.map(({ etiqueta, icono: Icono, ruta }) =>
+            ruta ? (
+              <NavLink
+                key={etiqueta}
+                to={ruta}
+                end
+                onClick={onCerrar}
+                className={({ isActive }) =>
+                  cn(
+                    claseItem,
+                    'outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
+                    isActive ? 'bg-accent text-accent-foreground' : 'text-subtle hover:bg-muted',
+                  )
+                }
+              >
+                <Icono aria-hidden="true" className="size-5" />
+                {etiqueta}
+              </NavLink>
+            ) : (
+              <div key={etiqueta} aria-disabled="true" className={cn(claseItem, 'text-faint')}>
+                <Icono aria-hidden="true" className="size-5" />
+                <span className="flex-1 whitespace-nowrap">{etiqueta}</span>
+                <span className="rounded-full bg-chip px-1.5 py-0.5 text-[10.5px] font-bold text-subtle">Pronto</span>
+              </div>
+            ),
           )}
-        >
-          <LogOut aria-hidden="true" className="size-5" />
-          Cerrar sesión
-        </button>
-      </div>
-    </nav>
+        </div>
+
+        <div className="mt-auto flex flex-col gap-2 border-t border-border pt-4">
+          <ThemeToggle variant="row" />
+          {usuario && (
+            <div className="flex items-center gap-3 px-2 py-1">
+              <span
+                aria-hidden="true"
+                className="flex size-10 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-foreground"
+              >
+                {iniciales(usuario.nombre_completo)}
+              </span>
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-bold">{usuario.nombre_completo}</span>
+                <span className="text-xs text-muted-foreground capitalize">{usuario.rol}</span>
+              </div>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={cerrarSesion}
+            className={cn(
+              claseItem,
+              'cursor-pointer text-sm text-subtle outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring',
+            )}
+          >
+            <LogOut aria-hidden="true" className="size-5" />
+            Cerrar sesión
+          </button>
+        </div>
+      </nav>
+    </>
   )
 }

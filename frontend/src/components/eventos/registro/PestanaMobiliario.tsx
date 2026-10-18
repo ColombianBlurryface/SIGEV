@@ -20,9 +20,14 @@ import { useInventario } from '@/hooks/useInventario'
 import { useUmbralAlquiler } from '@/hooks/useUmbralAlquiler'
 import { repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { formatearNumero } from '@/lib/formato'
+import { cn } from '@/lib/utils'
 import type { MobiliarioAgregado } from '@/types/registro'
 
-const COLUMNAS = 'grid grid-cols-[minmax(0,1fr)_84px_84px_96px_36px] items-center gap-2.5'
+// Tabla en pantallas medianas y grandes; en celular cada elemento es una tarjeta con sus datos etiquetados
+const COLUMNAS =
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1.5 md:grid-cols-[minmax(0,1fr)_84px_84px_96px_36px]'
+const CELDA =
+  'before:mr-1 before:text-muted-foreground before:content-[attr(data-etiqueta)] md:text-right md:before:content-none'
 
 // Valor del <select> para lo que no está en el inventario
 const OPCION_OTRO = 'otro'
@@ -179,10 +184,10 @@ export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar 
         </form>
       </Card>
 
-      <Card className="overflow-x-auto rounded-[14px]">
-        <div className="min-w-[560px]">
+      <Card className="overflow-hidden rounded-[14px]">
+        <div>
           <div
-            className={`${COLUMNAS} border-b border-border bg-muted px-[18px] py-3 text-[11.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase`}
+            className={`${COLUMNAS} hidden border-b border-border bg-muted px-[18px] py-3 text-[11.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase md:grid`}
           >
             <span>Elemento</span>
             <span className="text-right">Requerido</span>
@@ -213,17 +218,26 @@ export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar 
                       {item.referencia && ` · ${item.referencia}`}
                     </span>
                   </span>
-                  <span className="text-right font-bold">{formatearNumero(item.cantidad)}</span>
-                  <span className="text-right text-subtle">{formatearNumero(reparto.propias)}</span>
-                  <span className={reparto.alquilar > 0 ? 'text-right font-bold text-warning-foreground' : 'text-right text-subtle'}>
-                    {formatearNumero(reparto.alquilar)}
+                  <span className="col-span-2 row-start-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] md:contents md:text-sm">
+                    <span data-etiqueta="Requerido:" className={`${CELDA} font-bold`}>
+                      {formatearNumero(item.cantidad)}
+                    </span>
+                    <span data-etiqueta="Propias:" className={`${CELDA} text-subtle`}>
+                      {formatearNumero(reparto.propias)}
+                    </span>
+                    <span
+                      data-etiqueta="A alquilar:"
+                      className={cn(CELDA, reparto.alquilar > 0 ? 'font-bold text-warning-foreground' : 'text-subtle')}
+                    >
+                      {formatearNumero(reparto.alquilar)}
+                    </span>
                   </span>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => onQuitar(item.id)}
                     aria-label={`Quitar ${item.elemento}`}
-                    className="size-8 text-muted-foreground"
+                    className="col-start-2 row-start-1 size-8 text-muted-foreground md:col-start-auto md:row-start-auto"
                   >
                     <Trash2 className="!size-4" />
                   </Button>
