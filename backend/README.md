@@ -317,6 +317,17 @@ Las unidades propias se calculan con el inventario **al momento de consultar**, 
 
 Categorías válidas (conjunto cerrado, HU-09 / RF-10): `Mobiliario`, `Bar/Bebidas` (bebidas de consumo directo), `Bebidas de Coctelería` (licores fuertes) y `Vajilla`. Esos son los valores de la API y de la base; en la pantalla se muestran como «Bebidas Generales» y «Licores para Cócteles» (ver el README del frontend). Hay que escribirlas exactamente así. Cada elemento tiene una sola categoría y el filtro `?categoria=` devuelve solo esa (HU-13). Cualquier otro valor, como `Decoración`, `null` o un texto en minúsculas, responde `400`: `La categoría «Decoración» no es válida. Debe ser una de: ...`. La base de datos también lo rechaza con una restricción, y hay un índice sobre la categoría porque se filtra muy seguido.
 
+Máximo de unidades **por elemento** según su categoría (RF-11, RF-13, RN-16). Se aplica al registrar, al actualizar la cantidad, al adquirir y al cambiar la categoría de un elemento; pasarse responde `400` con el motivo. Los límites viven en [`src/config/limitesInventario.js`](src/config/limitesInventario.js) y en `frontend/src/lib/inventario.ts`.
+
+| Categoría | Máximo por elemento |
+| --- | --- |
+| `Mobiliario` | 2.000 |
+| `Vajilla` | 6.000 |
+| `Bar/Bebidas` (Bebidas Generales) | 4.000 |
+| `Bebidas de Coctelería` (Licores para Cócteles) | 4.000 |
+
+Las cantidades deben ser enteros: no se aceptan negativos, decimales ni texto. Una adquisición que haría pasar el máximo se rechaza y el mensaje dice cuánto se puede adquirir como mucho (por ejemplo, con 1.800 sillas y 2.000 de máximo: «como mucho se pueden adquirir 200»).
+
 #### `POST /api/inventario`
 
 ```json
@@ -371,7 +382,7 @@ Fija la cantidad disponible. La diferencia con la cantidad anterior queda como u
 { "cantidad": 50, "notas": "Reposición para temporada de bodas" }
 ```
 
-Suma la cantidad al elemento (entero de 1 a 100.000) y registra un movimiento de tipo `adquisicion`. Solo aplica a elementos que ya existen. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
+Suma la cantidad al elemento (entero mayor o igual a 1) y registra un movimiento de tipo `adquisicion`. La cantidad no puede dejar el elemento por encima del **máximo de su categoría** (ver abajo): si se pasa, responde `400` y dice cuántas unidades se pueden adquirir como mucho. Solo aplica a elementos que ya existen. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
 
 #### `POST /api/inventario/:id/baja`
 

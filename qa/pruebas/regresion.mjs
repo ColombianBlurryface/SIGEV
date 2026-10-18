@@ -573,6 +573,108 @@ await t('El historial muestra «Baja por daño» con la nota por defecto', async
   cierto(m.some((x) => x.notas === 'Baja por daño' && x.cantidad === -6), 'sin nota por defecto')
 })
 
+
+// ============ Corrección: máximos de inventario por categoría (HU-08, HU-11 · RF-11, RF-13, RN-16) ============
+grupo = 'Cor. máximos de inventario (RN-16)'
+const MAXIMOS = { 'Mobiliario': 2000, 'Vajilla': 6000, 'Bar/Bebidas': 4000, 'Bebidas de Coctelería': 4000 }
+const crearElemento = (nombre, categoria, cantidad) => api('/inventario', { method: 'POST', body: { nombre, categoria_inventario: categoria, cantidad_propia: cantidad } })
+const adquirir = (id, cantidad) => api(`/inventario/${id}/adquisiciones`, { method: 'POST', body: { cantidad } })
+
+await t('Registrar (API): el valor exacto del máximo se acepta y uno más se rechaza, en las 4 categorías', async () => {
+  for (const [cat, max] of Object.entries(MAXIMOS)) {
+    const justo = await crearElemento(`Máx ${cat} ${max}` + sufijo, cat, max)
+    igual(justo.estado, 201, `${cat} ${max}:`)
+    const pasado = await crearElemento(`Máx ${cat} ${max + 1}` + sufijo, cat, max + 1)
+    igual(pasado.estado, 400, `${cat} ${max + 1}:`)
+    cierto(String(pasado.cuerpo.detalle).includes('máximo'), `mensaje ${cat}: ` + pasado.cuerpo.detalle)
+  }
+})
+await t('Registrar (API): 1 millón de sillas se rechaza; negativos, decimales y texto también', async () => {
+  igual((await crearElemento('Millón de sillas' + sufijo, 'Mobiliario', 1000000)).estado, 400, '1.000.000:')
+  igual((await crearElemento('Negativo' + sufijo, 'Mobiliario', -1)).estado, 400, '-1:')
+  igual((await crearElemento('Decimal' + sufijo, 'Mobiliario', 1.5)).estado, 400, '1.5:')
+  igual((await crearElemento('Texto' + sufijo, 'Mobiliario', '10')).estado, 400, 'texto:')
+  cierto(!(await api('/inventario')).cuerpo.some((e) => /Millón de sillas|Negativo|Decimal|Texto/.test(e.nombre) && e.nombre.endsWith(sufijo)), 'se guardó un elemento inválido')
+})
+await t('Actualizar cantidad (API): el máximo exacto se acepta y uno más se rechaza; no cambia nada', async () => {
+  const e = (await crearElemento('Actualizar máx' + sufijo, 'Mobiliario', 10)).cuerpo
+  const fijar = (cantidad) => api(`/inventario/${e.id}/cantidad`, { method: 'PATCH', body: { cantidad_propia: cantidad } })
+  igual((await fijar(2001)).estado, 400, '2001:')
+  igual((await fijar(100000)).estado, 400, '100000:')
+  igual((await api('/inventario')).cuerpo.find((x) => x.id === e.id).cantidad_propia, 10, 'tras rechazo:')
+  igual((await fijar(2000)).estado, 200, '2000:')
+  igual((await fijar(-1)).estado, 400, '-1:'); igual((await fijar(1.5)).estado, 400, '1.5:')
+})
+await t('Adquirir (API): un exceso se rechaza y el mensaje dice cuánto se puede adquirir como mucho', async () => {
+  const e = (await crearElemento('Adquirir máx' + sufijo, 'Mobiliario', 1800)).cuerpo
+  const r = await adquirir(e.id, 201)
+  igual(r.estado, 400); cierto(String(r.cuerpo.detalle).includes('como mucho se pueden adquirir 200'), 'mensaje: ' + r.cuerpo.detalle)
+  igual((await api('/inventario')).cuerpo.find((x) => x.id === e.id).cantidad_propia, 1800, 'tras rechazo:')
+  igual((await adquirir(e.id, 200)).estado, 201, 'justo 200:')
+  const lleno = await adquirir(e.id, 1)
+  igual(lleno.estado, 400, 'ya en el máximo:'); cierto(String(lleno.cuerpo.detalle).includes('ya tiene el máximo'), 'mensaje: ' + lleno.cuerpo.detalle)
+  igual((await adquirir(e.id, 0)).estado, 400, '0:'); igual((await adquirir(e.id, -5)).estado, 400, '-5:'); igual((await adquirir(e.id, 1.5)).estado, 400, '1.5:')
+  igual((await adquirir(e.id, 100000)).estado, 400, '100000:')
+})
+await t('Adquirir (API): el tope depende de la categoría (vajilla admite más que mobiliario)', async () => {
+  const v = (await crearElemento('Adquirir vajilla' + sufijo, 'Vajilla', 5000)).cuerpo
+  igual((await adquirir(v.id, 1001)).estado, 400, '1001:')
+  igual((await adquirir(v.id, 1000)).estado, 201, '1000:')
+  igual((await api('/inventario')).cuerpo.find((x) => x.id === v.id).cantidad_propia, 6000, 'total:')
+})
+await t('Adquirir (API): dos adquisiciones simultáneas no pueden pasar juntas del máximo', async () => {
+  const e = (await crearElemento('Adquirir carrera' + sufijo, 'Mobiliario', 1900)).cuerpo
+  const rs = await Promise.all([adquirir(e.id, 80), adquirir(e.id, 80), adquirir(e.id, 80)])
+  const ok = rs.filter((r) => r.estado === 201).length
+  igual(ok, 1, 'aceptadas:')
+  cierto((await api('/inventario')).cuerpo.find((x) => x.id === e.id).cantidad_propia <= 2000, 'pasó del máximo')
+})
+await t('Cambiar categoría (API): no cabe en una categoría con menor máximo', async () => {
+  const e = (await crearElemento('Cambio categoría' + sufijo, 'Vajilla', 5000)).cuerpo
+  const mover = (cat) => api(`/inventario/${e.id}/categoria`, { method: 'PATCH', body: { categoria_inventario: cat } })
+  igual((await mover('Mobiliario')).estado, 400, 'a Mobiliario:')
+  igual((await mover('Bar/Bebidas')).estado, 400, 'a Bebidas Generales:')
+  igual((await api('/inventario')).cuerpo.find((x) => x.id === e.id).categoria_inventario, 'Vajilla', 'sigue en Vajilla:')
+  await api(`/inventario/${e.id}/cantidad`, { method: 'PATCH', body: { cantidad_propia: 1500 } })
+  igual((await mover('Mobiliario')).estado, 200, 'con 1500:')
+})
+await t('Registrar (UI): el máximo se avisa al escribirlo y 2001 no se registra; 2000 sí', async () => {
+  await page.goto(`${URL}/inventario`)
+  await page.getByLabel('Nombre del elemento').fill('UI máx' + sufijo)
+  await page.selectOption('#inventario-categoria', 'Mobiliario')
+  await page.getByLabel('Cantidad disponible').fill('2001')
+  await page.waitForSelector('text=El máximo por elemento de Mobiliario es 2.000 unidades')
+  await page.getByRole('button', { name: 'Registrar elemento' }).click()
+  await page.waitForSelector('text=El máximo por elemento de Mobiliario es 2.000 unidades')
+  cierto(!(await api('/inventario')).cuerpo.some((e) => e.nombre === 'UI máx' + sufijo), 'se registró con 2001')
+  await page.getByLabel('Cantidad disponible').fill('2000')
+  await page.getByRole('button', { name: 'Registrar elemento' }).click()
+  await page.waitForSelector('text=registrado como propio')
+})
+await t('Actualizar cantidad (UI): 2001 se rechaza con mensaje claro; 2000 se guarda', async () => {
+  await page.reload()
+  await page.getByRole('button', { name: 'Actualizar cantidad de UI máx' + sufijo }).click()
+  const id = (await api('/inventario')).cuerpo.find((e) => e.nombre === 'UI máx' + sufijo).id
+  await page.fill(`#cantidad-${id}`, '2001'); await page.getByRole('button', { name: 'Guardar cambios' }).click()
+  await page.waitForSelector('text=El máximo por elemento de Mobiliario es 2.000 unidades')
+  await page.fill(`#cantidad-${id}`, '1999'); await page.getByRole('button', { name: 'Guardar cambios' }).click()
+  await page.waitForTimeout(700)
+  igual((await api('/inventario')).cuerpo.find((e) => e.id === id).cantidad_propia, 1999, 'cantidad:')
+})
+await t('Adquisición (UI): el aviso dice cuánto se puede adquirir; 2 se rechaza con 1 de margen y 1 se acepta', async () => {
+  await page.reload()
+  await page.getByRole('button', { name: 'Adquisición', exact: true }).click()
+  const id = (await api('/inventario')).cuerpo.find((e) => e.nombre === 'UI máx' + sufijo).id
+  await page.selectOption('#adquisicion-elemento', String(id))
+  await page.waitForSelector('text=Como mucho puedes adquirir 1 unidades más')
+  await page.fill('#adquisicion-cantidad', '2')
+  await page.waitForSelector('text=Como mucho se pueden adquirir 1')
+  await page.getByRole('button', { name: 'Registrar adquisición', exact: true }).click()
+  igual((await api('/inventario')).cuerpo.find((e) => e.id === id).cantidad_propia, 1999, 'no debía cambiar:')
+  await page.fill('#adquisicion-cantidad', '1'); await page.getByRole('button', { name: 'Registrar adquisición', exact: true }).click()
+  await page.waitForSelector('text=Ahora hay 2.000 disponibles')
+})
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {
