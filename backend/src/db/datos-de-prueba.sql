@@ -113,7 +113,10 @@ WITH aplicar AS (
       AND NOT EXISTS (SELECT 1 FROM movimientos_inventario m WHERE m.producto_id = c.id AND m.notas LIKE 'Datos de prueba%')
 ),
 actualizado AS (
-    UPDATE catalogo_productos c SET cantidad_propia = a.cantidad
+    -- La carpa del ejemplo es un elemento ALQUILADO (así se ve la etiqueta y el reparto propio/alquiler en los eventos)
+    UPDATE catalogo_productos c
+    SET cantidad_propia = a.cantidad,
+        es_propio = CASE WHEN c.nombre = 'Carpa' THEN false ELSE c.es_propio END
     FROM aplicar a WHERE c.id = a.id
     RETURNING c.id, c.cantidad_propia
 )
