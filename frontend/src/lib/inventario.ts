@@ -29,3 +29,13 @@ export const ESTILO_CATEGORIA_INVENTARIO: Record<CategoriaInventario, ConfigCate
   'Bebidas de Coctelería': { icono: Martini, clases: 'bg-servicios-soft text-servicios' },
   Vajilla: { icono: UtensilsCrossed, clases: 'bg-alimentos-soft text-alimentos' },
 }
+
+// RN-16: máximo de unidades por elemento según su categoría. Debe coincidir con backend/src/config/limitesInventario.js
+export const MAXIMO_POR_CATEGORIA: Record<CategoriaInventario, number> = {
+  Mobiliario: 2000,
+  Vajilla: 6000,
+  'Bar/Bebidas': 4000,
+  'Bebidas de Coctelería': 4000,
+}
+
+export const maximoCategoria = (categoria: CategoriaInventario) => MAXIMO_POR_CATEGORIA[categoria]

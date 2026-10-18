@@ -38,7 +38,6 @@ const DEFECTOS_CONOCIDOS = new Set([
   'Evento con id no numérico',
   'Porción por persona negativa en un producto',
   'Filtro de catálogo con valor inválido',
-  'Cantidad inicial de inventario gigantesca (10^12)',
 ])
 
 const corrida = Date.now().toString(36).slice(-5)

@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatearNumero } from '@/lib/formato'
-import { ESTILO_CATEGORIA_INVENTARIO, etiquetaCategoria } from '@/lib/inventario'
+import { ESTILO_CATEGORIA_INVENTARIO, etiquetaCategoria, maximoCategoria } from '@/lib/inventario'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'
@@ -56,6 +56,12 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
     const cantidad = Number(valor)
     if (valor.trim() === '' || !Number.isInteger(cantidad) || cantidad < 0) {
       setError('La cantidad debe ser un número entero mayor o igual a 0.')
+      return
+    }
+    // RN-16: no se puede pasar del máximo de la categoría del elemento
+    const maximo = maximoCategoria(elemento.categoria_inventario)
+    if (cantidad > maximo) {
+      setError(`El máximo por elemento de ${etiquetaCategoria(elemento.categoria_inventario)} es ${formatearNumero(maximo)} unidades.`)
       return
     }
 
@@ -141,8 +147,10 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
                         id={`cantidad-${elemento.id}`}
                         type="number"
                         min={0}
+                        max={maximoCategoria(elemento.categoria_inventario)}
                         step={1}
                         inputMode="numeric"
+                        title={`Máximo ${formatearNumero(maximoCategoria(elemento.categoria_inventario))} unidades`}
                         value={valor}
                         onChange={(e) => setValor(e.target.value)}
                         disabled={guardando}
