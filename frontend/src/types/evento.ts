@@ -102,8 +102,17 @@ export interface EstadoAlquiler {
   motivo: string
 }
 
+// HU-21 (RF-28, RN-04, RN-12): personal de servicio. Se calcula al consultar el evento, no se guarda.
+export interface LogisticaEvento {
+  meseros_requeridos: number
+  asistentes_por_mesero: number
+  relacion_meseros: string
+}
+
 export interface EventoDetalle extends EventoListado {
   estado_alquiler: EstadoAlquiler
+  // HU-21: personal de servicio calculado por el backend al consultar el evento
+  logistica: LogisticaEvento
   productos_calculados: ProductoCalculado[]
   servicios_adicionales: ServicioAdicional[]
 }

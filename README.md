@@ -41,6 +41,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-09 · clasificación | Clasificar el inventario en cuatro categorías cerradas: Mobiliario, Bebidas Generales, Licores para Cócteles y Vajilla. No existe «Decoración». Se filtra por categoría y se puede cambiar la categoría de un elemento (por ahora solo en la API). | `/inventario` |
 | HU-10 | Retirar unidades del inventario desde una sección aparte, «Retiro de elementos» (cubre daño, pérdida o devolución): se elige el elemento y se escribe solo la «Cantidad a retirar»; el sistema hace la resta, muestra el nuevo total y no deja retirar más de lo disponible. | `/inventario` · pestaña «Retiro» |
 | HU-12 | Diferenciar lo propio de lo alquilado: cada elemento del inventario se registra como **Propio** o **Alquilado** (con filtro por propiedad), cada línea de mobiliario del evento dice cuántas unidades son propias y cuántas se alquilan, y se avisa de alquiler cuando el evento supera el umbral de asistentes (200 por defecto). | `/inventario`, nuevo evento · paso 2 y 3, detalle del evento |
+| HU-21 | **Calcular los meseros** de cada evento: 1 por cada 20 asistentes, siempre redondeado hacia arriba (45 asistentes → 2,25 → 3 meseros; 60 → 3). Se muestra dentro del detalle del evento con la cuenta explicada, y también en la vista previa y en el resumen del registro. Es la primera historia del módulo de **personal de servicio**, que se construye una historia a la vez. | Detalle del evento, nuevo evento · paso 1 y 3 |
 
 Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
 
@@ -65,6 +66,10 @@ Resumen, búsqueda, filtros por estado y, a la derecha, el detalle del evento se
 En el detalle, el mobiliario se compara con el **inventario actual**: si después se compran más unidades, lo que hay que alquilar baja solo.
 
 ![Detalle de un evento con mobiliario propio y alquilado](docs/imagenes/eventos-alquiler.png)
+
+**Meseros (HU-21).** El detalle muestra cuántos meseros hacen falta: 1 por cada 20 asistentes, siempre redondeado hacia arriba, con la cuenta a la vista. También se ve en la vista previa del paso 1 (cambia mientras se escriben los asistentes) y en el resumen del paso 3.
+
+![Meseros requeridos en el detalle de un evento](docs/imagenes/meseros-detalle.png)
 
 ### Registrar un evento (HU-01 a HU-05 y HU-07)
 
@@ -170,7 +175,7 @@ SIGEV/
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
 │   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-├── qa/                      Pruebas automáticas (105 de regresión y 36 casos límite)
+├── qa/                      Pruebas automáticas (117 de regresión y 76 casos límite)
 ├── docs/
 │   ├── imagenes/            Capturas usadas en la documentación
 │   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
@@ -238,7 +243,7 @@ Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del m
 
 ## Pruebas y entorno de QA
 
-El proyecto trae pruebas automáticas en [`qa/`](qa) (105 pruebas de los checklists y 36 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+El proyecto trae pruebas automáticas en [`qa/`](qa) (117 pruebas de los checklists y 76 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
 
 - [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
 - [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.
@@ -270,6 +275,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 - La **duración** de un evento va de **3 a 8 horas** y la **fecha** debe ser **hoy o posterior** (nunca el pasado) y no pasar de 5 años adelante; no puede haber más de **3 eventos activos el mismo día** (RN-13, RN-14).
 - Cada **servicio adicional** (DJ, música en vivo, sonido, iluminación, entretenimiento) admite de **1 a 5 unidades** y sus **horas no pueden superar la duración del evento**: no hay «DJ ilimitados» ni 300 horas de DJ en un evento de 3. Si se acorta la duración del evento después de agregar servicios, el sistema avisa y no deja continuar hasta corregirlo (RN-18).
 - Con **más de 300 asistentes** el evento es de modalidad **buffet** (RN-02).
+- Los **meseros** requeridos son **1 por cada 20 asistentes**, siempre **redondeados hacia arriba** para que nunca falte personal (RN-04, RN-12). Se calculan al consultar el evento, no se guardan, así que siempre coinciden con los asistentes. Es la primera historia del módulo de personal de servicio (HU-21); las siguientes se suman una por una.
 - Con **más de 200 asistentes** (valor por defecto del umbral) se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).
 - **Solo se alquila mobiliario y vajilla** (RN-17): las bebidas (generales y licores) siempre son propias y no ofrecen la opción «Alquilado». Lo que se alquila en un evento es, como máximo, lo requerido menos lo propio disponible, y si no falta nada no se alquila nada. La cantidad que se pide de mobiliario es un entero de 1 a 2.000 (RF-14).
 - El mobiliario de un evento se compara con el stock actual del inventario: lo que alcanza es **propio** y el resto se **alquila**. Lo que no está en el inventario, o está marcado como **alquilado**, se alquila completo (HU-12).

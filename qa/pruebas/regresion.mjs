@@ -87,9 +87,17 @@ const abrirMenu = async () => {
   }
 }
 const optVal = async (p, sel, texto) => p.locator(`${sel} option`).filter({ hasText: new RegExp(`^${texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$|\\()`) }).first().getAttribute('value')
-// Cada evento de prueba va en una fecha distinta y lejana (2028-2030): así las pruebas no chocan con el tope de
+// Cada evento de prueba va en una fecha al azar entre 1 mes y 4 años adelante (dentro del tope de 5 años): así las pruebas no chocan con el tope de
 // eventos por día ni con lo que dejaron corridas anteriores.
-const fechaLibre = () => new Date(Date.UTC(2028, 0, 1) + Math.floor(Math.random() * 1000) * 86400000).toISOString().slice(0, 10)
+// Días que ya tienen eventos de corridas anteriores (se cargan después de iniciar sesión): se evitan, porque con 3 el día se llena
+let DIAS_OCUPADOS = new Set()
+const fechaLibre = () => {
+  for (let i = 0; i < 50; i++) {
+    const f = new Date(Date.now() + (30 + Math.floor(Math.random() * 1500)) * 86400000).toISOString().slice(0, 10)
+    if (!DIAS_OCUPADOS.has(f)) return f
+  }
+  return new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+}
 const nuevoEvento = async (nombre, asistentes, tipo = 'Boda') => {
   await page.goto(`${URL}/eventos/nuevo`)
   await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', nombre)
@@ -132,6 +140,7 @@ await t('Login correcto lleva a Eventos', async () => {
   await page.waitForURL('**/eventos**')
   const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usuario: USUARIO, password: clave }) })
   TOKEN = (await r.json()).token
+  DIAS_OCUPADOS = new Set((await api('/eventos')).cuerpo.map((e) => String(e.fecha_evento).slice(0, 10)))
   cierto(TOKEN, 'sin token del login')
 })
 await t('API protegida: sin token las rutas privadas responden 401', async () => {
@@ -941,6 +950,66 @@ await t('El detalle del evento muestra las unidades y las horas del servicio', a
   igual(sonido.cantidad, 5, 'unidades sonido:')
   await page.waitForSelector('text=Sonido cinco')
   cierto(/5 und/.test(await page.locator('body').innerText()), 'el detalle no muestra «5 und»')
+})
+
+
+
+// ============ HU-21 · Calcular meseros (RF-28, RN-04, RN-12) ============
+grupo = 'HU-21 Meseros (RF-28 / RN-04 / RN-12)'
+const eventoMeseros = (asistentes, extra = {}) => api('/eventos', { method: 'POST', body: { nombre_evento: `Meseros ${asistentes}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes, ...extra } })
+const meserosEsperados = (a) => Math.floor((a + 19) / 20) // techo de a / 20 con enteros
+
+await t('API: 1 mesero por cada 20 asistentes, redondeado hacia arriba (45 → 3, 60 → 3, 40 → 2, 41 → 3, 600 → 30)', async () => {
+  for (const [asistentes, esperado] of [[40, 2], [41, 3], [45, 3], [60, 3], [100, 5], [300, 15], [301, 16], [599, 30], [600, 30]]) {
+    const r = await eventoMeseros(asistentes)
+    igual(r.estado, 201, `${asistentes} asistentes:`)
+    const d = (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo
+    igual(d.logistica.meseros_requeridos, esperado, `${asistentes} asistentes:`)
+    igual(esperado, meserosEsperados(asistentes), `control del esperado para ${asistentes}:`)
+  }
+})
+await t('API: el detalle trae la relación y el dato queda dentro del evento (logistica)', async () => {
+  const r = await eventoMeseros(45)
+  const d = (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo
+  igual(d.logistica.asistentes_por_mesero, 20, 'asistentes por mesero:')
+  igual(d.logistica.relacion_meseros, '1 por cada 20 asistentes', 'relación:')
+  igual(d.logistica.meseros_requeridos, 3, 'meseros:')
+})
+await t('Registro (paso 1): la vista previa calcula los meseros en vivo (45 → 3) y no muestra nada con asistentes fuera de rango', async () => {
+  await nuevoEvento('Vista meseros' + sufijo, 45)
+  const fila = page.locator('dl > div').filter({ hasText: /^Meseros/ })
+  await page.waitForFunction(() => [...document.querySelectorAll('dl > div')].some((d) => /^Meseros/.test(d.textContent) && /3$/.test(d.textContent.trim())))
+  cierto(/3/.test(await fila.innerText()), 'no muestra 3 con 45 asistentes')
+  await page.getByLabel('Número de asistentes').fill('61')
+  await page.waitForFunction(() => [...document.querySelectorAll('dl > div')].some((d) => /^Meseros/.test(d.textContent) && /4$/.test(d.textContent.trim())))
+  await page.getByLabel('Número de asistentes').fill('30')
+  await page.waitForFunction(() => [...document.querySelectorAll('dl > div')].some((d) => /^Meseros/.test(d.textContent) && /—$/.test(d.textContent.trim())))
+  await page.getByLabel('Número de asistentes').fill('45')
+})
+await t('Registro (paso 3): el resumen muestra los meseros requeridos antes de guardar', async () => {
+  await aRequerimientos()
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.getByRole('button', { name: 'Guardar evento' }).waitFor()
+  const txt = await page.locator('main').innerText()
+  cierto(/Meseros requeridos\s*3 \(1 por cada 20 asistentes\)/.test(txt.replace(/\n/g, ' ')), 'el resumen no muestra «Meseros requeridos 3 (1 por cada 20 asistentes)»')
+})
+await t('Detalle del evento: muestra los meseros con la cuenta (45 ÷ 20 = 2,25 → redondea hacia arriba a 3) y coincide con la API', async () => {
+  await page.getByRole('button', { name: 'Guardar evento' }).click()
+  await page.waitForURL('**/eventos?evento=*')
+  const id = Number(new globalThis.URL(page.url()).searchParams.get('evento'))
+  await page.waitForSelector('[aria-label="Meseros requeridos"]')
+  igual((await page.locator('[aria-label="Meseros requeridos"]').innerText()).trim(), '3', 'valor en pantalla:')
+  igual((await api(`/eventos/${id}`)).cuerpo.logistica.meseros_requeridos, 3, 'valor de la API:')
+  const txt = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
+  cierto(txt.includes('45 ÷ 20 = 2,25 → se redondea hacia arriba a 3'), 'sin la cuenta explicada')
+  cierto(txt.includes('Meseros requeridos · 1 por cada 20 asistentes'), 'sin la relación')
+})
+await t('Detalle del evento: un múltiplo exacto (60 asistentes) muestra 3 sin redondeo', async () => {
+  const r = await eventoMeseros(60)
+  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
+  await page.waitForSelector('[aria-label="Meseros requeridos"]')
+  igual((await page.locator('[aria-label="Meseros requeridos"]').innerText()).trim(), '3')
+  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('60 ÷ 20 = 3'), 'sin «60 ÷ 20 = 3»')
 })
 
 

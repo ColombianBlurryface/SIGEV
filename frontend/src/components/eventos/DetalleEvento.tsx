@@ -4,7 +4,7 @@
  * propio y cuánto hay que alquilar según el inventario actual (HU-12). Las bebidas generales
  * y las de coctelería se muestran en secciones separadas, cada una con su costo (HU-13).
  */
-import { RotateCw } from 'lucide-react'
+import { RotateCw, Users } from 'lucide-react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -22,6 +22,7 @@ import {
   type TipoBebida,
 } from '@/lib/categorias'
 import { capitalizar, formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
+import { calcularMeseros, explicarMeseros, relacionMeseros } from '@/lib/reglasPersonal'
 import { describirHoras } from '@/lib/reglasServicios'
 import { cn } from '@/lib/utils'
 import type { EventoDetalle, EventoListado } from '@/types/evento'
@@ -155,6 +156,20 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
           </div>
         ))}
       </dl>
+
+      {/* HU-21: personal de servicio. Se calcula con los asistentes (1 por cada 20, redondeado hacia arriba) */}
+      <div className="flex items-center gap-3.5 rounded-[10px] bg-accent px-3.5 py-3 text-accent-foreground">
+        <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-card">
+          <Users className="size-5" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-xs font-semibold">Meseros requeridos · {relacionMeseros}</span>
+          <span className="text-[12.5px] opacity-80">{explicarMeseros(evento.asistentes)}</span>
+        </div>
+        <span aria-label="Meseros requeridos" className="font-display text-3xl leading-none font-extrabold">
+          {formatearNumero(calcularMeseros(evento.asistentes))}
+        </span>
+      </div>
 
       <div className="flex flex-col gap-1">
         <span className="text-xs font-bold text-muted-foreground">Observaciones</span>
