@@ -11,7 +11,7 @@ import { describirReparto, repartirMobiliario, totalAlquilar } from '@/lib/alqui
 import { calcularProducto } from '@/lib/calculos'
 import { CATEGORIAS, etiquetaServicio, TIPOS_BEBIDA, type ConfigCategoria } from '@/lib/categorias'
 import { formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
-import { calcularMeseros, relacionMeseros } from '@/lib/reglasPersonal'
+import { calcularCocineros, calcularMeseros, reglaCocina, relacionMeseros } from '@/lib/reglasPersonal'
 import { describirHoras } from '@/lib/reglasServicios'
 import { validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ import type { ProductoCatalogo } from '@/types/catalogo'
 import type { RequerimientosEvento } from '@/types/registro'
 import type { Paso } from './PasosRegistro'
 import { calcularTotales } from './totales'
+import { etiquetaServicioComida } from '@/types/evento'
 
 interface LineaResumen {
   id: number
@@ -103,11 +104,19 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
 
   const datos = [
     { etiqueta: 'Tipo', valor: valores.tipo },
+    { etiqueta: 'Servicio de comida', valor: etiquetaServicioComida(valores.servicio) },
     { etiqueta: 'Fecha', valor: formatearFecha(valores.fecha) },
     { etiqueta: 'Duración', valor: `${formatearNumero(valores.duracion)} horas` },
     { etiqueta: 'Asistentes', valor: formatearNumero(cantidad) },
     { etiqueta: 'Modalidad', valor: asistentes.esBuffet ? 'Buffet' : 'Servida a la mesa' },
     { etiqueta: 'Meseros requeridos', valor: `${formatearNumero(calcularMeseros(cantidad))} (${relacionMeseros})` },
+    {
+      etiqueta: 'Cocineros requeridos',
+      valor:
+        valores.servicio === 'cena'
+          ? `${formatearNumero(calcularCocineros(cantidad, valores.servicio))} (${reglaCocina})`
+          : 'No aplica (solo las cenas)',
+    },
     { etiqueta: 'Estado inicial', valor: 'Planificación' },
   ]
 

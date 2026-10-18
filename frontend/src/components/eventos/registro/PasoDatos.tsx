@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { fechaMaxima, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
-import { TIPOS_EVENTO } from '@/types/evento'
+import { TIPOS_EVENTO, TIPOS_SERVICIO_COMIDA } from '@/types/evento'
 import { hoyIso } from '@/lib/formato'
 interface PasoDatosProps {
   valores: ValoresEvento
@@ -54,6 +54,29 @@ export function PasoDatos({ valores, errores, mostrarVacio, avisoDuracion, onCam
             {TIPOS_EVENTO.map((tipo) => (
               <option key={tipo} value={tipo}>
                 {tipo}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+
+        <FormField
+          id="servicio"
+          label="Servicio de comida"
+          error={errores.servicio}
+          hint="La cena calcula también el personal de cocina."
+        >
+          <Select
+            id="servicio"
+            value={valores.servicio}
+            onChange={(e) => onCambio('servicio', e.target.value)}
+            {...propsError('servicio')}
+          >
+            <option value="" disabled>
+              Selecciona un servicio
+            </option>
+            {TIPOS_SERVICIO_COMIDA.map(({ valor, etiqueta }) => (
+              <option key={valor} value={valor}>
+                {etiqueta}
               </option>
             ))}
           </Select>

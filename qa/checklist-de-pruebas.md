@@ -142,6 +142,17 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **También antes de guardar:** en el paso 1 la vista previa cambia en vivo al escribir los asistentes (45 → 3, 61 → 4) y muestra «—» con asistentes fuera de rango; el resumen del paso 3 dice «Meseros requeridos: 3 (1 por cada 20 asistentes)».
 - [ ] 🤖 La API trae `logistica.meseros_requeridos`, `asistentes_por_mesero` y `relacion_meseros`; el número de la pantalla coincide con el de la API.
 
+### HU-22 · Cocineros para una cena (RF-29, RN-05)
+
+- [ ] 🤖👀 **El evento tiene «Servicio de comida»** (Cena, Cóctel, Buffet, Refrigerio, Otro) y es obligatorio: sin elegirlo, el paso 1 no deja avanzar («Selecciona el servicio de comida»).
+- [ ] 🤖 **Cena → (asistentes ÷ 30, hacia arriba) × 2, mínimo 2.** 90 → **6** (ejemplo de verificación); 40 → 4; 41 → 4; 61 → 6; 300 → 20; 301 → 22; 600 → 40. Nunca menos de 2.
+- [ ] 🤖 Escenario de 10 asistentes → 2 (el mínimo): solo a nivel de cálculo, porque un evento real exige 40 a 600 asistentes (`cd backend && npm test`).
+- [ ] 🤖 **Cóctel con 100 asistentes → 0**; buffet, refrigerio y otro → 0; los meseros no cambian.
+- [ ] 🤖👀 **Detalle del evento:** en una cena, recuadro «Cocineros requeridos · 2 cocineros por cada 30 asistentes (mínimo 2)» con el número y la cuenta («90 ÷ 30 = 3 × 2 = 6 cocineros»; con redondeo: «40 ÷ 30 = 1,33 → 2 grupos × 2 = 4 cocineros»). En un cóctel, «Cocineros: no aplica».
+- [ ] 🤖👀 **Antes de guardar:** la vista previa del paso 1 muestra los cocineros en vivo (cena 90 → 6; cóctel → «No aplica»; asistentes fuera de rango → «—») y el resumen del paso 3 los incluye.
+- [ ] 🤖 La API exige `tipo_servicio` (de la lista) y devuelve `logistica.cocineros_requeridos` y `regla_cocina`.
+- [ ] 👀 En los eventos de ejemplo: Boda, Quinceañero y Gala son cenas (cocineros 12, 8 y 6); el congreso es buffet; el cumpleaños, cóctel; la reunión, refrigerio.
+
 ---
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)

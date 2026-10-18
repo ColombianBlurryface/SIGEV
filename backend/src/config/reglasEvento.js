@@ -5,6 +5,9 @@
  */
 const TIPOS_EVENTO = ['Boda', 'Corporativo', 'Quinceañero', 'Gala', 'Cumpleaños', 'Otro'];
 
+// Tipo de servicio de comida (HU-22): valores guardados. Los nombres y la regla de cocineros están en reglasPersonal.js
+const TIPOS_SERVICIO_COMIDA = ['cena', 'coctel', 'buffet', 'refrigerio', 'otro'];
+
 // Tipos de servicio adicional (además de 'mobiliario', que tiene su propia lógica con el inventario)
 const ETIQUETA_SERVICIO = {
   dj: 'DJ',
@@ -32,4 +35,4 @@ const LIMITES = {
   gramosPorPersonaMax: 1000    // un alimento no pasa de 1 kg por persona
 };
 
-module.exports = { TIPOS_EVENTO, TIPOS_SERVICIO, ETIQUETA_SERVICIO, LIMITES };
+module.exports = { TIPOS_EVENTO, TIPOS_SERVICIO_COMIDA, TIPOS_SERVICIO, ETIQUETA_SERVICIO, LIMITES };

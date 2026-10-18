@@ -42,6 +42,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-10 | Retirar unidades del inventario desde una sección aparte, «Retiro de elementos» (cubre daño, pérdida o devolución): se elige el elemento y se escribe solo la «Cantidad a retirar»; el sistema hace la resta, muestra el nuevo total y no deja retirar más de lo disponible. | `/inventario` · pestaña «Retiro» |
 | HU-12 | Diferenciar lo propio de lo alquilado: cada elemento del inventario se registra como **Propio** o **Alquilado** (con filtro por propiedad), cada línea de mobiliario del evento dice cuántas unidades son propias y cuántas se alquilan, y se avisa de alquiler cuando el evento supera el umbral de asistentes (200 por defecto). | `/inventario`, nuevo evento · paso 2 y 3, detalle del evento |
 | HU-21 | **Calcular los meseros** de cada evento: 1 por cada 20 asistentes, siempre redondeado hacia arriba (45 asistentes → 2,25 → 3 meseros; 60 → 3). Se muestra dentro del detalle del evento con la cuenta explicada, y también en la vista previa y en el resumen del registro. Es la primera historia del módulo de **personal de servicio**, que se construye una historia a la vez. | Detalle del evento, nuevo evento · paso 1 y 3 |
+| HU-22 | **Calcular el personal de cocina de una cena:** (asistentes ÷ 30, redondeado hacia arriba) × 2 cocineros, con mínimo de 2 (90 asistentes → 3 × 2 = 6; 40 → 2 × 2 = 4; 10 → 2). Solo aplica a los eventos cuyo **servicio de comida** es una cena; en un cóctel, buffet, refrigerio u otro, no aplica. Para eso el evento tiene un campo nuevo, **«Servicio de comida»** (Cena, Cóctel, Buffet, Refrigerio, Otro), obligatorio al registrarlo. Se muestra en el detalle con la cuenta explicada, en la vista previa y en el resumen del registro. | Nuevo evento · paso 1 y 3, detalle del evento |
 
 Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
 
@@ -175,7 +176,7 @@ SIGEV/
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
 │   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-├── qa/                      Pruebas automáticas (117 de regresión y 76 casos límite)
+├── qa/                      Pruebas automáticas (126 de regresión y 82 casos límite)
 ├── docs/
 │   ├── imagenes/            Capturas usadas en la documentación
 │   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
@@ -243,7 +244,7 @@ Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del m
 
 ## Pruebas y entorno de QA
 
-El proyecto trae pruebas automáticas en [`qa/`](qa) (117 pruebas de los checklists y 76 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+El proyecto trae pruebas automáticas en [`qa/`](qa) (126 pruebas de los checklists y 82 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
 
 - [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
 - [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.
@@ -276,6 +277,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 - Cada **servicio adicional** (DJ, música en vivo, sonido, iluminación, entretenimiento) admite de **1 a 5 unidades** y sus **horas no pueden superar la duración del evento**: no hay «DJ ilimitados» ni 300 horas de DJ en un evento de 3. Si se acorta la duración del evento después de agregar servicios, el sistema avisa y no deja continuar hasta corregirlo (RN-18).
 - Con **más de 300 asistentes** el evento es de modalidad **buffet** (RN-02).
 - Los **meseros** requeridos son **1 por cada 20 asistentes**, siempre **redondeados hacia arriba** para que nunca falte personal (RN-04, RN-12). Se calculan al consultar el evento, no se guardan, así que siempre coinciden con los asistentes. Es la primera historia del módulo de personal de servicio (HU-21); las siguientes se suman una por una.
+- Los **cocineros** de una **cena** son **(asistentes ÷ 30, redondeado hacia arriba) × 2, con mínimo de 2**: 90 asistentes → 6 cocineros. Solo aplica si el servicio de comida del evento es una cena; en los demás servicios son 0 (RN-05, HU-22). También se calcula al consultar el evento, sin guardarse.
 - Con **más de 200 asistentes** (valor por defecto del umbral) se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).
 - **Solo se alquila mobiliario y vajilla** (RN-17): las bebidas (generales y licores) siempre son propias y no ofrecen la opción «Alquilado». Lo que se alquila en un evento es, como máximo, lo requerido menos lo propio disponible, y si no falta nada no se alquila nada. La cantidad que se pide de mobiliario es un entero de 1 a 2.000 (RF-14).
 - El mobiliario de un evento se compara con el stock actual del inventario: lo que alcanza es **propio** y el resto se **alquila**. Lo que no está en el inventario, o está marcado como **alquilado**, se alquila completo (HU-12).

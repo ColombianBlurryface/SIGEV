@@ -7,7 +7,7 @@
  * elemento sea mobiliario, las porciones según el tipo de cálculo) lo revisa el controlador.
  */
 const { MAXIMO_POR_CATEGORIA, formatearCantidad } = require('../config/limitesInventario');
-const { TIPOS_EVENTO, TIPOS_SERVICIO, ETIQUETA_SERVICIO, LIMITES } = require('../config/reglasEvento');
+const { TIPOS_EVENTO, TIPOS_SERVICIO_COMIDA, TIPOS_SERVICIO, ETIQUETA_SERVICIO, LIMITES } = require('../config/reglasEvento');
 
 const rechazar = (res, detalle, error = 'Datos inválidos') => res.status(400).json({ error, detalle });
 
@@ -19,7 +19,7 @@ const sumarAnios = (iso, anios) => `${Number(iso.slice(0, 4)) + anios}${iso.slic
 const validarCreacionEvento = (req, res, next) => {
   if (!esObjeto(req.body)) return rechazar(res, 'El cuerpo de la petición debe ser un objeto JSON.');
   const {
-    nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales,
+    nombre_evento, fecha_evento, tipo_evento, tipo_servicio, duracion_horas, asistentes, observaciones_generales,
     productos, servicios_adicionales
   } = req.body;
 
@@ -36,6 +36,11 @@ const validarCreacionEvento = (req, res, next) => {
   // El tipo es uno de la lista que ofrece la pantalla
   if (!TIPOS_EVENTO.includes(tipo_evento)) {
     return rechazar(res, `El tipo de evento debe ser uno de: ${TIPOS_EVENTO.join(', ')}.`);
+  }
+
+  // El tipo de servicio de comida (HU-22) es obligatorio y uno de la lista: de él depende el cálculo de cocineros (RN-05)
+  if (!TIPOS_SERVICIO_COMIDA.includes(tipo_servicio)) {
+    return rechazar(res, `El tipo de servicio debe ser uno de: ${TIPOS_SERVICIO_COMIDA.join(', ')}.`, 'Campos requeridos faltantes');
   }
 
   // La fecha debe ser un día real con formato AAAA-MM-DD («2026-13-45» o «mañana» no lo son)

@@ -13,7 +13,8 @@
 --
 -- CÓMO USARLO
 --   · Ejecutar en el SQL Editor de Supabase, primero en QA y luego en producción. Solo agrega datos; lo único
---     estructural es una columna opcional (`horas`, de los servicios) que se crea si falta (RN-18).
+--     estructural son dos columnas opcionales que se crean si faltan (`horas` de los servicios, RN-18, y `tipo_servicio`
+--     del evento, HU-22).
 --   · Se puede ejecutar varias veces: no duplica nada y NO toca los elementos que ya tienen unidades
 --     (no pisa inventario real).
 --   · Para quitarlo todo cuando empiecen los datos reales: backend/src/db/datos-de-prueba-quitar.sql
@@ -26,6 +27,12 @@ BEGIN;
 
 -- 0) Las horas de cada servicio (RN-18): columna opcional; si ya existe, no hace nada ni toca lo que hay
 ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);
+
+-- 0b) El tipo de servicio de comida de cada evento (HU-22): cena, cóctel, buffet, refrigerio u otro. Columna opcional.
+ALTER TABLE eventos ADD COLUMN IF NOT EXISTS tipo_servicio VARCHAR(20);
+ALTER TABLE eventos DROP CONSTRAINT IF EXISTS chk_tipo_servicio;
+ALTER TABLE eventos ADD CONSTRAINT chk_tipo_servicio
+    CHECK (tipo_servicio IS NULL OR tipo_servicio IN ('cena', 'coctel', 'buffet', 'refrigerio', 'otro'));
 
 -- 1) Productos del catálogo que usan los eventos de ejemplo. Solo se crean si faltan: nunca se
 --    cambia un producto (ni su precio) que ya exista.
@@ -156,17 +163,28 @@ INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, cantidad_result
 SELECT id, 'baja', -6, cantidad_propia, 'Datos de prueba: retiro de ejemplo (rotura)' FROM retirada;
 
 -- 5) Eventos de ejemplo
-INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, estado, observaciones_generales)
-SELECT v.nombre, CURRENT_DATE + v.dias, v.tipo, v.horas, v.asistentes, v.estado::estado_evento_enum, v.observaciones
+INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, tipo_servicio, duracion_horas, asistentes, estado, observaciones_generales)
+SELECT v.nombre, CURRENT_DATE + v.dias, v.tipo, v.servicio, v.horas, v.asistentes, v.estado::estado_evento_enum, v.observaciones
 FROM (VALUES
-    ('[Demo] Boda Martínez & Gómez',        30, 'Boda',        6, 250, 'planificacion', 'Datos de prueba. Ceremonia y recepción en el mismo salón. Menú sin mariscos. Supera el umbral de alquiler.'),
-    ('[Demo] Congreso Médico Andino',       45, 'Corporativo', 8, 480, 'confirmado',    'Datos de prueba. Más de 300 asistentes: modalidad buffet.'),
-    ('[Demo] Quince años de Valentina',     60, 'Quinceañero', 7, 120, 'planificacion', 'Datos de prueba. Vals a las 9 pm.'),
-    ('[Demo] Cena de gala Fundación Luz',   75, 'Gala',        4,  90, 'planificacion', 'Datos de prueba. Cena servida; el mobiliario alcanza con el inventario propio.'),
-    ('[Demo] Cumpleaños de Camila',        -20, 'Cumpleaños', 5,  80, 'realizado',     'Datos de prueba. Evento ya realizado (para probar el filtro de estado).'),
-    ('[Demo] Reunión de directivos',        20, 'Corporativo',3,  45, 'cancelado',     'Datos de prueba. Evento cancelado (para probar el filtro de estado).')
-) AS v(nombre, dias, tipo, horas, asistentes, estado, observaciones)
+    ('[Demo] Boda Martínez & Gómez',        30, 'Boda',        'cena',       6, 250, 'planificacion', 'Datos de prueba. Ceremonia y recepción en el mismo salón. Menú sin mariscos. Supera el umbral de alquiler.'),
+    ('[Demo] Congreso Médico Andino',       45, 'Corporativo', 'buffet',     8, 480, 'confirmado',    'Datos de prueba. Más de 300 asistentes: modalidad buffet.'),
+    ('[Demo] Quince años de Valentina',     60, 'Quinceañero', 'cena',       7, 120, 'planificacion', 'Datos de prueba. Vals a las 9 pm.'),
+    ('[Demo] Cena de gala Fundación Luz',   75, 'Gala',        'cena',       4,  90, 'planificacion', 'Datos de prueba. Cena servida; el mobiliario alcanza con el inventario propio.'),
+    ('[Demo] Cumpleaños de Camila',        -20, 'Cumpleaños', 'coctel',     5,  80, 'realizado',     'Datos de prueba. Evento ya realizado (para probar el filtro de estado).'),
+    ('[Demo] Reunión de directivos',        20, 'Corporativo', 'refrigerio', 3,  45, 'cancelado',     'Datos de prueba. Evento cancelado (para probar el filtro de estado).')
+) AS v(nombre, dias, tipo, servicio, horas, asistentes, estado, observaciones)
 WHERE NOT EXISTS (SELECT 1 FROM eventos e WHERE e.nombre_evento = v.nombre);
+
+-- Si los eventos de ejemplo ya estaban cargados (de antes de existir el tipo de servicio), se les pone el suyo
+UPDATE eventos SET tipo_servicio = CASE nombre_evento
+    WHEN '[Demo] Boda Martínez & Gómez' THEN 'cena'
+    WHEN '[Demo] Congreso Médico Andino' THEN 'buffet'
+    WHEN '[Demo] Quince años de Valentina' THEN 'cena'
+    WHEN '[Demo] Cena de gala Fundación Luz' THEN 'cena'
+    WHEN '[Demo] Cumpleaños de Camila' THEN 'coctel'
+    WHEN '[Demo] Reunión de directivos' THEN 'refrigerio'
+END
+WHERE nombre_evento LIKE '[Demo] %' AND tipo_servicio IS NULL;
 
 -- 6) Alimentos y bebidas de cada evento, con las mismas fórmulas del backend:
 --      · por porción (gramos): asistentes × porción; desde 1.000 g se pasa a kg; +10 % con 2 decimales
