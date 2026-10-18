@@ -39,7 +39,9 @@ solo_prueba AS (
 revertidos AS (
     UPDATE catalogo_productos c
     SET cantidad_propia = c.cantidad_propia - sp.total,
-        cantidad_danada = GREATEST(c.cantidad_danada - sp.retirado, 0)
+        cantidad_danada = GREATEST(c.cantidad_danada - sp.retirado, 0),
+        -- la carpa del ejemplo se había marcado como alquilada: vuelve a ser propia, como en el inventario base
+        es_propio = CASE WHEN c.nombre = 'Carpa' THEN true ELSE c.es_propio END
     FROM solo_prueba sp WHERE c.id = sp.producto_id
     RETURNING c.id
 )
