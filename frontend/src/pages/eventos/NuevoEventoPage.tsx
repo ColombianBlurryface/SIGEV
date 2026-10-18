@@ -18,6 +18,7 @@ import { validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvent
 import { ApiError } from '@/services/api'
 import { eventosService } from '@/services/eventosService'
 import { REQUERIMIENTOS_VACIOS, type RequerimientosEvento } from '@/types/registro'
+import { useEventos } from '@/hooks/useEventos'
 
 const VALORES_INICIALES: ValoresEvento = {
   nombre: '',
@@ -42,16 +43,24 @@ const TITULOS: Record<Paso, { titulo: string; descripcion: string }> = {
 
 export function NuevoEventoPage() {
   const navigate = useNavigate()
+  const { eventos } = useEventos()
   const [paso, setPaso] = useState<Paso>(1)
   const [valores, setValores] = useState<ValoresEvento>(VALORES_INICIALES)
   const [requerimientos, setRequerimientos] = useState<RequerimientosEvento>(REQUERIMIENTOS_VACIOS)
   const [intentoAvanzar, setIntentoAvanzar] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [errorServidor, setErrorServidor] = useState<string | null>(null)
-
+// Cuenta cuántos eventos hay ya registrados en esa misma fecha
+  const eventosEnFecha = valores.fecha
+    ? eventos.filter((e) => e.fecha_evento.slice(0, 10) === valores.fecha && e.estado !== 'cancelado').length
+    : 0
   // Los errores del paso 1 solo se muestran después del primer intento de avanzar,
   // para no llenar de rojo el formulario mientras el usuario apenas empieza a escribir.
-  const errores: ErroresEvento = intentoAvanzar ? validarEvento(valores) : {}
+  const errores: ErroresEvento = intentoAvanzar
+    ? validarEvento(valores, eventosEnFecha)
+    : eventosEnFecha >= 3
+      ? { fecha: 'Ya no se puede registrar más. Esta fecha ya tiene el límite máximo de 3 eventos programados.' }
+      : {}
   const asistentes = validarAsistentes(valores.asistentes)
   const asistentesFueraDeRango = asistentes.estado === 'bajo' || asistentes.estado === 'alto'
 
@@ -66,7 +75,7 @@ export function NuevoEventoPage() {
 
   function avanzarDesdeDatos() {
     setIntentoAvanzar(true)
-    if (Object.keys(validarEvento(valores)).length === 0) irAPaso(2)
+    if (Object.keys(validarEvento(valores, eventosEnFecha)).length === 0) irAPaso(2)
   }
 
   // Envía todo el evento en una sola petición: datos, productos (alimentos y bebidas)
