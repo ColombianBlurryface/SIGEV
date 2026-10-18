@@ -12,9 +12,10 @@ import { PasosRegistro, type Paso } from '@/components/eventos/registro/PasosReg
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
-import { TIPO_MOBILIARIO } from '@/lib/categorias'
+import { etiquetaServicio, TIPO_MOBILIARIO } from '@/lib/categorias'
 import { formatearFecha, formatearNumero } from '@/lib/formato'
-import { validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
+import { MAX_EVENTOS_POR_FECHA, validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
+import { describirHoras, serviciosFueraDeDuracion } from '@/lib/reglasServicios'
 import { ApiError } from '@/services/api'
 import { eventosService } from '@/services/eventosService'
 import { REQUERIMIENTOS_VACIOS, type RequerimientosEvento } from '@/types/registro'
@@ -58,9 +59,18 @@ export function NuevoEventoPage() {
   // para no llenar de rojo el formulario mientras el usuario apenas empieza a escribir.
   const errores: ErroresEvento = intentoAvanzar
     ? validarEvento(valores, eventosEnFecha)
-    : eventosEnFecha >= 3
-      ? { fecha: 'Ya no se puede registrar más. Esta fecha ya tiene el límite máximo de 3 eventos programados.' }
+    : eventosEnFecha >= MAX_EVENTOS_POR_FECHA
+      ? { fecha: `Ya no se puede registrar más. Esta fecha ya tiene el límite máximo de ${MAX_EVENTOS_POR_FECHA} eventos programados.` }
       : {}
+  // RN-18: las horas de cada servicio no pueden superar la duración del evento. Si se acorta el evento después de
+  // agregar servicios, el sistema avisa (paso 1 y paso 2) y no deja continuar hasta corregirlo.
+  const duracionNumero = valores.duracion.trim() === '' ? Number.NaN : Number(valores.duracion)
+  const serviciosPasados = serviciosFueraDeDuracion(requerimientos.servicios, duracionNumero)
+  const descripcionPasados = serviciosPasados.map((s) => `${etiquetaServicio(s.tipo)} (${describirHoras(s.horas)})`).join(', ')
+  const avisoDuracion =
+    serviciosPasados.length > 0
+      ? `Con ${formatearNumero(duracionNumero)} h de duración, estos servicios ya no caben: ${descripcionPasados}. Corrige sus horas en el paso 2.`
+      : null
   const asistentes = validarAsistentes(valores.asistentes)
   const asistentesFueraDeRango = asistentes.estado === 'bajo' || asistentes.estado === 'alto'
 
@@ -76,6 +86,17 @@ export function NuevoEventoPage() {
   function avanzarDesdeDatos() {
     setIntentoAvanzar(true)
     if (Object.keys(validarEvento(valores, eventosEnFecha)).length === 0) irAPaso(2)
+  }
+
+  // Pasa al resumen solo si todos los servicios caben en la duración del evento (RN-18)
+  function irAlResumen() {
+    if (serviciosPasados.length > 0) {
+      setErrorServidor(
+        `No se puede continuar: ${descripcionPasados} dura${serviciosPasados.length === 1 ? '' : 'n'} más que el evento (${formatearNumero(duracionNumero)} h). Corrige las horas o quita el servicio.`,
+      )
+      return
+    }
+    irAPaso(3)
   }
 
   // Envía todo el evento en una sola petición: datos, productos (alimentos y bebidas)
@@ -115,7 +136,8 @@ export function NuevoEventoPage() {
           ...requerimientos.servicios.map((s) => ({
             tipo: s.tipo,
             descripcion: s.descripcion,
-            cantidad: s.cantidad ?? undefined,
+            cantidad: s.cantidad,
+            horas: s.horas,
             notas: s.notas || undefined,
           })),
         ],
@@ -157,11 +179,18 @@ export function NuevoEventoPage() {
       {errorServidor && <Alert variant="error">{errorServidor}</Alert>}
 
       {paso === 1 && (
-        <PasoDatos valores={valores} errores={errores} mostrarVacio={intentoAvanzar} onCambio={cambiarValor} />
+        <PasoDatos
+          valores={valores}
+          errores={errores}
+          mostrarVacio={intentoAvanzar}
+          avisoDuracion={avisoDuracion}
+          onCambio={cambiarValor}
+        />
       )}
       {paso === 2 && (
         <PasoRequerimientos
           asistentes={asistentes.cantidad ?? 0}
+          duracionHoras={duracionNumero}
           requerimientos={requerimientos}
           onCambio={setRequerimientos}
         />
@@ -195,7 +224,7 @@ export function NuevoEventoPage() {
             </Button>
           )}
           {paso === 2 && (
-            <Button size="lg" onClick={() => irAPaso(3)}>
+            <Button size="lg" onClick={irAlResumen}>
               <span>
                 Siguiente<span className="hidden sm:inline">: Resumen</span>
               </span>

@@ -113,6 +113,10 @@ CREATE TABLE IF NOT EXISTS requerimientos_adicionales (
 ALTER TABLE requerimientos_adicionales
 ADD COLUMN IF NOT EXISTS producto_id INTEGER REFERENCES catalogo_productos(id) ON DELETE SET NULL;
 
+-- RN-18 (HU-05, RF-06): cada servicio adicional tiene sus unidades (columna cantidad, de 1 a 5) y sus horas, que no
+-- pueden superar la duración del evento. Solo se agrega una columna opcional: no cambia ni borra nada de lo que ya hay.
+ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);
+
 -- 6. Usuarios del sistema (login únicamente; el alta se hace con src/scripts/crearUsuario.js)
 --    La contraseña se guarda como hash bcrypt, nunca en texto plano.
 CREATE TABLE IF NOT EXISTS usuarios (

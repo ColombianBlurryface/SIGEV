@@ -74,7 +74,7 @@ y entrar a `https://sigev-qa.vercel.app` con un usuario de QA.
 git fetch origin && git push vercel origin/develop:refs/heads/develop
 ```
 
-Eso sube todo lo que se haya mezclado a `develop` de una vez (no hace falta hacerlo PR por PR). Los cambios de base de datos **no** se aplican solos: cada PR que los traiga lo dice y el SQL se ejecuta a mano en el SQL Editor de Supabase de QA (ver la sección «Para ejecutar en Supabase» del PR).
+Eso sube todo lo que se haya mezclado a `develop` de una vez (no hace falta hacerlo PR por PR). El script `scripts/desplegar-qa.sh` lo hace con verificación, y la lista de SQL pendiente de QA y de producción está en `docs/despliegue-y-sql-pendiente.md`. Los cambios de base de datos **no** se aplican solos: cada PR que los traiga lo dice y el SQL se ejecuta a mano en el SQL Editor de Supabase de QA (ver la sección «Para ejecutar en Supabase» del PR).
 
 **Empezar QA de cero** (borra eventos e inventario, conserva usuarios y catálogo, y deja datos de prueba con precios). Confirma que el Reference ID del Supabase empiece por `uvvluaho` y ejecuta, en este orden, en el SQL Editor:
 

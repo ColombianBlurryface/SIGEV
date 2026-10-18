@@ -134,6 +134,8 @@ Hoy Vercel está conectado a una **copia** del repositorio en la cuenta personal
 git fetch origin && git switch espejo-vercel && git merge origin/main && git push vercel espejo-vercel:main
 ```
 
+> **Atajo:** `scripts/desplegar-qa.sh` y `scripts/desplegar-produccion.sh` hacen estos pasos con verificación, y `docs/despliegue-y-sql-pendiente.md` lleva la lista de SQL pendiente de cada entorno.
+
 Para **QA** (el proyecto que sigue la rama `develop` de la copia) es igual de manual, y más corto porque no hace falta la rama `espejo-vercel`:
 
 ```bash

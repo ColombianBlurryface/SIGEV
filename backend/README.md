@@ -286,7 +286,7 @@ Activa o desactiva un producto. Un producto desactivado deja de ofrecerse en los
   "servicios_adicionales": [
     { "tipo": "mobiliario", "descripcion": "Sillas Tiffany doradas", "cantidad": 250, "producto_id": 10 },
     { "tipo": "mobiliario", "descripcion": "Carpa 10 × 20 m", "cantidad": 1 },
-    { "tipo": "dj", "descripcion": "DJ para recepción y fiesta", "cantidad": 6 }
+    { "tipo": "dj", "descripcion": "DJ para recepción y fiesta", "cantidad": 1, "horas": 6 }
   ]
 }
 ```
@@ -301,7 +301,23 @@ Activa o desactiva un producto. Un producto desactivado deja de ofrecerse en los
 
 Respuesta `201`: `{ "mensaje": "...", "evento": { "id": 4, "estado": "planificacion", ... } }`
 
-Validaciones (`400`): campos obligatorios, asistentes entre 40 y 600, duración mayor a 0 y `producto_id` de mobiliario existente y sin repetir.
+**Validaciones.** Todo lo que no cumple responde `400` con el motivo y **no se guarda nada** (antes varios casos daban un error 500). Las reglas viven en `src/config/reglasEvento.js` y se revisan en `src/middlewares/validarEvento.js`:
+
+| Dato | Regla |
+| --- | --- |
+| Nombre | Texto con contenido, máximo 150 caracteres |
+| Tipo de evento | Uno de: Boda, Corporativo, Quinceañero, Gala, Cumpleaños, Otro |
+| Fecha | Día real `AAAA-MM-DD`, desde hoy (hora de Colombia) hasta 5 años adelante, y máximo 3 eventos activos por día (RN-13) |
+| Duración | Número de 3 a 8 horas (RN-14); un texto como «4 horas» no vale |
+| Asistentes | Entero de 40 a 600 (RN-01) |
+| Observaciones | Texto de máximo 2.000 caracteres |
+| Productos | Lista de máximo 100; `producto_id` entero que exista y esté activo; sin repetir un producto; alimentos de 1 a 1.000 g por persona; bebidas individuales de 1 a 10 unidades por persona (RN-15); el valor unitario, mayor o igual a 0 |
+| Mobiliario | Entero de 1 a 2.000 por línea (RN-17); «Otro» exige descripción |
+| Servicios (DJ, música en vivo, sonido, iluminación, entretenimiento, otro) | **RN-18:** `cantidad` (unidades) entera de 1 a 5 y `horas` en horas completas o medias horas, mayores a 0 y **sin superar la duración del evento**; tipo de la lista; descripción obligatoria (máximo 300 caracteres); notas de máximo 300 |
+
+El registro de un evento toma un candado por fecha dentro de la transacción: con varias peticiones simultáneas para el mismo día entran 3 como máximo, no más. Las horas de cada servicio se guardan en la columna `horas` de `requerimientos_adicionales` (opcional, por eso los servicios guardados antes de esta regla no la tienen). Si se crea la base de cero con `schema.sql` ya viene incluida; en una base existente hay que agregarla (ver `docs/despliegue-y-sql-pendiente.md`).
+
+También devuelven `400` (antes `500`): un `id` que no es un número entero en `GET /api/eventos/:id` y `GET /api/catalogo/:id`, y un `?clasificacion=` que no existe en `GET /api/catalogo`. En el catálogo, los gramos por persona de un alimento van de 1 a 1.000 y la botella de una bebida compartida no pasa de 5.000 ml.
 
 #### `GET /api/eventos`
 

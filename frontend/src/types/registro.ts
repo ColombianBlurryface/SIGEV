@@ -35,7 +35,9 @@ export interface ServicioAgregado {
   id: string
   tipo: string
   descripcion: string
-  cantidad: number | null
+  // RN-18: de 1 a 5 unidades y horas que no superan la duración del evento
+  cantidad: number
+  horas: number
   notas: string
 }
 

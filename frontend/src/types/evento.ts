@@ -79,6 +79,8 @@ export interface ServicioAdicional {
   tipo: string
   descripcion: string
   cantidad: number | null
+  // Horas del servicio (RN-18). El mobiliario y los servicios guardados antes de esta regla no la tienen.
+  horas: string | number | null
   notas: string | null
   creado_en: string
   // HU-12: solo en el mobiliario. Se comparan con el stock actual del inventario.

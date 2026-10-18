@@ -26,13 +26,7 @@ if (!esEntornoDePruebas && process.env.QA_FORZAR !== 'si') {
   process.exit(2)
 }
 
-const DEFECTOS_CONOCIDOS = new Set([
-  'Producto del catálogo inexistente',
-  'Servicio sin descripción',
-  'Evento con id no numérico',
-  'Porción por persona negativa en un producto',
-  'Filtro de catálogo con valor inválido',
-])
+const DEFECTOS_CONOCIDOS = new Set([])
 
 const corrida = Date.now().toString(36).slice(-5)
 const n = (t) => `${t} (QA-${corrida})`
@@ -97,6 +91,70 @@ await caso('Evento con id no numérico', [400, 404], async () => m(await call('/
 await caso('Porción por persona negativa en un producto', [400], async () => {
   const p = (await call('/catalogo?clasificacion=alimento')).c?.[0]
   return m(await call('/eventos', { method: 'POST', body: ev({ productos: [{ producto_id: p.id, porcion_por_persona: -50 }] }) }))
+})
+
+console.log('\n== Servicios adicionales (RN-18): 1 a 5 unidades y horas que no pasan la duración del evento')
+const srv = (o = {}) => ({ tipo: 'dj', descripcion: 'DJ', cantidad: 1, horas: 3, ...o })
+const conServicio = (o, evento = {}) => m(await_call_eventos(ev({ duracion_horas: 4, servicios_adicionales: [srv(o)], ...evento })))
+function await_call_eventos(cuerpo) { return call('/eventos', { method: 'POST', body: cuerpo }) }
+for (const u of [0, 6, -1, 2.5, 1000]) {
+  await caso(`Servicio con ${u} unidades`, [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: [srv({ cantidad: u })] }))))
+}
+for (const u of [1, 5]) {
+  await caso(`Servicio con ${u} unidad(es) (límite exacto)`, [201], async () => m(await await_call_eventos(ev({ servicios_adicionales: [srv({ cantidad: u })] }))))
+}
+await caso('DJ de 300 horas en un evento de 4', [400], async () => m(await await_call_eventos(ev({ duracion_horas: 4, servicios_adicionales: [srv({ horas: 300 })] }))))
+await caso('Horas mayores a la duración (5 h en un evento de 4 h)', [400], async () => m(await await_call_eventos(ev({ duracion_horas: 4, servicios_adicionales: [srv({ horas: 5 })] }))))
+await caso('Horas iguales a la duración (4 h en un evento de 4 h)', [201], async () => m(await await_call_eventos(ev({ duracion_horas: 4, servicios_adicionales: [srv({ horas: 4 })] }))))
+await caso('Media hora (3,5 h) en un evento de 4 h', [201], async () => m(await await_call_eventos(ev({ duracion_horas: 4, servicios_adicionales: [srv({ horas: 3.5 })] }))))
+await caso('Horas con cuarto de hora (3,25)', [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: [srv({ horas: 3.25 })] }))))
+await caso('Horas en 0, negativas o sin enviar', [400], async () => {
+  const r = [0, -2, undefined].map(async (h) => (await await_call_eventos(ev({ servicios_adicionales: [srv({ horas: h })] }))).s)
+  const s3 = await Promise.all(r)
+  return { s: s3.every((x) => x === 400) ? 400 : s3.join('/'), nota: s3.join('/') }
+})
+await caso('Servicio sin unidades', [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: [{ tipo: 'dj', descripcion: 'DJ', horas: 2 }] }))))
+await caso('Servicio con descripción en blanco', [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: [srv({ descripcion: '   ' })] }))))
+await caso('Servicio de un tipo inventado', [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: [srv({ tipo: 'helicoptero' })] }))))
+await caso('Descripción de servicio de 10.000 caracteres', [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: [srv({ descripcion: 'x'.repeat(10000) })] }))))
+await caso('Mobiliario «Otro» sin descripción', [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: [{ tipo: 'mobiliario', cantidad: 5 }] }))))
+await caso('servicios_adicionales que no es una lista', [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: 'hola' }))))
+
+console.log('\n== Datos del evento: fecha, tipo, nombre y productos')
+const ayer = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+await caso('Fecha de ayer', [400], async () => m(await await_call_eventos(ev({ fecha_evento: ayer }))))
+await caso('Fecha de hoy (se acepta)', [201, 400], async () => m(await await_call_eventos(ev({ fecha_evento: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }) }))))
+await caso('Fecha en el año 3000', [400], async () => m(await await_call_eventos(ev({ fecha_evento: '3000-01-01' }))))
+await caso('Tipo de evento inventado', [400], async () => m(await await_call_eventos(ev({ tipo_evento: 'Fiesta ilegal' }))))
+await caso('Nombre solo con espacios', [400], async () => m(await await_call_eventos(ev({ nombre_evento: '     ' }))))
+await caso('Observaciones de 1 millón de caracteres', [400, 413], async () => m(await await_call_eventos(ev({ observaciones_generales: 'x'.repeat(1000000) }))))
+await caso('Duración 0,5 h con 600 asistentes', [400], async () => m(await await_call_eventos(ev({ duracion_horas: 0.5, asistentes: 600 }))))
+await caso('Duración «4 horas» como texto', [400], async () => m(await await_call_eventos(ev({ duracion_horas: '4 horas' }))))
+await caso('El mismo alimento dos veces en un evento', [400], async () => {
+  const p = (await call('/catalogo?clasificacion=alimento')).c?.[0]
+  return m(await await_call_eventos(ev({ productos: [{ producto_id: p.id }, { producto_id: p.id }] })))
+})
+await caso('producto_id con texto', [400, 404], async () => m(await await_call_eventos(ev({ productos: [{ producto_id: 'abc' }] }))))
+await caso('productos que no es una lista', [400], async () => m(await await_call_eventos(ev({ productos: 'hola' }))))
+for (const [titulo, porcion] of [['negativa', -200], ['en 0', 0], ['de 50 kg por persona', 50000]]) {
+  await caso(`Alimento con porción ${titulo}`, [400], async () => {
+    const p = (await call('/catalogo?clasificacion=alimento')).c?.[0]
+    return m(await await_call_eventos(ev({ productos: [{ producto_id: p.id, porcion_por_persona: porcion }] })))
+  })
+}
+await caso('Evento con id texto', [400], async () => m(await call('/eventos/abc')))
+await caso('Evento con id gigante', [400, 404], async () => m(await call('/eventos/99999999999999999999')))
+await caso('Catálogo: grupo inválido en el filtro', [400], async () => m(await call('/catalogo?clasificacion=xyz')))
+await caso('Catálogo: producto con id texto', [400, 404], async () => m(await call('/catalogo/abc')))
+await caso('Catálogo: alimento de 90 kg por persona', [400], async () => m(await call('/catalogo', { method: 'POST', body: { nombre: n('Pesado'), clasificacion: 'alimento', tipo_calculo: 'porcion_persona', porcion_por_persona: 90000 } })))
+await caso('Catálogo: botella de 100 litros', [400], async () => m(await call('/catalogo', { method: 'POST', body: { nombre: n('Botellón'), clasificacion: 'bebida_general', tipo_calculo: 'botella_compartida', volumen_botella_ml: 100000, tamano_porcion_ml: 125 } })))
+
+console.log('\n== Concurrencia en el registro de eventos')
+await caso('30 registros simultáneos en la misma fecha: entran 3 como máximo', [3], async () => {
+  const f = fechaLibre()
+  const rs = await Promise.all(Array.from({ length: 30 }, () => call('/eventos', { method: 'POST', body: ev({ fecha_evento: f }) })))
+  const ok = rs.filter((r) => r.s === 201).length
+  return { s: ok, nota: `entraron ${ok}` }
 })
 
 console.log('\n== Filtros e inyección SQL')

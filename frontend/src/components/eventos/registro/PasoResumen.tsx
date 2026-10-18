@@ -11,6 +11,7 @@ import { describirReparto, repartirMobiliario, totalAlquilar } from '@/lib/alqui
 import { calcularProducto } from '@/lib/calculos'
 import { CATEGORIAS, etiquetaServicio, TIPOS_BEBIDA, type ConfigCategoria } from '@/lib/categorias'
 import { formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
+import { describirHoras } from '@/lib/reglasServicios'
 import { validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
 import { cn } from '@/lib/utils'
 import type { ProductoCatalogo } from '@/types/catalogo'
@@ -92,8 +93,8 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
         lineas: requerimientos.servicios.map((sv, indice) => ({
           id: indice,
           nombre: `${etiquetaServicio(sv.tipo)} · ${sv.descripcion}`,
-          nota: sv.notas || undefined,
-          cantidad: sv.cantidad === null ? '—' : formatearNumero(sv.cantidad),
+          nota: [describirHoras(sv.horas), sv.notas].filter(Boolean).join(' · '),
+          cantidad: `${formatearNumero(sv.cantidad)} und`,
         })),
       },
     ] satisfies SeccionResumen[]

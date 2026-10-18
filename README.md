@@ -267,6 +267,8 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 ## Reglas de negocio
 
 - Un evento debe tener **entre 40 y 600 asistentes** (RN-01 / HU-07).
+- La **duración** de un evento va de **3 a 8 horas** y la **fecha** debe ser **hoy o posterior** (nunca el pasado) y no pasar de 5 años adelante; no puede haber más de **3 eventos activos el mismo día** (RN-13, RN-14).
+- Cada **servicio adicional** (DJ, música en vivo, sonido, iluminación, entretenimiento) admite de **1 a 5 unidades** y sus **horas no pueden superar la duración del evento**: no hay «DJ ilimitados» ni 300 horas de DJ en un evento de 3. Si se acorta la duración del evento después de agregar servicios, el sistema avisa y no deja continuar hasta corregirlo (RN-18).
 - Con **más de 300 asistentes** el evento es de modalidad **buffet** (RN-02).
 - Con **más de 200 asistentes** (valor por defecto del umbral) se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).
 - **Solo se alquila mobiliario y vajilla** (RN-17): las bebidas (generales y licores) siempre son propias y no ofrecen la opción «Alquilado». Lo que se alquila en un evento es, como máximo, lo requerido menos lo propio disponible, y si no falta nada no se alquila nada. La cantidad que se pide de mobiliario es un entero de 1 a 2.000 (RF-14).
@@ -299,7 +301,6 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 ## Pendientes y próximos pasos
 
 - **Registrar qué usuario hace cada movimiento del inventario:** la API ya exige sesión y el token trae el usuario; falta guardarlo en el historial.
-- **Validaciones de entrada en eventos:** algunos datos inválidos enviados directamente a la API (porciones o cantidades negativas, fechas inválidas, productos inexistentes) responden 500 o se aceptan; la interfaz los evita, pero la API debe rechazarlos con un 400 claro.
 - **Diseño responsive:** la interfaz está pensada para escritorio; la adaptación a celular y tablet (menú de cajón y tablas en tarjetas) está lista en el PR #32, pendiente de mezclar.
 - **Conectar Vercel directamente a este repositorio:** hoy se publica desde una copia y la sincronización es manual (ver la guía del proceso de despliegue).
 - Editar los requerimientos y cambiar el estado de un evento ya creado.

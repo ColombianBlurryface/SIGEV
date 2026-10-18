@@ -238,6 +238,11 @@ await t('Un alimento no se puede agregar dos veces', async () => {
 })
 
 // ============ D. HU-03 / QA-04 / HU-13 bebidas ============
+// Las pruebas de precios no dependen de si el catálogo tiene precios cargados: la bebida «sin valor» es un producto
+// propio de la prueba (sin precio), y los precios del catálogo se leen de la API.
+const SIN_PRECIO = 'Bebida sin precio' + sufijo
+await api('/catalogo', { method: 'POST', body: { nombre: SIN_PRECIO, clasificacion: 'bebida_general', tipo_calculo: 'unidad_persona', porcion_por_persona: 2 } })
+const precioCat = async (n) => { const p = (await api('/catalogo')).cuerpo.find((x) => x.nombre === n); return Number(p.precio_unitario) > 0 ? String(Number(p.precio_unitario)) : '' }
 grupo = 'HU-03 / QA-04 / HU-13 Bebidas'
 const SEIS = ['Poker', 'Club Colombia', 'Águila', 'Águila Light', 'Costeña', 'Sol']
 await nuevoEvento('Bebidas' + sufijo, 200); await aRequerimientos(); await pestana('Bebidas')
@@ -254,10 +259,10 @@ await t('QA-04: cada una viene con 2 unidades por persona y es editable', async 
   await page.fill('#bebida-unidades', '3'); igual(await page.locator('#bebida-unidades').inputValue(), '3')
   await page.fill('#bebida-unidades', '2')
 })
-await t('QA-04: el valor unitario llega vacío en las seis', async () => {
+await t('QA-04: el valor unitario llega con el precio del catálogo (vacío si no tiene) en las seis', async () => {
   for (const n of SEIS) {
     await page.selectOption('#bebida-producto', await optVal(page, '#bebida-producto', n))
-    igual(await page.locator('#bebida-precio').inputValue(), '', n + ':')
+    igual(await page.locator('#bebida-precio').inputValue(), await precioCat(n), n + ':')
   }
 })
 await t('QA-04: 200 asistentes → 440 unidades de una individual', async () => {
@@ -277,7 +282,7 @@ await t('QA-04: vinos y champaña como compartidas 750 ml / 125 ml', async () =>
     cierto(comp.includes(n), `falta ${n}`)
     await page.selectOption('#bebida-producto', await optVal(page, '#bebida-producto', n))
     cierto((await page.getByText('750 ml / 125 ml').count()) > 0, `${n} no es 750/125`)
-    igual(await page.locator('#bebida-precio').inputValue(), '', n + ' precio:')
+    igual(await page.locator('#bebida-precio').inputValue(), await precioCat(n), n + ' precio:')
   }
 })
 await t('QA-04: 200 asistentes → 37 botellas de vino', async () => {
@@ -290,7 +295,7 @@ await t('QA-04: valor escrito en el evento calcula el costo y se guarda', async 
   await page.getByRole('button', { name: 'Agregar', exact: true }).click()
   await page.getByRole('button', { name: 'Compartida por botella' }).waitFor()
   await page.getByRole('button', { name: 'Individual por persona' }).click()
-  await agregarBebida('Poker')                      // sin valor
+  await agregarBebida(SIN_PRECIO)                   // sin valor
   await agregarBebida('Águila', { precio: 3500 })   // con valor
   cierto(await page.getByText('Sin valor').first().isVisible(), 'no muestra «Sin valor»')
   const id = await guardarEvento()
@@ -298,8 +303,8 @@ await t('QA-04: valor escrito en el evento calcula el costo y se guarda', async 
   const porNombre = Object.fromEntries(d.productos_calculados.map((p) => [p.nombre, p]))
   igual(Number(porNombre['Vino tinto'].cantidad_con_margen), 37, 'vino:')
   igual(Number(porNombre['Vino tinto'].costo_estimado), 1480000, 'costo vino:')
-  igual(Number(porNombre['Poker'].cantidad_con_margen), 440, 'poker:')
-  igual(Number(porNombre['Poker'].costo_estimado), 0, 'poker costo:')
+  igual(Number(porNombre[SIN_PRECIO].cantidad_con_margen), 440, 'sin precio:')
+  igual(Number(porNombre[SIN_PRECIO].costo_estimado), 0, 'sin precio costo:')
   igual(Number(porNombre['Águila'].costo_estimado), 1540000, 'águila:')
 })
 await t('HU-13: bar de coctelería lista solo licores y acompañantes (sin cervezas)', async () => {
@@ -403,13 +408,13 @@ grupo = 'HU-05 Servicios adicionales'
 await t('Agregar DJ con descripción, cantidad y notas; queda en el resumen y en el detalle', async () => {
   await nuevoEvento('Servicios' + sufijo, 120); await aRequerimientos(); await pestana('Servicios')
   await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ para recepción')
-  await page.fill('#servicio-cantidad', '6'); await page.fill('#servicio-notas', 'Música crossover')
+  await page.fill('#servicio-cantidad', '2'); await page.fill('#servicio-horas', '4'); await page.fill('#servicio-notas', 'Música crossover')
   await page.getByRole('button', { name: 'Agregar', exact: true }).click()
   await page.waitForSelector('text=DJ para recepción')
   const id = await guardarEvento()
   const d = (await api(`/eventos/${id}`)).cuerpo
   const s = d.servicios_adicionales.find((x) => x.tipo === 'dj')
-  igual(s.cantidad, 6, 'cantidad:'); igual(s.notas, 'Música crossover', 'notas:')
+  igual(s.cantidad, 2, 'unidades:'); igual(Number(s.horas), 4, 'horas:'); igual(s.notas, 'Música crossover', 'notas:')
 })
 
 // ============ G. HU-06 consulta ============
@@ -545,7 +550,7 @@ await t('HU-13 (escenario 1-3): licor no aparece en generales y los filtros no s
 })
 await t('Vajilla existe como categoría y el catálogo de eventos no se contamina con inventario', async () => {
   const c = (await api('/catalogo')).cuerpo
-  cierto(!c.some((p) => p.nombre.endsWith(sufijo)), 'inventario en el catálogo')
+  cierto(!c.some((p) => p.nombre.endsWith(sufijo) && p.nombre !== SIN_PRECIO), 'inventario en el catálogo') // SIN_PRECIO es un producto de catálogo creado por la propia prueba
 })
 
 // ============ K. HU-10 retiro (QA-02, COR-09) ============
@@ -857,6 +862,88 @@ await t('Evento (UI), 250 y 150 asistentes: «A alquilar» es lo requerido menos
 })
 
 
+
+// ============ Corrección: servicios (RN-18) y fecha pasada en la pantalla ============
+grupo = 'Cor. servicios RN-18 y fecha pasada (pantalla)'
+const ayerLocal = () => { const d = new Date(Date.now() - 86400000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+const agregarServicio = async ({ tipo = 'dj', descripcion = 'DJ prueba', unidades, horas }) => {
+  await page.selectOption('#servicio-tipo', tipo); await page.fill('#servicio-descripcion', descripcion)
+  if (unidades !== undefined) await page.fill('#servicio-cantidad', String(unidades))
+  if (horas !== undefined) await page.fill('#servicio-horas', String(horas))
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+}
+
+await t('Fecha de ayer escrita a mano: muestra el error y no deja pasar al paso 2', async () => {
+  await nuevoEvento('Fecha ayer' + sufijo, 100)
+  await page.fill('input[type=date]', ayerLocal())
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.waitForSelector('text=no se puede registrar un evento en el pasado')
+  igual(await page.getByRole('tab', { name: /Alimentos/ }).count(), 0, 'avanzó al paso 2:')
+})
+await t('Fecha de hace un año y de dentro de 10 años también se bloquean; la de hoy no', async () => {
+  const hoy = new Date(); const iso = (y) => `${y}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`
+  await page.fill('input[type=date]', iso(hoy.getFullYear() - 1)); await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.waitForSelector('text=no se puede registrar un evento en el pasado')
+  await page.fill('input[type=date]', iso(hoy.getFullYear() + 10)); await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.waitForSelector('text=no puede ser más de 5 años en el futuro')
+  await page.fill('input[type=date]', fechaLibre()); await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.getByRole('tab', { name: /Alimentos/ }).waitFor()
+})
+await t('Servicios: unidades 0 y 6 se rechazan; 1 y 5 se aceptan', async () => {
+  await pestana('Servicios')
+  for (const u of ['0', '6', '2,5', '-1']) {
+    await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ prueba'); await page.fill('#servicio-cantidad', u)
+    await page.waitForSelector('text=Las unidades deben ser un número entero de 1 a 5')
+    await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+    igual(await page.getByText('Todavía no has agregado servicios adicionales').count(), 1, `se agregó con ${u} unidades:`)
+  }
+  await agregarServicio({ descripcion: 'DJ una unidad', unidades: 1, horas: 3 })
+  await page.waitForSelector('text=DJ una unidad')
+  await agregarServicio({ tipo: 'sonido', descripcion: 'Sonido cinco', unidades: 5, horas: 3 })
+  await page.waitForSelector('text=Sonido cinco')
+})
+await t('Servicios: horas mayores a la duración se rechazan; iguales se aceptan', async () => {
+  // el evento dura 5 horas (nuevoEvento)
+  await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ largo'); await page.fill('#servicio-cantidad', '1')
+  await page.fill('#servicio-horas', '6')
+  await page.waitForSelector('text=Las horas no pueden superar la duración del evento (5 h)')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  igual(await page.getByText('DJ largo').count(), 0, 'se agregó el servicio largo:')
+  await page.fill('#servicio-horas', '300'); await page.waitForSelector('text=Las horas no pueden superar la duración del evento')
+  await page.fill('#servicio-horas', '5')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.waitForSelector('text=DJ largo')
+})
+await t('Si se reduce la duración por debajo de las horas de un servicio, el sistema avisa y no deja continuar', async () => {
+  await page.getByRole('button', { name: 'Atrás' }).click()
+  await page.fill('#duracion', '3')
+  await page.waitForSelector('text=estos servicios ya no caben')
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.getByRole('tab', { name: /Servicios/ }).waitFor()
+  await page.waitForSelector('text=Hay servicios que duran más que el evento (3 h)')
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.waitForSelector('text=No se puede continuar')
+  igual(await page.getByRole('button', { name: 'Guardar evento' }).count(), 0, 'llegó al resumen:')
+  // corregir: quitar el servicio que no cabe y ya se puede continuar
+  await pestana('Servicios')
+  await page.getByRole('button', { name: /Quitar DJ: DJ largo/ }).click()
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.getByRole('button', { name: 'Guardar evento' }).waitFor()
+})
+await t('El detalle del evento muestra las unidades y las horas del servicio', async () => {
+  await page.getByRole('button', { name: 'Guardar evento' }).click()
+  await page.waitForURL('**/eventos?evento=*')
+  const id = Number(new globalThis.URL(page.url()).searchParams.get('evento'))
+  const d = (await api(`/eventos/${id}`)).cuerpo
+  const dj = d.servicios_adicionales.find((x) => x.descripcion === 'DJ una unidad')
+  igual(dj.cantidad, 1, 'unidades:'); igual(Number(dj.horas), 3, 'horas:')
+  const sonido = d.servicios_adicionales.find((x) => x.descripcion === 'Sonido cinco')
+  igual(sonido.cantidad, 5, 'unidades sonido:')
+  await page.waitForSelector('text=Sonido cinco')
+  cierto(/5 und/.test(await page.locator('body').innerText()), 'el detalle no muestra «5 und»')
+})
+
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {
@@ -896,9 +983,11 @@ await t('Desactivar: sale del registro de eventos; Activar: vuelve', async () =>
   cierto((await api('/catalogo')).cuerpo.some((p) => p.nombre === 'Cerveza prueba' + sufijo), 'no volvió')
 })
 await t('Un producto ya usado en un evento no cambia de grupo/tipo (409)', async () => {
-  const poker = (await api('/catalogo')).cuerpo.find((p) => p.nombre === 'Poker')
-  const r = await api(`/catalogo/${poker.id}`, { method: 'PUT', body: { nombre: 'Poker', clasificacion: 'bar_cocteleria', tipo_calculo: 'unidad_persona', porcion_por_persona: 2, precio_unitario: 0 } })
+  // SIN_PRECIO es la bebida propia de las pruebas de precios: se usó en un evento guardado (ver QA-04)
+  const usado = (await api('/catalogo')).cuerpo.find((p) => p.nombre === SIN_PRECIO)
+  const r = await api(`/catalogo/${usado.id}`, { method: 'PUT', body: { nombre: SIN_PRECIO, clasificacion: 'bar_cocteleria', tipo_calculo: 'unidad_persona', porcion_por_persona: 2, precio_unitario: 0 } })
   igual(r.estado, 409)
+  igual((await api('/catalogo')).cuerpo.find((p) => p.nombre === SIN_PRECIO).clasificacion, 'bebida_general', 'no debía cambiar de grupo:')
 })
 
 // ============ L2. Corrección: unidades por persona = entero de 1 a 10 (HU-03, HU-43 · RF-22, RN-15) ============

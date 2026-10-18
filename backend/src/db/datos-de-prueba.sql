@@ -12,8 +12,8 @@
 --     historial de /inventario), y los elementos de bebidas que crea este script terminan en « (demo)».
 --
 -- CÓMO USARLO
---   · Ejecutar en el SQL Editor de Supabase, primero en QA y luego en producción. Solo datos: no cambia la
---     estructura de la base.
+--   · Ejecutar en el SQL Editor de Supabase, primero en QA y luego en producción. Solo agrega datos; lo único
+--     estructural es una columna opcional (`horas`, de los servicios) que se crea si falta (RN-18).
 --   · Se puede ejecutar varias veces: no duplica nada y NO toca los elementos que ya tienen unidades
 --     (no pisa inventario real).
 --   · Para quitarlo todo cuando empiecen los datos reales: backend/src/db/datos-de-prueba-quitar.sql
@@ -23,6 +23,9 @@
 -- =====================================================================================================
 
 BEGIN;
+
+-- 0) Las horas de cada servicio (RN-18): columna opcional; si ya existe, no hace nada ni toca lo que hay
+ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);
 
 -- 1) Productos del catálogo que usan los eventos de ejemplo. Solo se crean si faltan: nunca se
 --    cambia un producto (ni su precio) que ya exista.
@@ -220,26 +223,30 @@ CROSS JOIN LATERAL (
 ON CONFLICT (evento_id, producto_id) DO NOTHING;
 
 -- 7) Mobiliario (elegido del inventario; lo que no alcanza se alquila) y servicios adicionales de cada evento
-INSERT INTO requerimientos_adicionales (evento_id, tipo, descripcion, cantidad, notas, producto_id)
-SELECT e.id, v.tipo, COALESCE(c.nombre, v.descripcion), v.cantidad, v.notas, c.id
+INSERT INTO requerimientos_adicionales (evento_id, tipo, descripcion, cantidad, horas, notas, producto_id)
+SELECT e.id, v.tipo, COALESCE(c.nombre, v.descripcion), v.cantidad, v.horas, v.notas, c.id
 FROM (VALUES
-    ('[Demo] Boda Martínez & Gómez',      'mobiliario', 'Silla Tiffany',              NULL,                          250, 'Doradas'),
-    ('[Demo] Boda Martínez & Gómez',      'mobiliario', 'Mesa redonda (10 personas)', NULL,                           25, 'Mantel blanco'),
-    ('[Demo] Boda Martínez & Gómez',      'mobiliario', 'Carpa',                      NULL,                            1, 'Terraza'),
-    ('[Demo] Boda Martínez & Gómez',      'mobiliario', 'Barra de bar',               NULL,                            2, NULL),
-    ('[Demo] Boda Martínez & Gómez',      'dj',         NULL,                         'DJ para recepción y fiesta',    6, 'Incluye luces básicas'),
-    ('[Demo] Congreso Médico Andino',     'mobiliario', 'Silla Chiavari',             NULL,                           80, NULL),
-    ('[Demo] Congreso Médico Andino',     'mobiliario', 'Tarima',                     NULL,                            2, 'Escenario principal'),
-    ('[Demo] Congreso Médico Andino',     'mobiliario', NULL,                         'Pantalla LED 3 x 2 m',          1, 'Del proveedor'),
-    ('[Demo] Quince años de Valentina',   'mobiliario', 'Silla Tiffany',              NULL,                          120, NULL),
-    ('[Demo] Quince años de Valentina',   'mobiliario', 'Mesa de cóctel (alta)',      NULL,                           10, NULL),
-    ('[Demo] Quince años de Valentina',   'dj',         NULL,                         'DJ y animación',                5, NULL),
-    ('[Demo] Cena de gala Fundación Luz', 'mobiliario', 'Silla Tiffany',              NULL,                           90, NULL),
-    ('[Demo] Cena de gala Fundación Luz', 'mobiliario', 'Mesa redonda (10 personas)', NULL,                            9, NULL),
-    ('[Demo] Cumpleaños de Camila',       'mobiliario', 'Silla Chiavari',             NULL,                           80, NULL),
-    ('[Demo] Cumpleaños de Camila',       'mobiliario', 'Mesa de cóctel (alta)',      NULL,                            6, NULL),
-    ('[Demo] Reunión de directivos',      'mobiliario', 'Silla Chiavari',             NULL,                           45, NULL)
-) AS v(evento, tipo, elemento, descripcion, cantidad, notas)
+    -- Mobiliario: sin horas. Del inventario por nombre (elemento) o «Otro» (descripcion, sin inventario)
+    ('[Demo] Boda Martínez & Gómez',      'mobiliario', 'Silla Tiffany',              NULL,                          250, NULL, 'Doradas'),
+    ('[Demo] Boda Martínez & Gómez',      'mobiliario', 'Mesa redonda (10 personas)', NULL,                           25, NULL, 'Mantel blanco'),
+    ('[Demo] Boda Martínez & Gómez',      'mobiliario', 'Carpa',                      NULL,                            1, NULL, 'Terraza'),
+    ('[Demo] Boda Martínez & Gómez',      'mobiliario', 'Barra de bar',               NULL,                            2, NULL, NULL),
+    ('[Demo] Congreso Médico Andino',     'mobiliario', 'Silla Chiavari',             NULL,                           80, NULL, NULL),
+    ('[Demo] Congreso Médico Andino',     'mobiliario', 'Tarima',                     NULL,                            2, NULL, 'Escenario principal'),
+    ('[Demo] Congreso Médico Andino',     'mobiliario', NULL,                         'Pantalla LED 3 x 2 m',          1, NULL, 'Del proveedor'),
+    ('[Demo] Quince años de Valentina',   'mobiliario', 'Silla Tiffany',              NULL,                          120, NULL, NULL),
+    ('[Demo] Quince años de Valentina',   'mobiliario', 'Mesa de cóctel (alta)',      NULL,                           10, NULL, NULL),
+    ('[Demo] Cena de gala Fundación Luz', 'mobiliario', 'Silla Tiffany',              NULL,                           90, NULL, NULL),
+    ('[Demo] Cena de gala Fundación Luz', 'mobiliario', 'Mesa redonda (10 personas)', NULL,                            9, NULL, NULL),
+    ('[Demo] Cumpleaños de Camila',       'mobiliario', 'Silla Chiavari',             NULL,                           80, NULL, NULL),
+    ('[Demo] Cumpleaños de Camila',       'mobiliario', 'Mesa de cóctel (alta)',      NULL,                            6, NULL, NULL),
+    ('[Demo] Reunión de directivos',      'mobiliario', 'Silla Chiavari',             NULL,                           45, NULL, NULL),
+    -- Servicios (RN-18): de 1 a 5 unidades y horas que no pasan la duración del evento
+    ('[Demo] Boda Martínez & Gómez',      'dj',         NULL,                         'DJ para recepción y fiesta',    1,    6, 'Incluye luces básicas'),
+    ('[Demo] Boda Martínez & Gómez',      'iluminacion',NULL,                         'Iluminación ambiental',         2,    6, NULL),
+    ('[Demo] Quince años de Valentina',   'dj',         NULL,                         'DJ y animación',                1,    5, NULL),
+    ('[Demo] Congreso Médico Andino',     'sonido',     NULL,                         'Sonido para conferencias',      2,    8, NULL)
+) AS v(evento, tipo, elemento, descripcion, cantidad, horas, notas)
 JOIN eventos e ON e.nombre_evento = v.evento
 LEFT JOIN catalogo_productos c ON c.nombre = v.elemento AND c.categoria_inventario = 'Mobiliario'
 WHERE NOT EXISTS (
