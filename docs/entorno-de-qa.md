@@ -68,7 +68,21 @@ y entrar a `https://sigev-qa.vercel.app` con un usuario de QA.
 
 ## B. Usarlo
 
-**Quien desarrolla:** al terminar una historia, abre el PR hacia `develop`. Cuando se mergea, QA se actualiza solo y ahí se prueba, con los datos de prueba que se quiera.
+**Quien desarrolla:** al terminar una historia, abre el PR hacia `develop`. Mezclar a `develop` **no actualiza QA por sí solo** mientras Vercel siga conectado a la copia personal del repositorio (ver el recuadro de arriba): hay que sincronizar la copia, y ahí QA se redespliega. Con la cuenta de GitHub de la copia (`javier-r-ramos`) activa:
+
+```bash
+git fetch origin && git push vercel origin/develop:refs/heads/develop
+```
+
+Eso sube todo lo que se haya mezclado a `develop` de una vez (no hace falta hacerlo PR por PR). Los cambios de base de datos **no** se aplican solos: cada PR que los traiga lo dice y el SQL se ejecuta a mano en el SQL Editor de Supabase de QA (ver la sección «Para ejecutar en Supabase» del PR).
+
+**Empezar QA de cero** (borra eventos e inventario, conserva usuarios y catálogo, y deja datos de prueba con precios). Confirma que el Reference ID del Supabase empiece por `uvvluaho` y ejecuta, en este orden, en el SQL Editor:
+
+1. `qa/reiniciar-datos-qa.sql`: borra eventos, inventario y movimientos. Tiene un candado: solo corre si existe el usuario `qa`, así que en producción no hace nada.
+2. `backend/src/db/precios-catalogo.sql`: pone precios de referencia a los productos del catálogo que estén en 0 (nunca pisa un precio ya escrito).
+3. `backend/src/db/datos-de-prueba.sql`: inventario de las cuatro categorías y seis eventos «[Demo]» en los cuatro estados, con mobiliario.
+
+Los tres se pueden repetir sin problema.
 
 **QA:** prueba en `sigev-qa.vercel.app` con su usuario. Los hallazgos se validan contra el checklist de la historia.
 

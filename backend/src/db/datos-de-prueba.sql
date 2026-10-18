@@ -2,8 +2,9 @@
 -- DATOS DE PRUEBA para el entorno publicado (HU-04 · hallazgo P2 del profesor)
 --
 -- En la sustentación el mobiliario se vio vacío porque no había datos cargados. Este script deja
--- cada módulo con algo que mostrar: inventario de las cuatro categorías, cuatro eventos de ejemplo
--- con mobiliario requerido (uno supera el umbral de alquiler) y movimientos de todos los tipos.
+-- cada módulo con algo que mostrar: inventario de las cuatro categorías, seis eventos de ejemplo (en los
+-- cuatro estados: planificación, confirmado, realizado y cancelado) con mobiliario requerido, uno de ellos
+-- por encima del umbral de alquiler, y movimientos de todos los tipos.
 --
 -- CÓMO SE IDENTIFICAN COMO PRUEBA
 --   · Eventos: el nombre empieza por «[Demo] » y las observaciones dicen «Datos de prueba».
@@ -35,6 +36,7 @@ FROM (VALUES
     ('Ensalada César',                  'alimento',       'porcion_persona',    100, 'g',         0,   0, 10000),
     ('Pechuga en Salsa de Champiñones', 'alimento',       'porcion_persona',    220, 'g',         0,   0, 32000),
     ('Club Colombia',                   'bebida_general', 'unidad_persona',       2, 'unidades',  0,   0,     0),
+    ('Poker',                           'bebida_general', 'unidad_persona',       2, 'unidades',  0,   0,     0),
     ('Agua Cristal',                    'bebida_general', 'unidad_persona',       1, 'unidades',  0,   0,     0),
     ('Champaña',                        'bebida_general', 'botella_compartida',   0, 'botellas',750, 125,     0),
     ('Agua tónica',                     'bar_cocteleria', 'unidad_persona',       1, 'unidades',  0,   0,     0),
@@ -154,7 +156,9 @@ FROM (VALUES
     ('[Demo] Boda Martínez & Gómez',        30, 'Boda',        6, 250, 'planificacion', 'Datos de prueba. Ceremonia y recepción en el mismo salón. Menú sin mariscos. Supera el umbral de alquiler.'),
     ('[Demo] Congreso Médico Andino',       45, 'Corporativo', 8, 480, 'confirmado',    'Datos de prueba. Más de 300 asistentes: modalidad buffet.'),
     ('[Demo] Quince años de Valentina',     60, 'Quinceañero', 7, 120, 'planificacion', 'Datos de prueba. Vals a las 9 pm.'),
-    ('[Demo] Cena de gala Fundación Luz',   75, 'Gala',        4,  90, 'planificacion', 'Datos de prueba. Cena servida; el mobiliario alcanza con el inventario propio.')
+    ('[Demo] Cena de gala Fundación Luz',   75, 'Gala',        4,  90, 'planificacion', 'Datos de prueba. Cena servida; el mobiliario alcanza con el inventario propio.'),
+    ('[Demo] Cumpleaños de Camila',        -20, 'Cumpleaños', 5,  80, 'realizado',     'Datos de prueba. Evento ya realizado (para probar el filtro de estado).'),
+    ('[Demo] Reunión de directivos',        20, 'Corporativo',3,  45, 'cancelado',     'Datos de prueba. Evento cancelado (para probar el filtro de estado).')
 ) AS v(nombre, dias, tipo, horas, asistentes, estado, observaciones)
 WHERE NOT EXISTS (SELECT 1 FROM eventos e WHERE e.nombre_evento = v.nombre);
 
@@ -162,10 +166,11 @@ WHERE NOT EXISTS (SELECT 1 FROM eventos e WHERE e.nombre_evento = v.nombre);
 --      · por porción (gramos): asistentes × porción; desde 1.000 g se pasa a kg; +10 % con 2 decimales
 --      · por unidad: asistentes × unidades por persona; +10 % redondeado hacia arriba
 --      · por botella compartida: asistentes ÷ (botella ÷ porción); +10 % redondeado hacia arriba
---    El valor unitario va escrito aquí (como al registrar un evento); el costo es la cantidad con margen × valor.
+--    El valor unitario es el del catálogo si ya tiene precio; si no, el que va escrito aquí (como al escribirlo
+--    en el registro del evento). El costo es la cantidad con margen × valor unitario.
 INSERT INTO evento_productos
     (evento_id, producto_id, porcion_por_persona, cantidad_neta, cantidad_con_margen, unidad_entrega, costo_estimado, componentes_menu)
-SELECT e.id, c.id, p.porcion, n.neto, m.con_margen, n.unidad, m.con_margen * v.precio, v.componentes
+SELECT e.id, c.id, p.porcion, n.neto, m.con_margen, n.unidad, m.con_margen * COALESCE(NULLIF(c.precio_unitario, 0), v.precio), v.componentes
 FROM (VALUES
     ('[Demo] Boda Martínez & Gómez',      'Medallones de Lomo de Res',       45000, 'Salsa de vino tinto, puré rústico'),
     ('[Demo] Boda Martínez & Gómez',      'Arroz Verde con Almendras',       12000, NULL),
@@ -186,7 +191,13 @@ FROM (VALUES
     ('[Demo] Quince años de Valentina',   'Champaña',                        85000, NULL),
     ('[Demo] Cena de gala Fundación Luz', 'Medallones de Lomo de Res',       45000, 'Maridaje con vino tinto'),
     ('[Demo] Cena de gala Fundación Luz', 'Pechuga en Salsa de Champiñones', 32000, NULL),
-    ('[Demo] Cena de gala Fundación Luz', 'Champaña',                        85000, NULL)
+    ('[Demo] Cena de gala Fundación Luz', 'Champaña',                        85000, NULL),
+    ('[Demo] Cumpleaños de Camila',       'Pechuga en Salsa de Champiñones', 32000, 'Papas al romero'),
+    ('[Demo] Cumpleaños de Camila',       'Ensalada César',                  10000, NULL),
+    ('[Demo] Cumpleaños de Camila',       'Poker',                            3200, NULL),
+    ('[Demo] Cumpleaños de Camila',       'Agua Cristal',                     2500, NULL),
+    ('[Demo] Reunión de directivos',      'Arroz Verde con Almendras',       12000, NULL),
+    ('[Demo] Reunión de directivos',      'Agua Cristal',                     2500, NULL)
 ) AS v(evento, producto, precio, componentes)
 JOIN eventos e ON e.nombre_evento = v.evento
 JOIN catalogo_productos c ON c.nombre = v.producto AND c.categoria_inventario IS NULL
@@ -224,7 +235,10 @@ FROM (VALUES
     ('[Demo] Quince años de Valentina',   'mobiliario', 'Mesa de cóctel (alta)',      NULL,                           10, NULL),
     ('[Demo] Quince años de Valentina',   'dj',         NULL,                         'DJ y animación',                5, NULL),
     ('[Demo] Cena de gala Fundación Luz', 'mobiliario', 'Silla Tiffany',              NULL,                           90, NULL),
-    ('[Demo] Cena de gala Fundación Luz', 'mobiliario', 'Mesa redonda (10 personas)', NULL,                            9, NULL)
+    ('[Demo] Cena de gala Fundación Luz', 'mobiliario', 'Mesa redonda (10 personas)', NULL,                            9, NULL),
+    ('[Demo] Cumpleaños de Camila',       'mobiliario', 'Silla Chiavari',             NULL,                           80, NULL),
+    ('[Demo] Cumpleaños de Camila',       'mobiliario', 'Mesa de cóctel (alta)',      NULL,                            6, NULL),
+    ('[Demo] Reunión de directivos',      'mobiliario', 'Silla Chiavari',             NULL,                           45, NULL)
 ) AS v(evento, tipo, elemento, descripcion, cantidad, notas)
 JOIN eventos e ON e.nombre_evento = v.evento
 LEFT JOIN catalogo_productos c ON c.nombre = v.elemento AND c.categoria_inventario = 'Mobiliario'

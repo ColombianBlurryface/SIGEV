@@ -102,12 +102,14 @@ Se puede ejecutar varias veces: no duplica nada y no pisa precios escritos desde
 Para que ningún módulo se vea vacío al abrirlo en el entorno publicado (por ejemplo, en una sustentación), [`src/db/datos-de-prueba.sql`](src/db/datos-de-prueba.sql) carga, en el SQL Editor de Supabase (primero QA, luego producción):
 
 - **Inventario de las cuatro categorías** (mobiliario, vajilla, bebidas generales y licores para cócteles) con cantidades de ejemplo y movimientos de cada tipo (registro inicial, adquisición y retiro), para que el historial tenga algo que mostrar.
-- **4 eventos de ejemplo con mobiliario requerido**, con alimentos, bebidas y servicios: uno de 250 asistentes que supera el umbral de alquiler (se ven las unidades propias y las que se alquilan), uno de 480 en modalidad buffet, uno de 120 y uno de 90 que el inventario propio cubre completo. Las fechas son «hoy + 30, 45, 60 y 75 días», así que siempre salen como próximos.
+- **6 eventos de ejemplo con mobiliario requerido**, con alimentos, bebidas y servicios, en los cuatro estados: uno de 250 asistentes que supera el umbral de alquiler (se ven las unidades propias y las que se alquilan), uno de 480 en modalidad buffet y confirmado, uno de 120 y uno de 90 que el inventario propio cubre completo, uno ya realizado y uno cancelado (para probar el filtro por estado). Los próximos van a «hoy + 30, 45, 60 y 75 días», así que siempre salen como próximos. El costo usa el precio del catálogo cuando ya lo tiene.
 - Los productos del catálogo que esos eventos usan, solo si faltan.
 
 **Se identifican como prueba:** los eventos empiezan por «[Demo] » y sus observaciones dicen «Datos de prueba»; cada cantidad de ejemplo del inventario deja un movimiento con la nota «Datos de prueba…» (se ve en el historial de `/inventario`), y los elementos de bebidas que crea el script terminan en « (demo)».
 
 **Es seguro repetirlo:** no duplica nada y **no toca ningún elemento que ya tenga unidades**, así que no pisa inventario real. Solo agrega datos; no cambia la estructura de la base.
+
+Los precios de referencia del catálogo están en [`src/db/precios-catalogo.sql`](src/db/precios-catalogo.sql): son estimaciones aproximadas del mercado colombiano, solo se aplican a productos que están en 0 y nunca pisan un precio ya escrito. Para empezar QA de cero está [`../../qa/reiniciar-datos-qa.sql`](../../qa/reiniciar-datos-qa.sql) (ver `docs/entorno-de-qa.md`).
 
 Cuando empiecen los datos reales, [`src/db/datos-de-prueba-quitar.sql`](src/db/datos-de-prueba-quitar.sql) los quita: borra los eventos «[Demo]», devuelve cada elemento a la cantidad que tenía antes y borra los elementos « (demo)». Si ya hubo movimientos reales sobre un elemento de ejemplo, ese elemento se salta y el script lo avisa al final.
 
