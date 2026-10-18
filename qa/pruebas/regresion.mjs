@@ -377,12 +377,12 @@ await t('RN-03: 150 sin aviso; 200 sin aviso; 201 con aviso (estado_alquiler)', 
 await t('P-05: el umbral viene de la configuración (no está fijo)', async () => {
   const c = await api('/configuracion'); igual(c.cuerpo.umbral_alquiler, 200, 'umbral:')
 })
-await t('Con 180 asistentes y stock insuficiente avisa «el inventario no alcanza»', async () => {
+await t('Con 180 asistentes y stock insuficiente avisa que hay que alquilar y que el inventario no alcanza', async () => {
   await nuevoEvento('Faltante' + sufijo, 180); await aRequerimientos(); await pestana('Mobiliario')
   await page.waitForSelector('#mobiliario-elemento option[value]', { state: 'attached' })
   await page.selectOption('#mobiliario-elemento', String(sillaP.id)); await page.fill('#mobiliario-cantidad', '150')
   await page.getByRole('button', { name: 'Agregar', exact: true }).click()
-  await page.waitForSelector('text=El inventario no alcanza')
+  await page.waitForSelector('text=El inventario propio no alcanza para este evento')
 })
 
 // ============ F. HU-05 servicios ============
@@ -707,6 +707,62 @@ await t('Adquisición (UI): el aviso dice cuánto se puede adquirir; 2 se rechaz
   await page.fill('#adquisicion-cantidad', '1'); await page.getByRole('button', { name: 'Registrar adquisición', exact: true }).click()
   await page.waitForSelector('text=Ahora hay 2.000 disponibles')
 })
+
+
+// ============ Corrección: duración del evento (COR-01) y mensaje del aviso de alquiler ============
+grupo = 'Duración (COR-01) y aviso de alquiler'
+const fechaAviso = () => new Date(Date.UTC(2028, 0, 1) + Math.floor(Math.random() * 1000) * 86400000).toISOString().slice(0, 10)
+const eventoAviso = (extra = {}) => api('/eventos', { method: 'POST', body: { nombre_evento: 'Aviso' + sufijo, fecha_evento: fechaAviso(), tipo_evento: 'Quinceañero', duracion_horas: 5, asistentes: 100, ...extra } })
+const textoDeEvento = async (id) => { await page.goto(`${URL}/eventos?evento=${id}`); await page.waitForSelector('text=Requerimientos'); await page.waitForTimeout(700); return page.locator('body').innerText() }
+
+await t('Duración (API): 0,5 h, 2,9 h, 8,1 h, 60 h, 0 y negativos se rechazan; 3 h y 8 h (los límites) se aceptan', async () => {
+  const antes = (await api('/eventos')).cuerpo.length
+  for (const h of [0.5, 2.9, 8.1, 60, 0, -3, '4 horas']) {
+    const r = await eventoAviso({ duracion_horas: h, asistentes: 600 })
+    igual(r.estado, 400, `${JSON.stringify(h)} h:`)
+  }
+  igual((await api('/eventos')).cuerpo.length, antes, 'eventos guardados con duración inválida:')
+  igual((await eventoAviso({ duracion_horas: 3 })).estado, 201, '3 h:')
+  igual((await eventoAviso({ duracion_horas: 8 })).estado, 201, '8 h:')
+})
+await t('Fecha (API): una fecha pasada se rechaza', async () => {
+  igual((await eventoAviso({ fecha_evento: '2020-01-15' })).estado, 400)
+})
+await t('Duración (UI): 0,5 horas muestra el error y no deja pasar al paso 2', async () => {
+  await nuevoEvento('Duración UI' + sufijo, 600)
+  await page.fill('input[placeholder="Ej. 6"]', '0.5')
+  await page.getByRole('button', { name: /Siguiente: Requerimientos/ }).click()
+  await page.waitForSelector('text=La duración en horas debe estar entre 3 y 8 horas')
+  igual(await page.getByRole('tab', { name: /Alimentos/ }).count(), 0, 'avanzó al paso 2:')
+})
+await t('Aviso (detalle): 600 asistentes sin mobiliario → pide revisarlo; sin códigos internos', async () => {
+  const e = (await eventoAviso({ nombre_evento: 'Aviso 600 sin mobiliario' + sufijo, asistentes: 600 })).cuerpo.evento
+  const txt = await textoDeEvento(e.id)
+  cierto(txt.includes('Evento de más de 200 asistentes.') && txt.includes('Todavía no tiene mobiliario: con tantas personas conviene revisar si hay que alquilar'), 'texto: ' + (txt.match(/.{0,40}200 asistentes.{0,120}/) || [''])[0])
+  cierto(!txt.includes('RN-03') && !txt.includes('hasta ahora'), 'quedan códigos internos o texto viejo')
+})
+await t('Aviso (detalle): falta inventario → «Hay que alquilar N unidades» y «El inventario propio no alcanza»', async () => {
+  const el = (await api('/inventario', { method: 'POST', body: { nombre: 'Aviso falta' + sufijo, categoria_inventario: 'Mobiliario', cantidad_propia: 50 } })).cuerpo
+  const e = (await eventoAviso({ nombre_evento: 'Aviso falta' + sufijo, asistentes: 250, servicios_adicionales: [{ tipo: 'mobiliario', producto_id: el.id, cantidad: 80, descripcion: 'x' }] })).cuerpo.evento
+  const txt = await textoDeEvento(e.id)
+  cierto(txt.includes('Hay que alquilar 30 unidades de mobiliario.'), 'sin «Hay que alquilar 30 unidades»')
+  cierto(txt.includes('El inventario propio no alcanza para este evento.') && txt.includes('Además, tiene más de 200 asistentes.'), 'sin la explicación')
+  cierto(!txt.includes('RN-03'), 'aparece RN-03')
+})
+await t('Aviso (detalle): el inventario cubre el mobiliario → mensaje informativo, sin pedir alquilar', async () => {
+  const el = (await api('/inventario', { method: 'POST', body: { nombre: 'Aviso cubre' + sufijo, categoria_inventario: 'Mobiliario', cantidad_propia: 300 } })).cuerpo
+  const e = (await eventoAviso({ nombre_evento: 'Aviso cubre' + sufijo, asistentes: 250, servicios_adicionales: [{ tipo: 'mobiliario', producto_id: el.id, cantidad: 100, descripcion: 'x' }] })).cuerpo.evento
+  const txt = await textoDeEvento(e.id)
+  cierto(txt.includes('El inventario propio cubre el mobiliario pedido, así que por ahora no hay nada que alquilar.'), 'sin el mensaje de que cubre')
+  cierto(!txt.includes('Hay que alquilar'), 'pide alquilar sin faltar nada')
+})
+await t('Aviso (detalle): un evento de 150 asistentes con todo cubierto no muestra aviso', async () => {
+  const el = (await api('/inventario', { method: 'POST', body: { nombre: 'Aviso pequeño' + sufijo, categoria_inventario: 'Mobiliario', cantidad_propia: 200 } })).cuerpo
+  const e = (await eventoAviso({ nombre_evento: 'Aviso 150' + sufijo, asistentes: 150, servicios_adicionales: [{ tipo: 'mobiliario', producto_id: el.id, cantidad: 150, descripcion: 'x' }] })).cuerpo.evento
+  const txt = await textoDeEvento(e.id)
+  cierto(!txt.includes('Evento de más de') && !txt.includes('Hay que alquilar'), 'muestra un aviso innecesario')
+})
+
 
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
