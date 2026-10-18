@@ -159,7 +159,7 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | PATCH | `/inventario/:id/propiedad` | Marcar un elemento como propio o alquilado |
 | PATCH | `/inventario/:id/cantidad` | Fijar la cantidad disponible (queda como ajuste) |
 | POST | `/inventario/:id/adquisiciones` | Registrar una adquisición (suma a la cantidad) |
-| POST | `/inventario/:id/baja` | Retirar unidades dañadas (resta de la cantidad) |
+| POST | `/inventario/:id/retiro` | Retirar unidades por daño, pérdida o devolución (resta de la cantidad). `/inventario/:id/baja` es el nombre anterior y sigue funcionando |
 | GET | `/inventario/movimientos` | Historial de movimientos del inventario |
 
 ### Autenticación
@@ -385,13 +385,13 @@ Fija la cantidad disponible. La diferencia con la cantidad anterior queda como u
 
 Suma la cantidad al elemento (entero mayor o igual a 1) y registra un movimiento de tipo `adquisicion`. La cantidad no puede dejar el elemento por encima del **máximo de su categoría** (ver abajo): si se pasa, responde `400` y dice cuántas unidades se pueden adquirir como mucho. Solo aplica a elementos que ya existen. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
 
-#### `POST /api/inventario/:id/baja`
+#### `POST /api/inventario/:id/retiro`
 
 ```json
 { "cantidad": 5, "motivo": "Manchas de vino que no salieron" }
 ```
 
-Retira unidades dañadas (HU-10): las resta de `cantidad_propia`, las suma a `cantidad_danada` y registra un movimiento de tipo `baja` con la cantidad en negativo. Basta con la cantidad: el `motivo` es opcional (máximo 300 caracteres) y, si no se envía, el historial guarda «Baja por daño». No se puede retirar más de lo disponible (`400`). Como se resta de `cantidad_propia`, lo dado de baja deja de contarse como disponible en los eventos. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
+Retira unidades (HU-10, COR-09), por daño, pérdida o devolución: las resta de `cantidad_propia`, las suma a `cantidad_danada` y registra un movimiento de tipo `baja` con la cantidad en negativo (en pantalla se llama «retiro»; el nombre interno no cambió). Basta con la cantidad: el `motivo` es opcional (máximo 300 caracteres) y, si no se envía, el historial guarda «Retiro de elementos». No se puede retirar más de lo disponible (`400`). Como se resta de `cantidad_propia`, lo retirado deja de contarse como disponible en los eventos. La ruta anterior `POST /api/inventario/:id/baja` hace lo mismo. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
 
 #### `GET /api/inventario/movimientos?elemento_id=12&tipo=adquisicion&limite=20`
 

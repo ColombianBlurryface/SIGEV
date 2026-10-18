@@ -16,7 +16,8 @@
  *   - registro:    cantidad inicial al crear el elemento
  *   - adquisicion: unidades compradas que se suman (HU-09)
  *   - ajuste:      corrección manual de la cantidad (+ o -) desde "Actualizar"
- *   - baja:        unidades dañadas que se retiran (HU-10), siempre en negativo
+ *   - baja:        retiro de unidades (HU-10, COR-09: por daño, pérdida o devolución), siempre en negativo.
+ *                  En pantalla se llama «retiro»; el nombre interno «baja» se conserva en la base de datos.
  */
 const pool = require('../config/db');
 const { MAXIMO_POR_CATEGORIA, ETIQUETA_CATEGORIA, formatearCantidad } = require('../config/limitesInventario');
@@ -461,14 +462,14 @@ const consultarMovimientos = async (req, res) => {
     }
 };
 
-// Texto que queda en el historial cuando la baja se registra sin motivo
-const MOTIVO_BAJA_POR_DEFECTO = 'Baja por daño';
+// Texto que queda en el historial cuando el retiro se registra sin motivo
+const MOTIVO_BAJA_POR_DEFECTO = 'Retiro de elementos';
 
 /**
- * POST /api/inventario/:id/baja - HU-10 (RF-12)
- * Retira unidades dañadas { cantidad, motivo? } de un elemento: las resta de la cantidad
- * disponible, las suma a cantidad_danada y deja un movimiento de tipo "baja" en el historial.
- * Basta con indicar la cantidad dañada; el motivo es opcional (QA-02).
+ * POST /api/inventario/:id/retiro (y /baja, el nombre anterior) - HU-10 (RF-12, COR-09)
+ * Retira unidades { cantidad, motivo? } de un elemento, por daño, pérdida o devolución: las resta de la
+ * cantidad disponible, las suma a cantidad_danada (columna que conserva su nombre) y deja un movimiento
+ * de tipo "baja" en el historial. Basta con indicar la cantidad; el motivo es opcional (QA-02).
  */
 const retirarDanado = async (req, res) => {
     const id = Number(req.params.id);
@@ -529,8 +530,8 @@ const retirarDanado = async (req, res) => {
         res.status(201).json({ elemento, movimiento: movimiento.rows[0] });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Error al retirar elementos dañados:', error);
-        res.status(500).json({ error: 'Error al retirar los elementos dañados' });
+        console.error('Error al retirar elementos:', error);
+        res.status(500).json({ error: 'Error al retirar los elementos' });
     } finally {
         client.release();
     }

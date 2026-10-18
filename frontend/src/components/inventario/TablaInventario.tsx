@@ -1,7 +1,7 @@
 /**
  * Tabla de elementos del inventario. Permite actualizar la cantidad en la misma fila (HU-08),
  * marcar el elemento como propio o alquilado (HU-12) y abrir los formularios de adquisición (HU-09)
- * y de baja por daño (HU-10).
+ * y de retiro (HU-10).
  * En pantallas medianas cada fila se muestra como tarjeta.
  */
 import { Check, LoaderCircle, PackageMinus, PackagePlus, Pencil, X } from 'lucide-react'
@@ -25,10 +25,10 @@ interface TablaInventarioProps {
   mensajeVacio: string
   onActualizado: (elemento: ElementoInventario) => void
   onAdquirir: (elemento: ElementoInventario) => void
-  onDarDeBaja: (elemento: ElementoInventario) => void
+  onRetirar: (elemento: ElementoInventario) => void
 }
 
-export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdquirir, onDarDeBaja }: TablaInventarioProps) {
+export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdquirir, onRetirar }: TablaInventarioProps) {
   // Solo una fila se edita a la vez: la del id guardado aquí
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [valor, setValor] = useState('')
@@ -194,8 +194,8 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
                       <span className="font-display text-lg font-bold">{formatearNumero(elemento.cantidad_propia)}</span>
                       <span className="text-muted-foreground">und</span>
                       {elemento.cantidad_danada > 0 && (
-                        <span className="text-xs text-muted-foreground" title="Unidades dadas de baja por daño">
-                          · {formatearNumero(elemento.cantidad_danada)} de baja
+                        <span className="text-xs text-muted-foreground" title="Unidades retiradas del inventario">
+                          · {formatearNumero(elemento.cantidad_danada)} retiradas
                         </span>
                       )}
                       {/* Solo ícono para dejar espacio al nombre; el texto va en el título y en el aria-label */}
@@ -221,12 +221,12 @@ export function TablaInventario({ elementos, mensajeVacio, onActualizado, onAdqu
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => onDarDeBaja(elemento)}
+                        onClick={() => onRetirar(elemento)}
                         disabled={elemento.cantidad_propia === 0}
-                        aria-label={`Dar de baja unidades dañadas de ${elemento.nombre}`}
+                        aria-label={`Retirar unidades de ${elemento.nombre}`}
                       >
                         <PackageMinus aria-hidden="true" className="!size-4" />
-                        Baja
+                        Retiro
                       </Button>
                     </span>
                   )}

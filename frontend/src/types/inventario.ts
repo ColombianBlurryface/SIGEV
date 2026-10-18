@@ -43,4 +43,4 @@ export interface RegistrarAdquisicionResponse {
 }
 
 // La baja por daño responde igual que una adquisición: el elemento actualizado y el movimiento creado
-export type RegistrarBajaResponse = RegistrarAdquisicionResponse
+export type RegistrarRetiroResponse = RegistrarAdquisicionResponse
