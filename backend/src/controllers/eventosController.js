@@ -9,6 +9,7 @@
  */
 const pool = require('../config/db');
 const { esUnidadesPorPersonaValida } = require('../config/reglasBebidas');
+const { MAXIMO_POR_CATEGORIA, formatearCantidad } = require('../config/limitesInventario');
 
 // Redondea hacia arriba evitando errores de precisión decimal de JavaScript.
 // Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
@@ -155,6 +156,20 @@ const crearEvento = async (req, res) => {
     const elementosUsados = new Set();
     for (const servicio of servicios_adicionales) {
       const esMobiliario = servicio.tipo === 'mobiliario';
+
+      // RF-14, RN-17: lo que se pide de mobiliario es un entero de 1 hasta el máximo por elemento. Así lo que
+      // se alquila (lo requerido menos lo propio disponible) nunca pasa de ahí: no se piden ni se alquilan millones.
+      if (esMobiliario) {
+        const maximoMobiliario = MAXIMO_POR_CATEGORIA['Mobiliario'];
+        const cantidadPedida = servicio.cantidad;
+        if (typeof cantidadPedida !== 'number' || !Number.isInteger(cantidadPedida) || cantidadPedida < 1 || cantidadPedida > maximoMobiliario) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Datos inválidos',
+            detalle: `La cantidad de mobiliario debe ser un número entero de 1 a ${formatearCantidad(maximoMobiliario)}.`
+          });
+        }
+      }
       const productoId = esMobiliario && servicio.producto_id != null ? Number(servicio.producto_id) : null;
       let descripcion = servicio.descripcion;
 

@@ -39,3 +39,9 @@ export const MAXIMO_POR_CATEGORIA: Record<CategoriaInventario, number> = {
 }
 
 export const maximoCategoria = (categoria: CategoriaInventario) => MAXIMO_POR_CATEGORIA[categoria]
+
+// RN-17: solo se alquila mobiliario y vajilla. Las bebidas (generales y licores) siempre son propias.
+// Debe coincidir con backend/src/config/limitesInventario.js
+export const CATEGORIAS_ALQUILABLES: CategoriaInventario[] = ['Mobiliario', 'Vajilla']
+
+export const esAlquilable = (categoria: CategoriaInventario) => CATEGORIAS_ALQUILABLES.includes(categoria)

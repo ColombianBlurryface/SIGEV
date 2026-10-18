@@ -32,8 +32,6 @@ const DEFECTOS_CONOCIDOS = new Set([
   'Fecha en texto «mañana»',
   'Nombre de evento de 151 caracteres',
   'Producto del catálogo inexistente',
-  'Mobiliario con cantidad negativa',
-  'Mobiliario con cantidad decimal',
   'Servicio sin descripción',
   'Evento con id no numérico',
   'Porción por persona negativa en un producto',
@@ -52,7 +50,9 @@ const call = async (ruta, op = {}) => {
   try { c = await r.json() } catch { /* sin cuerpo */ }
   return { s: r.status, c }
 }
-const ev = (o = {}) => ({ nombre_evento: n('Explo'), fecha_evento: '2026-12-30', tipo_evento: 'Boda', duracion_horas: 4, asistentes: 100, ...o })
+// Cada evento de prueba va en una fecha distinta y lejana (2028-2030), por el tope de eventos por día
+const fechaLibre = () => new Date(Date.UTC(2028, 0, 1) + Math.floor(Math.random() * 1000) * 86400000).toISOString().slice(0, 10)
+const ev = (o = {}) => ({ nombre_evento: n('Explo'), fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 4, asistentes: 100, ...o })
 const m = (r) => ({ s: r.s, nota: r.c?.error || r.c?.detalle || '' })
 
 const filas = []

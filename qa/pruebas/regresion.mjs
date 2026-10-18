@@ -77,11 +77,14 @@ const entrar = async (p, usuario = USUARIO, pw = clave) => {
   await p.keyboard.press('Enter')
 }
 const optVal = async (p, sel, texto) => p.locator(`${sel} option`).filter({ hasText: new RegExp(`^${texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$|\\()`) }).first().getAttribute('value')
+// Cada evento de prueba va en una fecha distinta y lejana (2028-2030): así las pruebas no chocan con el tope de
+// eventos por día ni con lo que dejaron corridas anteriores.
+const fechaLibre = () => new Date(Date.UTC(2028, 0, 1) + Math.floor(Math.random() * 1000) * 86400000).toISOString().slice(0, 10)
 const nuevoEvento = async (nombre, asistentes, tipo = 'Boda') => {
   await page.goto(`${URL}/eventos/nuevo`)
   await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', nombre)
   await page.selectOption('select', tipo)
-  await page.fill('input[type=date]', '2026-12-27')
+  await page.fill('input[type=date]', fechaLibre())
   await page.fill('input[placeholder="Ej. 6"]', '5')
   await page.getByLabel('Número de asistentes').fill(String(asistentes))
 }
@@ -368,7 +371,7 @@ await t('El detalle guardado muestra propias, a alquilar y «Elemento alquilado�
 await t('RN-03: 150 sin aviso; 200 sin aviso; 201 con aviso (estado_alquiler)', async () => {
   const res = {}
   for (const n of [150, 200, 201]) {
-    const e = await api('/eventos', { method: 'POST', body: { nombre_evento: `Umbral ${n}` + sufijo, fecha_evento: '2026-12-28', tipo_evento: 'Boda', duracion_horas: 4, asistentes: n } })
+    const e = await api('/eventos', { method: 'POST', body: { nombre_evento: `Umbral ${n}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 4, asistentes: n } })
     res[n] = (await api(`/eventos/${e.cuerpo.evento.id}`)).cuerpo.estado_alquiler
   }
   igual(res[150].requiere_alquiler, false, '150:'); igual(res[200].requiere_alquiler, false, '200:'); igual(res[201].requiere_alquiler, true, '201:')
@@ -560,7 +563,7 @@ await t('El sistema resta y muestra el nuevo total', async () => {
   igual(e.cantidad_propia, 34, 'propia:'); igual(e.cantidad_danada, 6, 'dañada:')
 })
 await t('Lo dado de baja deja de contarse como disponible para los eventos', async () => {
-  const e = await api('/eventos', { method: 'POST', body: { nombre_evento: 'Baja efecto' + sufijo, fecha_evento: '2026-12-29', tipo_evento: 'Boda', duracion_horas: 3, asistentes: 100,
+  const e = await api('/eventos', { method: 'POST', body: { nombre_evento: 'Baja efecto' + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 3, asistentes: 100,
     servicios_adicionales: [{ tipo: 'mobiliario', descripcion: 'x', cantidad: 36, producto_id: baja.id }] } })
   const antes = (await api(`/eventos/${e.cuerpo.evento.id}`)).cuerpo.servicios_adicionales[0]
   igual(antes.unidades_alquilar, 2, 'antes: faltan 2 de 36 con 34 disponibles')
@@ -675,6 +678,139 @@ await t('Adquisición (UI): el aviso dice cuánto se puede adquirir; 2 se rechaz
   await page.waitForSelector('text=Ahora hay 2.000 disponibles')
 })
 
+
+// ============ Corrección: alquiler solo de mobiliario y vajilla (HU-12 · RF-14, RN-17) ============
+grupo = 'Cor. alquiler solo de mobiliario y vajilla (RN-17)'
+const crearAlquilable = (nombre, categoria, cantidad, esPropio) => api('/inventario', { method: 'POST', body: { nombre, categoria_inventario: categoria, cantidad_propia: cantidad, es_propio: esPropio } })
+const eventoConMobiliario = (asistentes, lineas) => api('/eventos', { method: 'POST', body: { nombre_evento: `Alquiler ${asistentes}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes,
+  servicios_adicionales: lineas.map(([producto_id, cantidad, descripcion]) => ({ tipo: 'mobiliario', producto_id, cantidad, descripcion })) } })
+
+await t('Registrar (API): una bebida no se puede registrar como alquilada; mobiliario y vajilla sí', async () => {
+  for (const cat of ['Bar/Bebidas', 'Bebidas de Coctelería']) {
+    const r = await crearAlquilable(`Bebida alquilada ${cat}` + sufijo, cat, 100, false)
+    igual(r.estado, 400, `${cat}:`); cierto(String(r.cuerpo.detalle).includes('Solo se alquila mobiliario y vajilla'), 'mensaje: ' + r.cuerpo.detalle)
+    igual((await crearAlquilable(`Bebida propia ${cat}` + sufijo, cat, 100, true)).estado, 201, `${cat} propia:`)
+  }
+  igual((await crearAlquilable('Mobiliario alquilado' + sufijo, 'Mobiliario', 10, false)).estado, 201, 'Mobiliario:')
+  igual((await crearAlquilable('Vajilla alquilada' + sufijo, 'Vajilla', 10, false)).estado, 201, 'Vajilla:')
+  cierto(!(await api('/inventario')).cuerpo.some((e) => /^Bebida alquilada/.test(e.nombre) && e.nombre.endsWith(sufijo)), 'se guardó una bebida alquilada')
+})
+await t('Marcar como alquilado (API): una bebida no; mobiliario y vajilla sí', async () => {
+  const beb = (await crearAlquilable('Bebida marcar' + sufijo, 'Bar/Bebidas', 50, true)).cuerpo
+  const mob = (await crearAlquilable('Mobiliario marcar' + sufijo, 'Mobiliario', 50, true)).cuerpo
+  const marcar = (id, v) => api(`/inventario/${id}/propiedad`, { method: 'PATCH', body: { es_propio: v } })
+  igual((await marcar(beb.id, false)).estado, 400, 'bebida:')
+  igual((await marcar(beb.id, true)).estado, 200, 'bebida propia (no cambia nada):')
+  igual((await marcar(mob.id, false)).estado, 200, 'mobiliario:')
+  igual((await api('/inventario')).cuerpo.find((x) => x.id === beb.id).es_propio, true, 'bebida sigue propia:')
+})
+await t('Cambiar categoría (API): un elemento alquilado no puede pasar a bebidas', async () => {
+  const e = (await crearAlquilable('Alquilado cambio' + sufijo, 'Vajilla', 10, false)).cuerpo
+  const mover = (cat) => api(`/inventario/${e.id}/categoria`, { method: 'PATCH', body: { categoria_inventario: cat } })
+  igual((await mover('Bar/Bebidas')).estado, 400, 'a Bebidas Generales:')
+  igual((await mover('Bebidas de Coctelería')).estado, 400, 'a Licores:')
+  igual((await mover('Mobiliario')).estado, 200, 'a Mobiliario:')
+  const p = (await crearAlquilable('Propio cambio' + sufijo, 'Mobiliario', 10, true)).cuerpo
+  igual((await api(`/inventario/${p.id}/categoria`, { method: 'PATCH', body: { categoria_inventario: 'Bar/Bebidas' } })).estado, 200, 'propio a bebidas (sin alquiler):')
+})
+await t('Evento (API): la cantidad de mobiliario es un entero de 1 a 2.000 (el máximo exacto sí, uno más no)', async () => {
+  const el = (await crearAlquilable('Cantidad evento' + sufijo, 'Mobiliario', 100, true)).cuerpo
+  const antes = (await api('/eventos')).cuerpo.length
+  for (const v of [0, -5, 1.5, 2001, 1000000, '10', null]) {
+    const r = await eventoConMobiliario(100, [[el.id, v]])
+    igual(r.estado, 400, `cantidad ${JSON.stringify(v)}:`)
+  }
+  igual((await api('/eventos')).cuerpo.length, antes, 'eventos guardados con datos inválidos:')
+  const otro = await eventoConMobiliario(100, [[null, 2000, 'Carpa 10 x 20 m']])
+  igual(otro.estado, 201, '2000 de «Otro»:')
+  igual((await eventoConMobiliario(100, [[el.id, 2000]])).estado, 201, '2000 del inventario:')
+})
+await t('Alquiler (API), 250 asistentes: se alquila exactamente lo requerido menos lo propio disponible', async () => {
+  const e = (await crearElemento('Mesas 250' + sufijo, 'Mobiliario', 150)).cuerpo
+  const r = await eventoConMobiliario(250, [[e.id, 250]])
+  igual(r.estado, 201)
+  const det = (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo
+  const l = det.servicios_adicionales[0]
+  igual(l.unidades_propias, 150, 'propias:'); igual(l.unidades_alquilar, 100, 'a alquilar (250 − 150):')
+  igual(det.estado_alquiler.unidades_alquilar, 100, 'total a alquilar:'); igual(det.estado_alquiler.inventario_insuficiente, true, 'falta inventario:')
+  igual(det.aviso_alquiler, true, 'aviso por umbral (250 > 200):')
+})
+await t('Alquiler (API), 150 asistentes: si no falta nada, no se alquila nada', async () => {
+  const e = (await crearElemento('Mesas 150' + sufijo, 'Mobiliario', 150)).cuerpo
+  const r = await eventoConMobiliario(150, [[e.id, 150]])
+  igual(r.estado, 201)
+  const det = (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo
+  const l = det.servicios_adicionales[0]
+  igual(l.unidades_propias, 150, 'propias:'); igual(l.unidades_alquilar, 0, 'a alquilar:')
+  igual(det.estado_alquiler.unidades_alquilar, 0, 'total a alquilar:'); igual(det.estado_alquiler.inventario_insuficiente, false, 'no falta inventario:')
+  igual(det.aviso_alquiler, false, 'sin aviso (150 ≤ 200):')
+})
+await t('Alquiler (API): nunca pasa de lo requerido menos lo propio, ni con un elemento alquilado ni con «Otro»', async () => {
+  const propio = (await crearElemento('Alq propio' + sufijo, 'Mobiliario', 80)).cuerpo
+  const alquilado = (await crearAlquilable('Alq proveedor' + sufijo, 'Mobiliario', 500, false)).cuerpo
+  const r = await eventoConMobiliario(300, [[propio.id, 50], [alquilado.id, 120], [null, 40, 'Carpa']])
+  igual(r.estado, 201)
+  const l = (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo.servicios_adicionales
+  const porNombre = (n) => l.find((x) => x.descripcion.startsWith(n))
+  igual(porNombre('Alq propio').unidades_alquilar, 0, 'propio con stock de sobra:')
+  igual(porNombre('Alq proveedor').unidades_alquilar, 120, 'alquilado: todo lo requerido y no más:')
+  igual(porNombre('Carpa').unidades_alquilar, 40, '«Otro»: todo lo requerido y no más:')
+  for (const x of l) cierto(Number(x.unidades_alquilar) <= Number(x.cantidad) - Number(x.unidades_propias), `${x.descripcion}: alquilar > requerido − propio`)
+})
+await t('Inventario (UI): al elegir una bebida no se ofrece «Alquilado»; con mobiliario o vajilla sí', async () => {
+  await page.goto(`${URL}/inventario`)
+  const alquilado = page.getByRole('button', { name: 'Alquilado', exact: true })
+  await page.selectOption('#inventario-categoria', 'Mobiliario')
+  igual(await alquilado.isDisabled(), false, 'Mobiliario:')
+  await alquilado.click(); igual(await alquilado.getAttribute('aria-pressed'), 'true', 'marcado:')
+  await page.selectOption('#inventario-categoria', 'Bar/Bebidas')
+  igual(await alquilado.isDisabled(), true, 'Bebidas Generales:')
+  igual(await page.getByRole('button', { name: 'Propio', exact: true }).getAttribute('aria-pressed'), 'true', 'vuelve a Propio:')
+  await page.waitForSelector('text=Solo se alquila mobiliario y vajilla')
+  await page.selectOption('#inventario-categoria', 'Bebidas de Coctelería')
+  igual(await alquilado.isDisabled(), true, 'Licores:')
+  await page.selectOption('#inventario-categoria', 'Vajilla')
+  igual(await alquilado.isDisabled(), false, 'Vajilla:')
+})
+await t('Inventario (UI): al editar una bebida el selector de propiedad no trae «Alquilado»', async () => {
+  await page.reload()
+  const beb = (await api('/inventario')).cuerpo.find((x) => x.nombre === 'Bebida propia Bar/Bebidas' + sufijo)
+  const mob = (await api('/inventario')).cuerpo.find((x) => x.nombre === 'Mobiliario alquilado' + sufijo)
+  await page.fill('#buscar-inventario', beb.nombre)
+  await page.getByRole('button', { name: `Actualizar cantidad de ${beb.nombre}` }).click()
+  igual(await page.locator(`#propiedad-${beb.id} option[value=alquilado]`).count(), 0, 'bebida:')
+  await page.fill('#buscar-inventario', mob.nombre)
+  await page.getByRole('button', { name: `Actualizar cantidad de ${mob.nombre}` }).click()
+  igual(await page.locator(`#propiedad-${mob.id} option[value=alquilado]`).count(), 1, 'mobiliario:')
+  await page.fill('#buscar-inventario', '')
+})
+await t('Evento (UI), 250 y 150 asistentes: «A alquilar» es lo requerido menos lo propio, y 0 si no falta nada', async () => {
+  const e = (await api('/inventario')).cuerpo.find((x) => x.nombre === 'Mesas 250' + sufijo)
+  const filaMob = () => page.locator('li', { hasText: e.nombre }).first().innerText()
+  await nuevoEvento('UI alquiler 250' + sufijo, 250)
+  await aRequerimientos(); await pestana('Mobiliario')
+  await page.selectOption('#mobiliario-elemento', String(e.id)); await page.fill('#mobiliario-cantidad', '250')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  const t250 = (await filaMob()).replace(/\s+/g, ' ')
+  cierto(/150/.test(t250) && /100/.test(t250), 'la fila no muestra 150 propias y 100 a alquilar: ' + t250)
+  cierto(await page.getByText('Hay que alquilar 100 unidades').count() === 1, 'no avisa 100 a alquilar')
+  // 2001 unidades: no se deja agregar
+  await page.getByRole('button', { name: `Quitar ${e.nombre}` }).click()
+  await page.selectOption('#mobiliario-elemento', String(e.id)); await page.fill('#mobiliario-cantidad', '2001')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.waitForSelector('text=La cantidad máxima por elemento de mobiliario es 2.000 unidades')
+  // 150 asistentes con 150 requeridas y 150 propias: no falta nada
+  await nuevoEvento('UI alquiler 150' + sufijo, 150)
+  await aRequerimientos(); await pestana('Mobiliario')
+  const e150 = (await api('/inventario')).cuerpo.find((x) => x.nombre === 'Mesas 150' + sufijo)
+  await page.selectOption('#mobiliario-elemento', String(e150.id)); await page.fill('#mobiliario-cantidad', '150')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.waitForTimeout(400)
+  igual(await page.getByText(/Hay que alquilar/).count(), 0, 'avisa alquiler sin faltar nada:')
+  cierto(/Propio/.test(await page.locator('li', { hasText: e150.nombre }).first().innerText()), 'no figura como propio')
+})
+
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {
@@ -722,10 +858,8 @@ await t('Un producto ya usado en un evento no cambia de grupo/tipo (409)', async
 grupo = 'Cor. unidades por persona (RF-22 / RN-15)'
 const MSG_UNIDADES = 'Las unidades por persona deben ser un número entero de 1 a 10'
 const nuevaBebidaCatalogo = (nombre, porcion) => api('/catalogo', { method: 'POST', body: { nombre, clasificacion: 'bebida_general', tipo_calculo: 'unidad_persona', porcion_por_persona: porcion } })
-let diaUnidades = 0
 const eventoConUnidades = async (productoId, porcion) => {
-  diaUnidades += 1 // una fecha distinta por evento, por si hay un tope de eventos por día
-  return api('/eventos', { method: 'POST', body: { nombre_evento: 'Unidades' + sufijo, fecha_evento: `2027-04-${String(10 + diaUnidades).padStart(2, '0')}`, tipo_evento: 'Boda', duracion_horas: 5, asistentes: 100, productos: [{ producto_id: productoId, porcion_por_persona: porcion, precio_unitario: 3000 }] } })
+  return api('/eventos', { method: 'POST', body: { nombre_evento: 'Unidades' + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes: 100, productos: [{ producto_id: productoId, porcion_por_persona: porcion, precio_unitario: 3000 }] } })
 }
 const poker = (await api('/catalogo')).cuerpo.find((p) => p.nombre === 'Poker')
 

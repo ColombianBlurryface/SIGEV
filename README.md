@@ -269,6 +269,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 - Un evento debe tener **entre 40 y 600 asistentes** (RN-01 / HU-07).
 - Con **más de 300 asistentes** el evento es de modalidad **buffet** (RN-02).
 - Con **más de 200 asistentes** (valor por defecto del umbral) se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).
+- **Solo se alquila mobiliario y vajilla** (RN-17): las bebidas (generales y licores) siempre son propias y no ofrecen la opción «Alquilado». Lo que se alquila en un evento es, como máximo, lo requerido menos lo propio disponible, y si no falta nada no se alquila nada. La cantidad que se pide de mobiliario es un entero de 1 a 2.000 (RF-14).
 - El mobiliario de un evento se compara con el stock actual del inventario: lo que alcanza es **propio** y el resto se **alquila**. Lo que no está en el inventario, o está marcado como **alquilado**, se alquila completo (HU-12).
 - El umbral de 200 asistentes no está escrito en el código: se define con la variable `MAX_OWNED_CAPACITY_THRESHOLD` del backend (P-05). Si el cliente compra más inventario y el límite sube, solo se cambia el `.env` y se reinicia el servidor.
 - Las **bebidas generales** (cerveza, vino, champaña, gaseosa) y las del **bar de coctelería** (licores fuertes) se manejan por separado y un producto pertenece a un solo grupo (RN-08 / HU-13).

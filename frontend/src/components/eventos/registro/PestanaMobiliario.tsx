@@ -20,12 +20,14 @@ import { useInventario } from '@/hooks/useInventario'
 import { useUmbralAlquiler } from '@/hooks/useUmbralAlquiler'
 import { repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { formatearNumero } from '@/lib/formato'
+import { MAXIMO_POR_CATEGORIA } from '@/lib/inventario'
 import type { MobiliarioAgregado } from '@/types/registro'
 
 const COLUMNAS = 'grid grid-cols-[minmax(0,1fr)_84px_84px_96px_36px] items-center gap-2.5'
 
 // Valor del <select> para lo que no está en el inventario
 const OPCION_OTRO = 'otro'
+const MAXIMO_MOBILIARIO = MAXIMO_POR_CATEGORIA.Mobiliario
 
 interface PestanaMobiliarioProps {
   asistentes: number
@@ -58,6 +60,10 @@ export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar 
     if (!seleccion) return setErrorForm('Selecciona un elemento del inventario o «Otro».')
     if (esOtro && !referencia.trim()) return setErrorForm('Describe el elemento que no está en el inventario.')
     if (!Number.isInteger(cantidadNumero) || cantidadNumero < 1) return setErrorForm('La cantidad debe ser un número entero mayor a 0.')
+    // RN-17: lo que se pide (y por tanto lo que se podría alquilar) no pasa del máximo por elemento de mobiliario
+    if (cantidadNumero > MAXIMO_MOBILIARIO) {
+      return setErrorForm(`La cantidad máxima por elemento de mobiliario es ${formatearNumero(MAXIMO_MOBILIARIO)} unidades.`)
+    }
 
     onAgregar({
       id: crypto.randomUUID(),
@@ -151,11 +157,16 @@ export function PestanaMobiliario({ asistentes, mobiliario, onAgregar, onQuitar 
               />
             </FormField>
 
-            <FormField id="mobiliario-cantidad" label="Cantidad requerida">
+            <FormField
+              id="mobiliario-cantidad"
+              label="Cantidad requerida"
+              hint={`Hasta ${formatearNumero(MAXIMO_MOBILIARIO)} unidades. Solo se alquila lo que falta.`}
+            >
               <Input
                 id="mobiliario-cantidad"
                 type="number"
                 min={1}
+                max={MAXIMO_MOBILIARIO}
                 step={1}
                 inputMode="numeric"
                 value={cantidad}

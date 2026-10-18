@@ -19,7 +19,7 @@
  *   - baja:        unidades dañadas que se retiran (HU-10), siempre en negativo
  */
 const pool = require('../config/db');
-const { MAXIMO_POR_CATEGORIA, ETIQUETA_CATEGORIA, formatearCantidad } = require('../config/limitesInventario');
+const { MAXIMO_POR_CATEGORIA, ETIQUETA_CATEGORIA, CATEGORIAS_ALQUILABLES, formatearCantidad } = require('../config/limitesInventario');
 
 // Cada categoría de inventario se guarda con la clasificación del catálogo que le corresponde.
 // La vajilla no tiene clasificación propia en el catálogo (el enum solo distingue alimento,
@@ -41,6 +41,11 @@ const esCantidadValida = (valor) => typeof valor === 'number' && Number.isIntege
 // RN-16: cada categoría tiene un máximo de unidades por elemento (ver config/limitesInventario.js)
 const mensajeMaximo = (categoria) =>
     `El máximo por elemento de ${ETIQUETA_CATEGORIA[categoria]} es ${formatearCantidad(MAXIMO_POR_CATEGORIA[categoria])} unidades.`;
+
+// RN-17: solo se alquila mobiliario y vajilla; las bebidas siempre son propias
+const esAlquilable = (categoria) => CATEGORIAS_ALQUILABLES.includes(categoria);
+const mensajeNoAlquilable = (categoria) =>
+    `Solo se alquila mobiliario y vajilla (RN-17): ${ETIQUETA_CATEGORIA[categoria]} no se puede marcar como alquilado.`;
 
 // Respuesta estándar 400 cuando los datos enviados no cumplen las reglas
 const datosInvalidos = (res, detalle) => res.status(400).json({ error: 'Datos inválidos', detalle });
@@ -100,6 +105,9 @@ const registrarElemento = async (req, res) => {
     }
     if (typeof esPropio !== 'boolean') {
         return datosInvalidos(res, 'es_propio debe ser verdadero (propio) o falso (alquilado).');
+    }
+    if (!esPropio && !esAlquilable(categoria_inventario)) {
+        return datosInvalidos(res, mensajeNoAlquilable(categoria_inventario));
     }
 
     const client = await pool.connect();
@@ -198,15 +206,24 @@ const actualizarPropiedad = async (req, res) => {
     }
 
     try {
+        // RN-17: marcar un elemento como alquilado solo se permite en mobiliario y vajilla
         const result = await pool.query(
             `UPDATE catalogo_productos SET es_propio = $1
             WHERE id = $2 AND categoria_inventario IS NOT NULL
+              AND ($1 = true OR categoria_inventario = ANY($3))
             RETURNING ${CAMPOS_INVENTARIO}`,
-            [es_propio, id]
+            [es_propio, id, CATEGORIAS_ALQUILABLES]
         );
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
+            const existe = await pool.query(
+                'SELECT categoria_inventario FROM catalogo_productos WHERE id = $1 AND categoria_inventario IS NOT NULL',
+                [id]
+            );
+            if (existe.rowCount === 0) {
+                return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
+            }
+            return datosInvalidos(res, mensajeNoAlquilable(existe.rows[0].categoria_inventario));
         }
         res.json(result.rows[0]);
     } catch (error) {
@@ -236,17 +253,22 @@ const actualizarCategoria = async (req, res) => {
         const result = await pool.query(
             `UPDATE catalogo_productos SET categoria_inventario = $1, clasificacion = $2
             WHERE id = $3 AND categoria_inventario IS NOT NULL AND cantidad_propia <= $4
+              AND (es_propio = true OR $5::boolean)
             RETURNING ${CAMPOS_INVENTARIO}`,
-            [categoria_inventario, CATEGORIAS_INVENTARIO[categoria_inventario], id, MAXIMO_POR_CATEGORIA[categoria_inventario]]
+            [categoria_inventario, CATEGORIAS_INVENTARIO[categoria_inventario], id, MAXIMO_POR_CATEGORIA[categoria_inventario], esAlquilable(categoria_inventario)]
         );
 
         if (result.rowCount === 0) {
             const existe = await pool.query(
-                'SELECT cantidad_propia FROM catalogo_productos WHERE id = $1 AND categoria_inventario IS NOT NULL',
+                'SELECT cantidad_propia, es_propio FROM catalogo_productos WHERE id = $1 AND categoria_inventario IS NOT NULL',
                 [id]
             );
             if (existe.rowCount === 0) {
                 return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
+            }
+            // RN-17: un elemento alquilado no puede pasar a una categoría que no se alquila
+            if (!existe.rows[0].es_propio && !esAlquilable(categoria_inventario)) {
+                return datosInvalidos(res, `El elemento está marcado como alquilado. ${mensajeNoAlquilable(categoria_inventario)}`);
             }
             return datosInvalidos(
                 res,
