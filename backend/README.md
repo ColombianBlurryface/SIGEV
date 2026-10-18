@@ -97,6 +97,22 @@ Se puede ejecutar varias veces: no duplica nada y no pisa precios escritos desde
 
 ---
 
+## Datos de prueba del entorno publicado
+
+Para que ningún módulo se vea vacío al abrirlo en el entorno publicado (por ejemplo, en una sustentación), [`src/db/datos-de-prueba.sql`](src/db/datos-de-prueba.sql) carga, en el SQL Editor de Supabase (primero QA, luego producción):
+
+- **Inventario de las cuatro categorías** (mobiliario, vajilla, bebidas generales y licores para cócteles) con cantidades de ejemplo y movimientos de cada tipo (registro inicial, adquisición y retiro), para que el historial tenga algo que mostrar.
+- **4 eventos de ejemplo con mobiliario requerido**, con alimentos, bebidas y servicios: uno de 250 asistentes que supera el umbral de alquiler (se ven las unidades propias y las que se alquilan), uno de 480 en modalidad buffet, uno de 120 y uno de 90 que el inventario propio cubre completo. Las fechas son «hoy + 30, 45, 60 y 75 días», así que siempre salen como próximos.
+- Los productos del catálogo que esos eventos usan, solo si faltan.
+
+**Se identifican como prueba:** los eventos empiezan por «[Demo] » y sus observaciones dicen «Datos de prueba»; cada cantidad de ejemplo del inventario deja un movimiento con la nota «Datos de prueba…» (se ve en el historial de `/inventario`), y los elementos de bebidas que crea el script terminan en « (demo)».
+
+**Es seguro repetirlo:** no duplica nada y **no toca ningún elemento que ya tenga unidades**, así que no pisa inventario real. Solo agrega datos; no cambia la estructura de la base.
+
+Cuando empiecen los datos reales, [`src/db/datos-de-prueba-quitar.sql`](src/db/datos-de-prueba-quitar.sql) los quita: borra los eventos «[Demo]», devuelve cada elemento a la cantidad que tenía antes y borra los elementos « (demo)». Si ya hubo movimientos reales sobre un elemento de ejemplo, ese elemento se salta y el script lo avisa al final.
+
+---
+
 ## Estructura
 
 ```text
@@ -159,7 +175,7 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | PATCH | `/inventario/:id/propiedad` | Marcar un elemento como propio o alquilado |
 | PATCH | `/inventario/:id/cantidad` | Fijar la cantidad disponible (queda como ajuste) |
 | POST | `/inventario/:id/adquisiciones` | Registrar una adquisición (suma a la cantidad) |
-| POST | `/inventario/:id/baja` | Retirar unidades dañadas (resta de la cantidad) |
+| POST | `/inventario/:id/retiro` | Retirar unidades por daño, pérdida o devolución (resta de la cantidad). `/inventario/:id/baja` es el nombre anterior y sigue funcionando |
 | GET | `/inventario/movimientos` | Historial de movimientos del inventario |
 
 ### Autenticación
@@ -387,13 +403,13 @@ Fija la cantidad disponible. La diferencia con la cantidad anterior queda como u
 
 Suma la cantidad al elemento (entero mayor o igual a 1) y registra un movimiento de tipo `adquisicion`. La cantidad no puede dejar el elemento por encima del **máximo de su categoría** (ver abajo): si se pasa, responde `400` y dice cuántas unidades se pueden adquirir como mucho. Solo aplica a elementos que ya existen. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
 
-#### `POST /api/inventario/:id/baja`
+#### `POST /api/inventario/:id/retiro`
 
 ```json
 { "cantidad": 5, "motivo": "Manchas de vino que no salieron" }
 ```
 
-Retira unidades dañadas (HU-10): las resta de `cantidad_propia`, las suma a `cantidad_danada` y registra un movimiento de tipo `baja` con la cantidad en negativo. Basta con la cantidad: el `motivo` es opcional (máximo 300 caracteres) y, si no se envía, el historial guarda «Baja por daño». No se puede retirar más de lo disponible (`400`). Como se resta de `cantidad_propia`, lo dado de baja deja de contarse como disponible en los eventos. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
+Retira unidades (HU-10, COR-09), por daño, pérdida o devolución: las resta de `cantidad_propia`, las suma a `cantidad_danada` y registra un movimiento de tipo `baja` con la cantidad en negativo (en pantalla se llama «retiro»; el nombre interno no cambió). Basta con la cantidad: el `motivo` es opcional (máximo 300 caracteres) y, si no se envía, el historial guarda «Retiro de elementos». No se puede retirar más de lo disponible (`400`). Como se resta de `cantidad_propia`, lo retirado deja de contarse como disponible en los eventos. La ruta anterior `POST /api/inventario/:id/baja` hace lo mismo. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
 
 #### `GET /api/inventario/movimientos?elemento_id=12&tipo=adquisicion&limite=20`
 

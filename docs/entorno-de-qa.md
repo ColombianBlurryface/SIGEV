@@ -84,6 +84,8 @@ npm run todo
 
 **Limpiar los datos de prueba:** ejecutar `qa/limpiar-datos-qa.sql` en el SQL Editor de Supabase de QA.
 
+**Datos de ejemplo para mostrar el sistema** (inventario de las cuatro categorías y eventos «[Demo]» con mobiliario): `backend/src/db/datos-de-prueba.sql`, y `backend/src/db/datos-de-prueba-quitar.sql` para quitarlos. Ver la sección «Datos de prueba del entorno publicado» de `backend/README.md`.
+
 ## C. Reglas del entorno de QA
 
 1. **Producción nunca se prueba.** Todo lo que sea «probar» va a QA.

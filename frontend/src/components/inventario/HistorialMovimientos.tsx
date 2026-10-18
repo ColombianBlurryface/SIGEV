@@ -1,5 +1,5 @@
 /**
- * Historial de movimientos del inventario (HU-09): registros iniciales, adquisiciones, ajustes y bajas,
+ * Historial de movimientos del inventario (HU-09): registros iniciales, adquisiciones, ajustes y retiros,
  * con filtro por elemento y botón "Ver más".
  */
 import { History, RotateCw } from 'lucide-react'
@@ -16,8 +16,11 @@ const ESTILO_TIPO: Record<TipoMovimiento, { etiqueta: string; clases: string }> 
   registro: { etiqueta: 'Registro', clases: 'bg-accent text-accent-foreground' },
   adquisicion: { etiqueta: 'Adquisición', clases: 'bg-success-soft text-success-foreground' },
   ajuste: { etiqueta: 'Ajuste', clases: 'bg-warning-soft text-warning-foreground' },
-  baja: { etiqueta: 'Baja por daño', clases: 'bg-destructive-soft text-destructive-foreground' },
+  baja: { etiqueta: 'Retiro', clases: 'bg-destructive-soft text-destructive-foreground' },
 }
+
+// Los retiros que se guardaron antes del cambio de nombre dicen «Baja por daño»: se muestran con el nombre nuevo
+const notaVisible = (nota: string) => (nota === 'Baja por daño' ? 'Retiro de elementos' : nota)
 
 const conSigno = (cantidad: number) => `${cantidad > 0 ? '+' : '−'}${formatearNumero(Math.abs(cantidad))}`
 
@@ -117,7 +120,7 @@ export function HistorialMovimientos({
                     </span>
                     <span className="truncate text-[12.5px] text-muted-foreground">
                       {formatearFechaHora(m.creado_en)}
-                      {m.notas ? ` · ${m.notas}` : m.tipo === 'ajuste' ? ' · Ajuste manual' : ''}
+                      {m.notas ? ` · ${notaVisible(m.notas)}` : m.tipo === 'ajuste' ? ' · Ajuste manual' : ''}
                     </span>
                     <span className="text-right text-[12.5px] whitespace-nowrap text-muted-foreground">
                       Quedó en {formatearNumero(m.cantidad_resultante)}
