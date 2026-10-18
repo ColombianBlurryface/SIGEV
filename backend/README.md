@@ -232,7 +232,7 @@ Crea un producto. `precio_unitario` es opcional: sin precio queda en `0` y se es
 | Grupo (`clasificacion`) | Tipos de cálculo permitidos | Datos |
 | --- | --- | --- |
 | `alimento` | `porcion_persona` | `porcion_por_persona` en gramos; el precio es por kg |
-| `bebida_general`, `bar_cocteleria` | `unidad_persona` | `porcion_por_persona` en unidades; el precio es por unidad |
+| `bebida_general`, `bar_cocteleria` | `unidad_persona` | `porcion_por_persona` en unidades: un **entero de 1 a 10** (RF-22 / RN-15); el precio es por unidad |
 | `bebida_general`, `bar_cocteleria` | `botella_compartida` | `volumen_botella_ml` y `tamano_porcion_ml` (la porción no puede superar la botella); el precio es por botella |
 
 La unidad de medida se deduce del tipo. Los números deben enviarse como número (no como texto). Responde `201` con el producto, `400` si algo no cumple las reglas y `409` si ya hay otro producto del catálogo con ese nombre. El mobiliario no se crea aquí: vive en el inventario.
@@ -275,6 +275,7 @@ Activa o desactiva un producto. Un producto desactivado deja de ofrecerse en los
 
 - `productos` y `servicios_adicionales` son opcionales.
 - `porcion_por_persona` es opcional: si no se envía, se usa la del catálogo.
+- En una bebida de tipo `unidad_persona`, la porción (la enviada o la del catálogo) debe ser un entero de 1 a 10; si no, responde `400` con «Las unidades por persona de «…» deben ser un número entero de 1 a 10» y no se guarda nada (RF-22 / RN-15).
 - `precio_unitario` es opcional: es el valor unitario (por unidad, por botella o por kg) escrito en el evento. Si no se envía, se usa el del catálogo. Debe ser un número mayor o igual a 0 (`400` si no). El costo guardado se calcula con ese valor, y el detalle del evento lo devuelve como el precio realmente usado.
 - El mobiliario se envía como servicio adicional con `tipo: "mobiliario"`. Con `producto_id` se relaciona con un elemento del inventario de categoría `Mobiliario` (HU-12); en ese caso la descripción se toma del inventario. Sin `producto_id`, el elemento no está en el inventario y todo se alquila.
 - Un mismo elemento del inventario no puede repetirse en el evento (`400`).

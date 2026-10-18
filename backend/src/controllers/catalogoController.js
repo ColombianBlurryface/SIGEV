@@ -11,6 +11,7 @@
  * los eventos nuevos.
  */
 const pool = require('../config/db');
+const { esUnidadesPorPersonaValida, MENSAJE_UNIDADES_POR_PERSONA } = require('../config/reglasBebidas');
 
 // Grupos del catálogo. El mobiliario no está aquí: vive en el inventario (HU-04 / HU-12).
 const CLASIFICACIONES = ['alimento', 'bebida_general', 'bar_cocteleria'];
@@ -79,12 +80,13 @@ const validarProducto = (body) => {
     volumen = volumen_botella_ml;
     tamano = tamano_porcion_ml;
   } else {
-    if (!esNumeroPositivo(porcion_por_persona)) {
-      return {
-        error: tipo_calculo === 'porcion_persona'
-          ? 'Los gramos por persona deben ser un número mayor a 0.'
-          : 'Las unidades por persona deben ser un número mayor a 0.'
-      };
+    if (tipo_calculo === 'porcion_persona') {
+      if (!esNumeroPositivo(porcion_por_persona)) {
+        return { error: 'Los gramos por persona deben ser un número mayor a 0.' };
+      }
+    } else if (!esUnidadesPorPersonaValida(porcion_por_persona)) {
+      // Bebida individual (RF-22, RN-15): las unidades por persona son un entero de 1 a 10
+      return { error: MENSAJE_UNIDADES_POR_PERSONA };
     }
     porcion = porcion_por_persona;
   }

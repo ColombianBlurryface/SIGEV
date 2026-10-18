@@ -22,6 +22,7 @@ import { useCatalogo } from '@/hooks/useCatalogo'
 import { calcularProducto } from '@/lib/calculos'
 import { ORDEN_TIPOS_BEBIDA, TIPOS_BEBIDA, type TipoBebida } from '@/lib/categorias'
 import { formatearMoneda, formatearNumero } from '@/lib/formato'
+import { esUnidadesPorPersonaValida, MENSAJE_UNIDADES_POR_PERSONA } from '@/lib/reglasBebidas'
 import { cn } from '@/lib/utils'
 import type { ProductoCatalogo } from '@/types/catalogo'
 import type { BebidaAgregada } from '@/types/registro'
@@ -65,8 +66,9 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
   const precioValido = Number.isFinite(precioNumero) && precioNumero >= 0
   // Con el valor escrito en el evento, todos los cálculos (vista previa, subtotal y resumen) usan ese precio
   const producto = productoCatalogo ? { ...productoCatalogo, precio_unitario: String(precioValido ? precioNumero : 0) } : null
+  // RF-22, RN-15: las unidades por persona de una bebida individual son un entero de 1 a 10
   const unidadesNumero = Number(unidades)
-  const unidadesValidas = unidades.trim() !== '' && Number.isFinite(unidadesNumero) && unidadesNumero > 0
+  const unidadesValidas = esUnidadesPorPersonaValida(unidades)
   const listo = producto !== null && (modo === 'compartida' || unidadesValidas)
   // En las compartidas la porción viene del catálogo (tamaño de la copa); en las individuales la escribe el usuario
   const porcionEnvio = modo === 'compartida' ? Number(producto?.porcion_por_persona ?? 0) : unidadesNumero
@@ -107,7 +109,7 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
   function agregar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault()
     if (!producto) return setErrorForm('Selecciona una bebida del catálogo.')
-    if (modo === 'individual' && !unidadesValidas) return setErrorForm('Las unidades por persona deben ser mayores a 0.')
+    if (modo === 'individual' && !unidadesValidas) return setErrorForm(MENSAJE_UNIDADES_POR_PERSONA)
     if (!precioValido) return setErrorForm('El valor unitario debe ser 0 o más.')
 
     onAgregar({ producto, porcion: porcionEnvio })
@@ -225,16 +227,25 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
                   </FormField>
 
                   {modo === 'individual' ? (
-                    <FormField id="bebida-unidades" label="Unidades por persona">
+                    <FormField
+                      id="bebida-unidades"
+                      label="Unidades por persona"
+                      hint="Número entero de 1 a 10"
+                      error={unidades.trim() !== '' && !unidadesValidas ? MENSAJE_UNIDADES_POR_PERSONA : undefined}
+                    >
                       <Input
                         id="bebida-unidades"
-                        type="number"
-                        min={0}
-                        step="any"
-                        inputMode="decimal"
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={3}
                         value={unidades}
-                        onChange={(e) => setUnidades(e.target.value)}
+                        onChange={(e) => {
+                          setUnidades(e.target.value)
+                          setErrorForm(null)
+                        }}
                         disabled={!producto}
+                        aria-invalid={unidades.trim() !== '' && !unidadesValidas}
+                        aria-describedby={unidades.trim() !== '' && !unidadesValidas ? 'bebida-unidades-error' : undefined}
                       />
                     </FormField>
                   ) : (
