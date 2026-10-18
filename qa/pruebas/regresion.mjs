@@ -718,6 +718,99 @@ await t('Un producto ya usado en un evento no cambia de grupo/tipo (409)', async
   igual(r.estado, 409)
 })
 
+// ============ L2. Corrección: unidades por persona = entero de 1 a 10 (HU-03, HU-43 · RF-22, RN-15) ============
+grupo = 'Cor. unidades por persona (RF-22 / RN-15)'
+const MSG_UNIDADES = 'Las unidades por persona deben ser un número entero de 1 a 10'
+const nuevaBebidaCatalogo = (nombre, porcion) => api('/catalogo', { method: 'POST', body: { nombre, clasificacion: 'bebida_general', tipo_calculo: 'unidad_persona', porcion_por_persona: porcion } })
+let diaUnidades = 0
+const eventoConUnidades = async (productoId, porcion) => {
+  diaUnidades += 1 // una fecha distinta por evento, por si hay un tope de eventos por día
+  return api('/eventos', { method: 'POST', body: { nombre_evento: 'Unidades' + sufijo, fecha_evento: `2027-04-${String(10 + diaUnidades).padStart(2, '0')}`, tipo_evento: 'Boda', duracion_horas: 5, asistentes: 100, productos: [{ producto_id: productoId, porcion_por_persona: porcion, precio_unitario: 3000 }] } })
+}
+const poker = (await api('/catalogo')).cuerpo.find((p) => p.nombre === 'Poker')
+
+await t('Catálogo (API): 1,4 se rechaza con un mensaje claro', async () => {
+  const r = await nuevaBebidaCatalogo('Unidades 1.4' + sufijo, 1.4)
+  igual(r.estado, 400); cierto(String(r.cuerpo.detalle).includes(MSG_UNIDADES), 'mensaje: ' + r.cuerpo.detalle)
+})
+await t('Catálogo (API): 0 y 11 se rechazan; 1 y 10 se aceptan', async () => {
+  igual((await nuevaBebidaCatalogo('Unidades 0' + sufijo, 0)).estado, 400, '0:')
+  igual((await nuevaBebidaCatalogo('Unidades 11' + sufijo, 11)).estado, 400, '11:')
+  igual((await nuevaBebidaCatalogo('Unidades -1' + sufijo, -1)).estado, 400, '-1:')
+  igual((await nuevaBebidaCatalogo('Unidades uno' + sufijo, '1')).estado, 400, 'texto:')
+  igual((await nuevaBebidaCatalogo('Unidades 1' + sufijo, 1)).estado, 201, '1:')
+  igual((await nuevaBebidaCatalogo('Unidades 10' + sufijo, 10)).estado, 201, '10:')
+})
+await t('Catálogo (API): editar un producto con 1,4 se rechaza', async () => {
+  const p = (await api('/catalogo')).cuerpo.find((x) => x.nombre === 'Unidades 1' + sufijo)
+  const r = await api(`/catalogo/${p.id}`, { method: 'PUT', body: { nombre: p.nombre, clasificacion: 'bebida_general', tipo_calculo: 'unidad_persona', porcion_por_persona: 1.4 } })
+  igual(r.estado, 400)
+  igual((await api(`/catalogo/${p.id}`, { method: 'PUT', body: { nombre: p.nombre, clasificacion: 'bebida_general', tipo_calculo: 'unidad_persona', porcion_por_persona: 3 } })).estado, 200, 'entero válido:')
+})
+await t('Evento (API): 1,4, 0 y 11 se rechazan con mensaje claro y no guardan nada', async () => {
+  const antes = (await api('/eventos')).cuerpo.length
+  for (const v of [1.4, 0, 11, -2, '1,4']) {
+    const r = await eventoConUnidades(poker.id, v)
+    igual(r.estado, 400, `${v}:`); cierto(/Poker.*deben ser un número entero de 1 a 10/.test(String(r.cuerpo.detalle)), `mensaje con ${v}: ` + r.cuerpo.detalle)
+  }
+  igual((await api('/eventos')).cuerpo.length, antes, 'eventos guardados:')
+})
+await t('Evento (API): los enteros 1 y 10 se aceptan (valor exacto del límite)', async () => {
+  for (const v of [1, 10]) {
+    const r = await eventoConUnidades(poker.id, v)
+    igual(r.estado, 201, `${v}:`)
+    const det = (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo
+    igual(Number(det.productos_calculados[0].porcion_por_persona), v, 'porción guardada:')
+  }
+})
+await t('Evento (UI): 1,4 muestra el mensaje y no deja agregar; luego un entero sí', async () => {
+  await nuevoEvento('UI unidades' + sufijo, 100)
+  await aRequerimientos(); await pestana('Bebidas')
+  await page.selectOption('#bebida-producto', await optVal(page, '#bebida-producto', 'Poker'))
+  await page.fill('#bebida-unidades', '1,4')
+  await page.waitForSelector(`text=${MSG_UNIDADES}`)
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.waitForSelector(`text=${MSG_UNIDADES}`)
+  igual(await page.getByText('Todavía no has agregado bebidas generales').count(), 1, 'se agregó algo:')
+  await page.fill('#bebida-unidades', '3')
+  igual(await page.getByText(MSG_UNIDADES).count(), 0, 'el mensaje debía desaparecer:')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.waitForSelector('text=300 und')
+})
+await t('Evento (UI): 0 y 11 se rechazan; 10 se acepta', async () => {
+  await page.selectOption('#bebida-producto', await optVal(page, '#bebida-producto', 'Águila'))
+  for (const v of ['0', '11', '2.5', '-1']) {
+    await page.fill('#bebida-unidades', v)
+    await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+    await page.waitForSelector(`text=${MSG_UNIDADES}`)
+  }
+  await page.fill('#bebida-unidades', '10')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.waitForSelector('text=1.000 und')
+})
+await t('Catálogo (UI): 1,4 se rechaza con un mensaje claro y 10 se acepta', async () => {
+  await page.goto(`${URL}/catalogo`)
+  await page.getByLabel('Nombre del producto').fill('UI unidades' + sufijo)
+  await page.selectOption('#catalogo-grupo', 'bebida_general')
+  await page.fill('#catalogo-porcion', '1,4')
+  await page.waitForSelector(`text=${MSG_UNIDADES}`)
+  await page.getByRole('button', { name: 'Crear producto' }).click()
+  await page.waitForSelector(`text=${MSG_UNIDADES}`)
+  cierto(!(await api('/catalogo')).cuerpo.some((x) => x.nombre === 'UI unidades' + sufijo), 'se creó con 1,4')
+  await page.fill('#catalogo-porcion', '10')
+  await page.getByRole('button', { name: 'Crear producto' }).click()
+  await page.waitForSelector('text=quedó en el catálogo')
+})
+await t('Las bebidas ya registradas siguen abriéndose sin error (catálogo y eventos)', async () => {
+  await page.goto(`${URL}/catalogo`)
+  await page.getByRole('button', { name: 'Editar Poker' }).click()
+  igual(await page.locator('#catalogo-porcion').inputValue(), '2', 'valor guardado:')
+  igual(await page.getByText(MSG_UNIDADES).count(), 0, 'error al abrir:')
+  const lista = (await api('/eventos')).cuerpo
+  cierto(lista.length > 0, 'sin eventos')
+  for (const e of lista.slice(0, 5)) igual((await api(`/eventos/${e.id}`)).estado, 200, `evento ${e.id}:`)
+})
+
 // ============ M. Transversales ============
 grupo = 'Transversales'
 await t('Modo oscuro se activa y se recuerda al recargar', async () => {

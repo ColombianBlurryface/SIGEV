@@ -24,6 +24,7 @@ import {
   type TipoConsumo,
 } from '@/lib/catalogo'
 import { formatearMoneda, formatearNumero } from '@/lib/formato'
+import { esUnidadesPorPersonaValida, MENSAJE_UNIDADES_POR_PERSONA } from '@/lib/reglasBebidas'
 import { ApiError } from '@/services/api'
 import { catalogoService } from '@/services/catalogoService'
 import type { DatosProducto, GrupoCatalogo, ProductoCatalogo } from '@/types/catalogo'
@@ -57,8 +58,12 @@ function validar(v: Valores): Errores {
     else if (positivo(v.volumen) && Number(v.tamano) > Number(v.volumen)) {
       errores.tamano = 'La porción no puede ser mayor que la botella.'
     }
+  } else if (v.tipo === 'unidad_persona') {
+    // Bebida individual (RF-22, RN-15): las unidades por persona son un entero de 1 a 10
+    if (v.porcion.trim() === '') errores.porcion = 'Indica las unidades por persona.'
+    else if (!esUnidadesPorPersonaValida(v.porcion)) errores.porcion = MENSAJE_UNIDADES_POR_PERSONA
   } else if (v.tipo && !positivo(v.porcion)) {
-    errores.porcion = v.tipo === 'porcion_persona' ? 'Indica los gramos por persona.' : 'Indica las unidades por persona.'
+    errores.porcion = 'Indica los gramos por persona.'
   }
 
   // El precio es opcional: vacío = sin precio. Si se escribe, debe ser 0 o más.
@@ -101,6 +106,10 @@ export function FormularioProducto({ producto, onGuardado, onCancelar }: Formula
 
   const editando = producto !== null
   const errores = intento ? validar(valores) : {}
+  // Las unidades por persona se avisan apenas se escriben, sin esperar a «Guardar» (RF-22)
+  if (!intento && valores.tipo === 'unidad_persona' && valores.porcion.trim() !== '' && !esUnidadesPorPersonaValida(valores.porcion)) {
+    errores.porcion = MENSAJE_UNIDADES_POR_PERSONA
+  }
   const cambiar = (campo: keyof Valores, valor: string) => setValores((v) => ({ ...v, [campo]: valor }))
   const propsError = (campo: Campo, id: string) => ({
     'aria-invalid': Boolean(errores[campo]),
@@ -265,13 +274,14 @@ export function FormularioProducto({ producto, onGuardado, onCancelar }: Formula
             >
               <Input
                 id="catalogo-porcion"
-                type="number"
-                min={0}
-                step="any"
-                inputMode="decimal"
+                // Las unidades por persona son un entero: se escribe como texto para ver y rechazar «1,4»
+                type={tipo === 'unidad_persona' ? 'text' : 'number'}
+                min={tipo === 'unidad_persona' ? undefined : 0}
+                step={tipo === 'unidad_persona' ? undefined : 'any'}
+                inputMode={tipo === 'unidad_persona' ? 'numeric' : 'decimal'}
                 value={valores.porcion}
                 onChange={(e) => cambiar('porcion', e.target.value)}
-                placeholder={tipo === 'porcion_persona' ? 'Ej. 200' : 'Ej. 2'}
+                placeholder={tipo === 'porcion_persona' ? 'Ej. 200' : 'Ej. 2 (entero de 1 a 10)'}
                 disabled={enviando}
                 {...propsError('porcion', 'catalogo-porcion')}
               />

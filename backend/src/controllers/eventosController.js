@@ -8,6 +8,7 @@
  * mobiliario con el inventario para saber qué es propio y qué hay que alquilar (HU-12).
  */
 const pool = require('../config/db');
+const { esUnidadesPorPersonaValida } = require('../config/reglasBebidas');
 
 // Redondea hacia arriba evitando errores de precisión decimal de JavaScript.
 // Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
@@ -86,7 +87,25 @@ const crearEvento = async (req, res) => {
         precioUnitario = p;
       }
 
-      const porcion = Number(item.porcion_por_persona || prod.porcion_por_persona);
+      let porcion = Number(item.porcion_por_persona || prod.porcion_por_persona);
+      if (prod.tipo_calculo === 'unidad_persona') {
+        // RF-22, RN-15: las unidades por persona de una bebida individual son un entero de 1 a 10.
+        // El valor enviado se valida tal cual (un 0 no se reemplaza por el del catálogo).
+        const enviado = item.porcion_por_persona;
+        const hayEnviado = enviado !== undefined && enviado !== null;
+        porcion = !hayEnviado
+          ? Number(prod.porcion_por_persona)
+          : typeof enviado === 'number' || typeof enviado === 'string'
+            ? Number(enviado)
+            : NaN;
+        if (!esUnidadesPorPersonaValida(porcion)) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Datos inválidos',
+            detalle: `Las unidades por persona de «${prod.nombre}» deben ser un número entero de 1 a 10.`
+          });
+        }
+      }
       let cantidadNeta = 0;
       let cantidadConMargen = 0;
       let unidadEntrega = prod.unidad_medida;

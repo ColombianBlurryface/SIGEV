@@ -276,6 +276,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 - Cómo se calcula cada producto:
   - **Por porción** (alimentos): asistentes × gramos por persona; si supera 1000 g se expresa en kg.
   - **Por unidad** (bebidas individuales): asistentes × unidades por persona, redondeado hacia arriba.
+    Las unidades por persona son un **número entero de 1 a 10** (no se sirven 1,4 gaseosas por persona); se valida al registrar las bebidas del evento y al guardar el producto en el catálogo (RF-22 / RN-15).
   - **Por botella** (bebidas compartidas): porciones por botella = volumen ÷ tamaño de la porción; botellas = asistentes ÷ porciones por botella, redondeado hacia arriba.
 - El costo estimado solo incluye alimentos y bebidas; el mobiliario y los servicios se cotizan aparte.
 - Todo elemento del inventario tiene **una de cuatro categorías**: Mobiliario, Bebidas Generales, Licores para Cócteles o Vajilla. Cualquier otro valor (por ejemplo «Decoración») se rechaza, tanto en la API como en la base de datos (RF-10 / HU-09).
