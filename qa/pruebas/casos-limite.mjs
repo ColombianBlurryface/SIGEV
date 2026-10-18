@@ -27,10 +27,6 @@ if (!esEntornoDePruebas && process.env.QA_FORZAR !== 'si') {
 }
 
 const DEFECTOS_CONOCIDOS = new Set([
-  'Asistentes decimales (100.5)',
-  'Fecha inválida «2026-13-45»',
-  'Fecha en texto «mañana»',
-  'Nombre de evento de 151 caracteres',
   'Producto del catálogo inexistente',
   'Mobiliario con cantidad negativa',
   'Mobiliario con cantidad decimal',
