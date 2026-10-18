@@ -39,7 +39,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-08 | Registrar elementos del inventario propio, actualizar su cantidad y consultarlos. | `/inventario` |
 | HU-09 | Registrar adquisiciones que suman al inventario, con historial de todos los movimientos. | `/inventario` |
 | HU-09 · clasificación | Clasificar el inventario en cuatro categorías cerradas: Mobiliario, Bebidas Generales, Licores para Cócteles y Vajilla. No existe «Decoración». Se filtra por categoría y se puede cambiar la categoría de un elemento (por ahora solo en la API). | `/inventario` |
-| HU-10 | Dar de baja unidades dañadas desde una sección aparte: se elige el elemento y se escribe solo la cantidad dañada; el sistema hace la resta, muestra el nuevo total y no deja dar de baja más de lo disponible. | `/inventario` · pestaña «Baja» |
+| HU-10 | Retirar unidades del inventario desde una sección aparte, «Retiro de elementos» (cubre daño, pérdida o devolución): se elige el elemento y se escribe solo la «Cantidad a retirar»; el sistema hace la resta, muestra el nuevo total y no deja retirar más de lo disponible. | `/inventario` · pestaña «Retiro» |
 | HU-12 | Diferenciar lo propio de lo alquilado: cada elemento del inventario se registra como **Propio** o **Alquilado** (con filtro por propiedad), cada línea de mobiliario del evento dice cuántas unidades son propias y cuántas se alquilan, y se avisa de alquiler cuando el evento supera el umbral de asistentes (200 por defecto). | `/inventario`, nuevo evento · paso 2 y 3, detalle del evento |
 
 Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
@@ -112,9 +112,9 @@ Registro de elementos y adquisiciones, tabla con búsqueda y filtros por categor
 | --- | --- |
 | ![Inventario en modo claro](docs/imagenes/inventario-claro.png) | ![Inventario en modo oscuro](docs/imagenes/inventario-oscuro.png) |
 
-**Baja por daño (HU-10).** La pestaña «Baja» (o el botón «Baja» de cada fila) separa esta acción de actualizar la cantidad: solo se escribe cuántas unidades se dañaron y el sistema resta. Lo dado de baja deja de contarse como disponible, también para los eventos.
+**Retiro de elementos (HU-10).** La pestaña «Retiro» (o el botón «Retiro» de cada fila) separa esta acción de actualizar la cantidad: solo se escribe la cantidad a retirar, por daño, pérdida o devolución, y el sistema resta. Lo retirado deja de contarse como disponible, también para los eventos.
 
-![Sección de baja de elementos dañados](docs/imagenes/inventario-baja.png)
+![Sección de retiro de elementos](docs/imagenes/inventario-retiro.png)
 
 Cada elemento es **propio** o **alquilado** a un proveedor (HU-12). Los alquilados se marcan con su etiqueta, se pueden filtrar y no suman a las unidades propias; en un evento, todo lo que se pida de ellos cuenta como «a alquilar».
 
@@ -258,7 +258,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 | `evento_productos` | Alimentos y bebidas de cada evento con la cantidad neta, la cantidad con margen y el costo estimado. |
 | `requerimientos_adicionales` | Mobiliario y servicios adicionales de cada evento (sin cálculo automático). El mobiliario guarda en `producto_id` el elemento del inventario con el que se relaciona (HU-12). |
 | `usuarios` | Cuentas que pueden iniciar sesión (contraseña guardada como hash bcrypt). |
-| `movimientos_inventario` | Historial de cada cambio de cantidad del inventario: registro inicial, adquisición, ajuste o baja por daño. |
+| `movimientos_inventario` | Historial de cada cambio de cantidad del inventario: registro inicial, adquisición, ajuste o retiro (por daño, pérdida o devolución; internamente el tipo se llama `baja`). |
 
 > **Importante:** modificar `schema.sql` **no actualiza Supabase por sí solo**. Quien cambie una tabla debe ejecutar ese cambio en Supabase (SQL Editor) dentro del mismo PR y avisarlo en la descripción.
 

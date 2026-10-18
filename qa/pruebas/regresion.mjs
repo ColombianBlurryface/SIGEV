@@ -535,32 +535,32 @@ await t('Vajilla existe como categoría y el catálogo de eventos no se contamin
   cierto(!c.some((p) => p.nombre.endsWith(sufijo)), 'inventario en el catálogo')
 })
 
-// ============ K. HU-10 baja (QA-02) ============
-grupo = 'HU-10 Baja de dañados (QA-02)'
-const baja = (await api('/inventario', { method: 'POST', body: { nombre: 'Silla baja' + sufijo, categoria_inventario: 'Mobiliario', cantidad_propia: 40 } })).cuerpo
-await t('Existe una sección de baja separada de la edición', async () => {
+// ============ K. HU-10 retiro (QA-02, COR-09) ============
+grupo = 'HU-10 Retiro de elementos (QA-02 / COR-09)'
+const baja = (await api('/inventario', { method: 'POST', body: { nombre: 'Silla retiro' + sufijo, categoria_inventario: 'Mobiliario', cantidad_propia: 40 } })).cuerpo
+await t('Existe una sección «Retiro de elementos» separada de la edición', async () => {
   await page.goto(`${URL}/inventario`)
-  await page.getByRole('button', { name: 'Baja', exact: true }).first().click()
-  await page.waitForSelector('text=Dar de baja elementos dañados')
+  await page.getByRole('button', { name: 'Retiro', exact: true }).first().click()
+  await page.waitForSelector('text=Retiro de elementos')
 })
 await t('Elegir elemento y escribir solo la cantidad (sin motivo obligatorio)', async () => {
-  await page.selectOption('#baja-elemento', String(baja.id)); await page.fill('#baja-cantidad', '6')
+  await page.selectOption('#retiro-elemento', String(baja.id)); await page.fill('#retiro-cantidad', '6')
   cierto((await page.locator('[aria-live=polite]').filter({ hasText: 'Disponible' }).innerText()).includes('34'), 'sin vista previa 40 → 34')
 })
-await t('No permite dar de baja más de lo disponible (aviso y botón deshabilitado)', async () => {
-  await page.fill('#baja-cantidad', '41')
-  await page.waitForSelector('text=No puedes dar de baja más de las')
-  igual(await page.getByRole('button', { name: 'Dar de baja', exact: true }).isDisabled(), true)
-  await page.fill('#baja-cantidad', '6')
+await t('No permite retirar más de lo disponible (aviso y botón deshabilitado)', async () => {
+  await page.fill('#retiro-cantidad', '41')
+  await page.waitForSelector('text=No puedes retirar más de las')
+  igual(await page.getByRole('button', { name: 'Retirar', exact: true }).isDisabled(), true)
+  await page.fill('#retiro-cantidad', '6')
 })
 await t('El sistema resta y muestra el nuevo total', async () => {
-  await page.getByRole('button', { name: 'Dar de baja', exact: true }).click()
+  await page.getByRole('button', { name: 'Retirar', exact: true }).click()
   await page.waitForSelector('text=Quedan 34 disponibles')
   const e = (await api('/inventario')).cuerpo.find((x) => x.id === baja.id)
   igual(e.cantidad_propia, 34, 'propia:'); igual(e.cantidad_danada, 6, 'dañada:')
 })
-await t('Lo dado de baja deja de contarse como disponible para los eventos', async () => {
-  const e = await api('/eventos', { method: 'POST', body: { nombre_evento: 'Baja efecto' + sufijo, fecha_evento: '2026-12-29', tipo_evento: 'Boda', duracion_horas: 3, asistentes: 100,
+await t('Lo retirado deja de contarse como disponible para los eventos', async () => {
+  const e = await api('/eventos', { method: 'POST', body: { nombre_evento: 'Retiro efecto' + sufijo, fecha_evento: '2026-12-29', tipo_evento: 'Boda', duracion_horas: 3, asistentes: 100,
     servicios_adicionales: [{ tipo: 'mobiliario', descripcion: 'x', cantidad: 36, producto_id: baja.id }] } })
   const antes = (await api(`/eventos/${e.cuerpo.evento.id}`)).cuerpo.servicios_adicionales[0]
   igual(antes.unidades_alquilar, 2, 'antes: faltan 2 de 36 con 34 disponibles')
@@ -568,9 +568,42 @@ await t('Lo dado de baja deja de contarse como disponible para los eventos', asy
   const despues = (await api(`/eventos/${e.cuerpo.evento.id}`)).cuerpo.servicios_adicionales[0]
   igual(despues.unidades_propias, 30, 'propias:'); igual(despues.unidades_alquilar, 6, 'alquilar:')
 })
-await t('El historial muestra «Baja por daño» con la nota por defecto', async () => {
+await t('El historial muestra «Retiro» con la nota por defecto «Retiro de elementos»', async () => {
   const m = (await api(`/inventario/movimientos?elemento_id=${baja.id}&tipo=baja`)).cuerpo
-  cierto(m.some((x) => x.notas === 'Baja por daño' && x.cantidad === -6), 'sin nota por defecto')
+  cierto(m.some((x) => x.notas === 'Retiro de elementos' && x.cantidad === -6), 'sin nota por defecto')
+})
+await t('COR-09: la sección se llama «Retiro de elementos» y el campo «Cantidad a retirar»', async () => {
+  await page.goto(`${URL}/inventario`)
+  await page.getByRole('button', { name: 'Retiro', exact: true }).first().click()
+  await page.getByRole('heading', { name: 'Retiro de elementos' }).waitFor()
+  await page.getByLabel('Cantidad a retirar').waitFor()
+  await page.getByLabel('Elemento a retirar').waitFor()
+})
+await t('COR-09: no quedan textos de «baja» ni de «dañada» en el formulario, las pestañas ni los botones', async () => {
+  const textos = [
+    await page.locator('main form').first().innerText(),
+    await page.getByRole('group', { name: 'Acción' }).innerText(),
+    (await page.locator('main li button').allInnerTexts()).join(' '),
+    (await page.locator('main li button').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label') || '').join(' '))),
+  ].join(' | ')
+  cierto(!/baja|dañad|dañar/i.test(textos), 'quedan textos viejos: ' + (textos.match(/.{0,25}(baja|dañad|dañar).{0,25}/i) || [''])[0])
+  cierto((await page.locator('main li button[aria-label^="Retirar unidades de"]').count()) > 0, 'sin botón «Retiro» en las filas')
+})
+await t('COR-09: el historial y la fila usan el nombre nuevo (Retiro / retiradas)', async () => {
+  cierto((await page.getByText('Baja por daño').count()) === 0, 'aparece «Baja por daño»')
+  cierto((await page.locator('li', { hasText: 'Silla retiro' + sufijo }).first().innerText()).includes('6 retiradas') || (await page.locator('li', { hasText: 'Silla retiro' + sufijo }).first().innerText()).includes('10 retiradas'), 'la fila no dice «retiradas»')
+})
+await t('COR-09: el descuento funciona igual por la ruta nueva /retiro y por la anterior /baja', async () => {
+  const e = (await api('/inventario', { method: 'POST', body: { nombre: 'Retiro rutas' + sufijo, categoria_inventario: 'Mobiliario', cantidad_propia: 50 } })).cuerpo
+  const nuevo = await api(`/inventario/${e.id}/retiro`, { method: 'POST', body: { cantidad: 7 } })
+  igual(nuevo.estado, 201, '/retiro:'); igual(nuevo.cuerpo.elemento.cantidad_propia, 43, 'quedan:'); igual(nuevo.cuerpo.movimiento.notas, 'Retiro de elementos', 'nota:')
+  const viejo = await api(`/inventario/${e.id}/baja`, { method: 'POST', body: { cantidad: 3, motivo: 'devolución' } })
+  igual(viejo.estado, 201, '/baja:'); igual(viejo.cuerpo.elemento.cantidad_propia, 40, 'quedan:'); igual(viejo.cuerpo.elemento.cantidad_danada, 10, 'retiradas acumuladas:')
+  igual((await api(`/inventario/${e.id}/retiro`, { method: 'POST', body: { cantidad: 41 } })).estado, 400, 'más de lo disponible:')
+  igual((await api(`/inventario/${e.id}/retiro`, { method: 'POST', body: { cantidad: 0 } })).estado, 400, '0:')
+  igual((await api(`/inventario/${e.id}/retiro`, { method: 'POST', body: { cantidad: 1.5 } })).estado, 400, '1.5:')
+  const mov = (await api(`/inventario/movimientos?elemento_id=${e.id}`)).cuerpo.reduce((suma, m) => suma + m.cantidad, 0)
+  igual(mov, 40, 'suma de movimientos = cantidad disponible:')
 })
 
 

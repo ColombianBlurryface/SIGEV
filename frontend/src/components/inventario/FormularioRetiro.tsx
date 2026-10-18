@@ -1,9 +1,10 @@
 /**
- * Formulario de baja de elementos dañados (HU-10, RF-12).
+ * Formulario de retiro de elementos (HU-10, RF-12, COR-09).
  *
  * Es una acción aparte de «Actualizar» cantidad: la persona elige el elemento y escribe solo
- * cuántas unidades se dañaron. El sistema hace la resta y muestra cómo queda el total, sin que
- * nadie tenga que calcular la cantidad resultante. No deja dar de baja más de lo disponible.
+ * cuántas unidades salen del inventario (por daño, pérdida o devolución). El sistema hace la resta
+ * y muestra cómo queda el total, sin que nadie tenga que calcular la cantidad resultante. No deja
+ * retirar más de lo disponible.
  */
 import { ArrowRight, LoaderCircle, PackageMinus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
@@ -22,23 +23,23 @@ type Errores = Partial<Record<'elemento' | 'cantidad', string>>
 
 function validar(elemento: ElementoInventario | null, cantidad: string): Errores {
   const errores: Errores = {}
-  if (!elemento) errores.elemento = 'Selecciona el elemento dañado.'
+  if (!elemento) errores.elemento = 'Selecciona el elemento a retirar.'
   const numero = Number(cantidad)
-  if (cantidad.trim() === '') errores.cantidad = 'Indica cuántas unidades se dañaron.'
+  if (cantidad.trim() === '') errores.cantidad = 'Indica cuántas unidades se retiran.'
   else if (!Number.isInteger(numero) || numero < 1) errores.cantidad = 'Debe ser un número entero mayor a 0.'
   else if (elemento && numero > elemento.cantidad_propia) {
-    errores.cantidad = `No puedes dar de baja más de las ${formatearNumero(elemento.cantidad_propia)} unidades disponibles.`
+    errores.cantidad = `No puedes retirar más de las ${formatearNumero(elemento.cantidad_propia)} unidades disponibles.`
   }
   return errores
 }
 
-interface FormularioBajaProps {
+interface FormularioRetiroProps {
   elementos: ElementoInventario[]
   elementoInicialId?: number
   onRegistrada: (elemento: ElementoInventario) => void
 }
 
-export function FormularioBaja({ elementos, elementoInicialId, onRegistrada }: FormularioBajaProps) {
+export function FormularioRetiro({ elementos, elementoInicialId, onRegistrada }: FormularioRetiroProps) {
   const [elementoId, setElementoId] = useState(elementoInicialId ? String(elementoInicialId) : '')
   const [cantidad, setCantidad] = useState('')
   const [motivo, setMotivo] = useState('')
@@ -47,7 +48,7 @@ export function FormularioBaja({ elementos, elementoInicialId, onRegistrada }: F
   const [errorServidor, setErrorServidor] = useState<string | null>(null)
   const [exito, setExito] = useState<string | null>(null)
 
-  // Solo se puede dar de baja lo que tiene unidades disponibles
+  // Solo se puede retirar lo que tiene unidades disponibles
   const conStock = elementos.filter((e) => e.cantidad_propia > 0)
   const elemento = elementos.find((e) => e.id === Number(elementoId)) ?? null
   const cantidadNumero = Number(cantidad)
@@ -69,20 +70,20 @@ export function FormularioBaja({ elementos, elementoInicialId, onRegistrada }: F
 
     setEnviando(true)
     try {
-      const { elemento: actualizado } = await inventarioService.registrarBaja(
+      const { elemento: actualizado } = await inventarioService.registrarRetiro(
         elemento.id,
         cantidadNumero,
         motivo.trim() || undefined,
       )
       onRegistrada(actualizado)
       setExito(
-        `Se dieron de baja ${formatearNumero(cantidadNumero)} unidades de «${actualizado.nombre}». Quedan ${formatearNumero(actualizado.cantidad_propia)} disponibles.`,
+        `Se retiraron ${formatearNumero(cantidadNumero)} unidades de «${actualizado.nombre}». Quedan ${formatearNumero(actualizado.cantidad_propia)} disponibles.`,
       )
       setCantidad('')
       setMotivo('')
       setIntento(false)
     } catch (err) {
-      setErrorServidor(err instanceof ApiError ? err.message : 'No fue posible registrar la baja. Intenta de nuevo.')
+      setErrorServidor(err instanceof ApiError ? err.message : 'No fue posible registrar el retiro. Intenta de nuevo.')
     } finally {
       setEnviando(false)
     }
@@ -91,7 +92,7 @@ export function FormularioBaja({ elementos, elementoInicialId, onRegistrada }: F
   if (elementos.length === 0) {
     return (
       <p className="rounded-[10px] bg-background px-3.5 py-3 text-sm text-subtle">
-        Todavía no hay elementos en el inventario para dar de baja.
+        Todavía no hay elementos en el inventario para retirar.
       </p>
     )
   }
@@ -101,13 +102,13 @@ export function FormularioBaja({ elementos, elementoInicialId, onRegistrada }: F
       {errorServidor && <Alert variant="error">{errorServidor}</Alert>}
       {exito && <Alert variant="success">{exito}</Alert>}
 
-      <FormField id="baja-elemento" label="Elemento dañado" error={errores.elemento}>
+      <FormField id="retiro-elemento" label="Elemento a retirar" error={errores.elemento}>
         <Select
-          id="baja-elemento"
+          id="retiro-elemento"
           value={elementoId}
           onChange={(e) => setElementoId(e.target.value)}
           disabled={enviando}
-          {...propsError('elemento', 'baja-elemento')}
+          {...propsError('elemento', 'retiro-elemento')}
         >
           <option value="" disabled>
             Selecciona un elemento
@@ -128,10 +129,10 @@ export function FormularioBaja({ elementos, elementoInicialId, onRegistrada }: F
         </Select>
       </FormField>
 
-      <FormField id="baja-cantidad" label="Cantidad dañada" error={errores.cantidad}>
+      <FormField id="retiro-cantidad" label="Cantidad a retirar" error={errores.cantidad}>
         <div className="relative">
           <Input
-            id="baja-cantidad"
+            id="retiro-cantidad"
             type="number"
             min={1}
             max={elemento?.cantidad_propia}
@@ -142,7 +143,7 @@ export function FormularioBaja({ elementos, elementoInicialId, onRegistrada }: F
             placeholder="Ej. 5"
             disabled={enviando}
             className="pr-24"
-            {...propsError('cantidad', 'baja-cantidad')}
+            {...propsError('cantidad', 'retiro-cantidad')}
           />
           <span aria-hidden="true" className="pointer-events-none absolute top-3.5 right-3.5 text-sm text-muted-foreground">
             unidades
@@ -150,18 +151,18 @@ export function FormularioBaja({ elementos, elementoInicialId, onRegistrada }: F
         </div>
       </FormField>
 
-      <FormField id="baja-motivo" label="Motivo" opcional>
+      <FormField id="retiro-motivo" label="Motivo" opcional>
         <Input
-          id="baja-motivo"
+          id="retiro-motivo"
           value={motivo}
           onChange={(e) => setMotivo(e.target.value)}
-          placeholder="Ej. rotura durante el evento"
+          placeholder="Ej. rotura, pérdida o devolución"
           maxLength={300}
           disabled={enviando}
         />
       </FormField>
 
-      {/* Vista previa: cantidad disponible actual -> cantidad que quedará después de la baja */}
+      {/* Vista previa: cantidad disponible actual -> cantidad que quedará después del retiro */}
       {elemento && (
         <div aria-live="polite" className="flex items-center justify-between gap-3 rounded-[10px] bg-destructive-soft px-3.5 py-3 text-sm text-destructive-foreground">
           <span className="font-semibold">Disponible</span>
@@ -176,7 +177,7 @@ export function FormularioBaja({ elementos, elementoInicialId, onRegistrada }: F
 
       <Button type="submit" size="lg" variant="destructive" disabled={enviando || excede}>
         {enviando ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <PackageMinus aria-hidden="true" />}
-        {enviando ? 'Registrando…' : 'Dar de baja'}
+        {enviando ? 'Registrando…' : 'Retirar'}
       </Button>
     </form>
   )

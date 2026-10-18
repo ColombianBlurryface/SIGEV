@@ -5,7 +5,7 @@
 import { RotateCw, Search } from 'lucide-react'
 import { useState } from 'react'
 import { FormularioAdquisicion } from '@/components/inventario/FormularioAdquisicion'
-import { FormularioBaja } from '@/components/inventario/FormularioBaja'
+import { FormularioRetiro } from '@/components/inventario/FormularioRetiro'
 import { FormularioElemento } from '@/components/inventario/FormularioElemento'
 import { HistorialMovimientos } from '@/components/inventario/HistorialMovimientos'
 import { TablaInventario } from '@/components/inventario/TablaInventario'
@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils'
 import { CATEGORIAS_INVENTARIO, type CategoriaInventario, type ElementoInventario } from '@/types/inventario'
 
 type Filtro = CategoriaInventario | 'todas'
-type Modo = 'elemento' | 'adquisicion' | 'baja'
+type Modo = 'elemento' | 'adquisicion' | 'retiro'
 
 // Título y explicación del formulario según la acción elegida
 const TEXTOS_MODO: Record<Modo, { titulo: string; descripcion: string }> = {
@@ -34,9 +34,9 @@ const TEXTOS_MODO: Record<Modo, { titulo: string; descripcion: string }> = {
     titulo: 'Registrar adquisición',
     descripcion: 'Suma unidades compradas a un elemento que ya está en el inventario.',
   },
-  baja: {
-    titulo: 'Dar de baja elementos dañados',
-    descripcion: 'Escribe solo cuántas unidades se dañaron; el sistema hace la resta y deja el registro.',
+  retiro: {
+    titulo: 'Retiro de elementos',
+    descripcion: 'Cubre daño, pérdida o devolución: escribe solo cuántas unidades salen; el sistema hace la resta y deja el registro.',
   },
 }
 
@@ -82,7 +82,7 @@ export function InventarioPage() {
   ]
 
   // Los botones «Adquisición» y «Baja» de cada fila abren el formulario con ese elemento ya elegido
-  function abrirFormulario(destino: 'adquisicion' | 'baja', elemento: ElementoInventario) {
+  function abrirFormulario(destino: 'adquisicion' | 'retiro', elemento: ElementoInventario) {
     setModo(destino)
     setPreseleccion((anterior) => ({ id: elemento.id, version: (anterior?.version ?? 0) + 1 }))
     document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
@@ -118,7 +118,7 @@ export function InventarioPage() {
                 [
                   ['elemento', 'Nuevo elemento', 'flex-[1.6]'],
                   ['adquisicion', 'Adquisición', 'flex-[1.2]'],
-                  ['baja', 'Baja', 'flex-1'],
+                  ['retiro', 'Retiro', 'flex-1'],
                 ] as const
               ).map(([valor, etiqueta, ancho]) => (
                 <button
@@ -152,8 +152,8 @@ export function InventarioPage() {
                 onRegistrada={cambioDeInventario}
               />
             )}
-            {modo === 'baja' && (
-              <FormularioBaja
+            {modo === 'retiro' && (
+              <FormularioRetiro
                 key={preseleccion ? `${preseleccion.id}-${preseleccion.version}` : 'sin-seleccion'}
                 elementos={elementos}
                 elementoInicialId={preseleccion?.id}
@@ -244,7 +244,7 @@ export function InventarioPage() {
                 }
                 onActualizado={cambioDeInventario}
                 onAdquirir={(elemento) => abrirFormulario('adquisicion', elemento)}
-                onDarDeBaja={(elemento) => abrirFormulario('baja', elemento)}
+                onRetirar={(elemento) => abrirFormulario('retiro', elemento)}
               />
             )
           )}
