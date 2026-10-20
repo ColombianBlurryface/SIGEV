@@ -388,6 +388,8 @@ Las cantidades deben ser enteros: no se aceptan negativos, decimales ni texto. U
 { "nombre": "Sillas Tiffany doradas", "categoria_inventario": "Mobiliario", "cantidad_propia": 300 }
 ```
 
+`cantidad_propia` es la cantidad inicial: entero de **1** hasta el máximo de la categoría (COR-04: no se registra un elemento con 0; `400` con «La cantidad inicial debe ser un número entero mayor o igual a 1»). Más adelante, «Actualizar» sí puede dejarlo en 0.
+
 `es_propio` es opcional: `true` (valor por defecto) para un elemento de la organización y `false` para uno alquilado a un proveedor (HU-12). Debe ser booleano; un texto como `"false"` responde `400`.
 
 Respuesta `201` con el elemento creado. Registra un movimiento de tipo `registro` con la cantidad inicial. Si ya hay **otro elemento del inventario** con ese nombre responde `409`; un producto del catálogo sí puede llamarse igual.

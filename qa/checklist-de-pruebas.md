@@ -88,6 +88,7 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **Máximo por elemento según la categoría:** Mobiliario 2.000, Vajilla 6.000, Bebidas Generales y Licores 4.000. Se aplica al registrar, al actualizar la cantidad y al adquirir. El valor exacto pasa; uno más se rechaza.
 - [ ] 🤖👀 **Adquisición que se pasa:** el mensaje dice cuánto se puede adquirir como mucho («Como mucho se pueden adquirir 200…»).
 - [ ] 🤖 Cantidades negativas, decimales o texto: 400. 1 millón de sillas: 400.
+- [ ] 🤖👀 **COR-04 · No se registra un elemento con cantidad 0** en ninguna de las 4 categorías: el formulario dice «Debe ser un número entero mayor o igual a 1» y la API responde 400. Con 1 sí se registra. Un elemento ya registrado sí puede quedar en 0 con «Actualizar».
 - [ ] 🤖 Dos adquisiciones simultáneas no pasan juntas del máximo.
 - [ ] 🤖👀 **«Retiro de elementos»** (antes «Baja»): pestaña «Retiro», campos «Elemento a retirar» y «Cantidad a retirar», botón «Retirar». **No queda ningún texto de «baja» ni «dañada»** en esa pantalla.
 - [ ] 🤖 El retiro resta igual que antes, no deja retirar más de lo disponible y la suma de movimientos siempre es igual a la cantidad.

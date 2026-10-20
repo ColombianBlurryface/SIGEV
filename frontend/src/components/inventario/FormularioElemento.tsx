@@ -18,11 +18,12 @@ import { CATEGORIAS_INVENTARIO, type CategoriaInventario, type ElementoInventari
 
 type Errores = Partial<Record<'nombre' | 'categoria' | 'cantidad', string>>
 
-// Error de la cantidad: entero mayor o igual a 0 y, si ya se eligió categoría, sin pasar su máximo (RN-16)
+// Error de la cantidad inicial (COR-04): entero de 1 en adelante (no se registra un elemento con 0) y, si ya se
+// eligió categoría, sin pasar su máximo (RN-16)
 function errorCantidad(cantidad: string, categoria: string): string | undefined {
   const numero = Number(cantidad)
   if (cantidad.trim() === '') return 'Indica la cantidad disponible.'
-  if (!Number.isInteger(numero) || numero < 0) return 'Debe ser un número entero mayor o igual a 0.'
+  if (!Number.isInteger(numero) || numero < 1) return 'Debe ser un número entero mayor o igual a 1.'
   if (categoria && numero > maximoCategoria(categoria as CategoriaInventario)) {
     return `El máximo por elemento de ${etiquetaCategoria(categoria as CategoriaInventario)} es ${formatearNumero(maximoCategoria(categoria as CategoriaInventario))} unidades.`
   }
@@ -180,7 +181,7 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
           <Input
             id="inventario-cantidad"
             type="number"
-            min={0}
+            min={1}
             step={1}
             inputMode="numeric"
             value={cantidad}

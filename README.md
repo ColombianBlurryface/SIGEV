@@ -290,6 +290,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 - El costo estimado solo incluye alimentos y bebidas; el mobiliario y los servicios se cotizan aparte.
 - Todo elemento del inventario tiene **una de cuatro categorías**: Mobiliario, Bebidas Generales, Licores para Cócteles o Vajilla. Cualquier otro valor (por ejemplo «Decoración») se rechaza, tanto en la API como en la base de datos (RF-10 / HU-09).
 - Cada elemento del inventario tiene un **máximo de unidades según su categoría**: mobiliario 2.000, vajilla 6.000, bebidas generales y licores 4.000. Se aplica al registrar, al actualizar la cantidad y al adquirir; una adquisición que se pasa se rechaza y dice cuántas unidades se pueden adquirir como mucho (RF-11, RF-13 / RN-16).
+- Un elemento nuevo se registra con **al menos 1 unidad** (no se puede registrar con 0) en todas las categorías; después, «Actualizar» sí puede dejarlo en 0 (COR-04).
 - En el inventario, la suma de los movimientos de cada elemento siempre es igual a su cantidad disponible.
 
 ---
