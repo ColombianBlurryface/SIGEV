@@ -117,6 +117,14 @@ ADD COLUMN IF NOT EXISTS producto_id INTEGER REFERENCES catalogo_productos(id) O
 -- pueden superar la duración del evento. Solo se agrega una columna opcional: no cambia ni borra nada de lo que ya hay.
 ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);
 
+-- HU-22 (RF-29, RN-05): tipo de servicio de comida del evento (cena, cóctel, buffet, refrigerio u otro). Hoy solo la
+-- cena calcula cocineros. Columna opcional (los eventos anteriores quedan sin tipo y dan 0 cocineros); no cambia ni
+-- borra nada de lo que ya hay.
+ALTER TABLE eventos ADD COLUMN IF NOT EXISTS tipo_servicio VARCHAR(20);
+ALTER TABLE eventos DROP CONSTRAINT IF EXISTS chk_tipo_servicio;
+ALTER TABLE eventos ADD CONSTRAINT chk_tipo_servicio
+    CHECK (tipo_servicio IS NULL OR tipo_servicio IN ('cena', 'coctel', 'buffet', 'refrigerio', 'otro'));
+
 -- 6. Usuarios del sistema (login únicamente; el alta se hace con src/scripts/crearUsuario.js)
 --    La contraseña se guarda como hash bcrypt, nunca en texto plano.
 CREATE TABLE IF NOT EXISTS usuarios (

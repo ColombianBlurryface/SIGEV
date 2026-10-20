@@ -101,7 +101,8 @@ const fechaLibre = () => {
 const nuevoEvento = async (nombre, asistentes, tipo = 'Boda') => {
   await page.goto(`${URL}/eventos/nuevo`)
   await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', nombre)
-  await page.selectOption('select', tipo)
+  await page.selectOption('#tipo', tipo)
+  await page.selectOption('#servicio', 'cena')
   await page.fill('input[type=date]', fechaLibre())
   await page.fill('input[placeholder="Ej. 6"]', '5')
   await page.getByLabel('Número de asistentes').fill(String(asistentes))
@@ -395,7 +396,7 @@ await t('El detalle guardado muestra propias, a alquilar y «Elemento alquilado�
 await t('RN-03: 150 sin aviso; 200 sin aviso; 201 con aviso (estado_alquiler)', async () => {
   const res = {}
   for (const n of [150, 200, 201]) {
-    const e = await api('/eventos', { method: 'POST', body: { nombre_evento: `Umbral ${n}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 4, asistentes: n } })
+    const e = await api('/eventos', { method: 'POST', body: { nombre_evento: `Umbral ${n}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', tipo_servicio: 'cena', duracion_horas: 4, asistentes: n } })
     res[n] = (await api(`/eventos/${e.cuerpo.evento.id}`)).cuerpo.estado_alquiler
   }
   igual(res[150].requiere_alquiler, false, '150:'); igual(res[200].requiere_alquiler, false, '200:'); igual(res[201].requiere_alquiler, true, '201:')
@@ -587,7 +588,7 @@ await t('El sistema resta y muestra el nuevo total', async () => {
   igual(e.cantidad_propia, 34, 'propia:'); igual(e.cantidad_danada, 6, 'dañada:')
 })
 await t('Lo retirado deja de contarse como disponible para los eventos', async () => {
-  const e = await api('/eventos', { method: 'POST', body: { nombre_evento: 'Retiro efecto' + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 3, asistentes: 100,
+  const e = await api('/eventos', { method: 'POST', body: { nombre_evento: 'Retiro efecto' + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', tipo_servicio: 'cena', duracion_horas: 3, asistentes: 100,
     servicios_adicionales: [{ tipo: 'mobiliario', descripcion: 'x', cantidad: 36, producto_id: baja.id }] } })
   const antes = (await api(`/eventos/${e.cuerpo.evento.id}`)).cuerpo.servicios_adicionales[0]
   igual(antes.unidades_alquilar, 2, 'antes: faltan 2 de 36 con 34 disponibles')
@@ -742,7 +743,7 @@ await t('Adquisición (UI): el aviso dice cuánto se puede adquirir; 2 se rechaz
 // ============ Corrección: alquiler solo de mobiliario y vajilla (HU-12 · RF-14, RN-17) ============
 grupo = 'Cor. alquiler solo de mobiliario y vajilla (RN-17)'
 const crearAlquilable = (nombre, categoria, cantidad, esPropio) => api('/inventario', { method: 'POST', body: { nombre, categoria_inventario: categoria, cantidad_propia: cantidad, es_propio: esPropio } })
-const eventoConMobiliario = (asistentes, lineas) => api('/eventos', { method: 'POST', body: { nombre_evento: `Alquiler ${asistentes}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes,
+const eventoConMobiliario = (asistentes, lineas) => api('/eventos', { method: 'POST', body: { nombre_evento: `Alquiler ${asistentes}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', tipo_servicio: 'cena', duracion_horas: 5, asistentes,
   servicios_adicionales: lineas.map(([producto_id, cantidad, descripcion]) => ({ tipo: 'mobiliario', producto_id, cantidad, descripcion })) } })
 
 await t('Registrar (API): una bebida no se puede registrar como alquilada; mobiliario y vajilla sí', async () => {
@@ -956,7 +957,7 @@ await t('El detalle del evento muestra las unidades y las horas del servicio', a
 
 // ============ HU-21 · Calcular meseros (RF-28, RN-04, RN-12) ============
 grupo = 'HU-21 Meseros (RF-28 / RN-04 / RN-12)'
-const eventoMeseros = (asistentes, extra = {}) => api('/eventos', { method: 'POST', body: { nombre_evento: `Meseros ${asistentes}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes, ...extra } })
+const eventoMeseros = (asistentes, extra = {}) => api('/eventos', { method: 'POST', body: { nombre_evento: `Meseros ${asistentes}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', tipo_servicio: 'cena', duracion_horas: 5, asistentes, ...extra } })
 const meserosEsperados = (a) => Math.floor((a + 19) / 20) // techo de a / 20 con enteros
 
 await t('API: 1 mesero por cada 20 asistentes, redondeado hacia arriba (45 → 3, 60 → 3, 40 → 2, 41 → 3, 600 → 30)', async () => {
@@ -1013,6 +1014,94 @@ await t('Detalle del evento: un múltiplo exacto (60 asistentes) muestra 3 sin r
 })
 
 
+
+// ============ HU-22 · Calcular personal de cocina para cena (RF-29, RN-05) ============
+grupo = 'HU-22 Cocineros (RF-29 / RN-05)'
+const eventoCocina = (asistentes, servicio, extra = {}) => api('/eventos', { method: 'POST', body: { nombre_evento: `Cocina ${servicio} ${asistentes}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Gala', tipo_servicio: servicio, duracion_horas: 5, asistentes, ...extra } })
+const cocinerosEsperados = (a) => Math.max(2, Math.floor((a + 29) / 30) * 2) // (techo de a / 30) × 2, mínimo 2
+
+await t('API: cena → (asistentes ÷ 30, hacia arriba) × 2 con mínimo 2 (90 → 6, 40 → 4, 41 → 4, 61 → 6, 300 → 20, 301 → 22, 600 → 40)', async () => {
+  for (const [asistentes, esperado] of [[40, 4], [41, 4], [60, 4], [61, 6], [90, 6], [100, 8], [300, 20], [301, 22], [600, 40]]) {
+    const r = await eventoCocina(asistentes, 'cena')
+    igual(r.estado, 201, `${asistentes} asistentes:`)
+    const d = (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo
+    igual(d.tipo_servicio, 'cena', 'tipo_servicio:')
+    igual(d.logistica.cocineros_requeridos, esperado, `${asistentes} asistentes:`)
+    igual(esperado, cocinerosEsperados(asistentes), `control del esperado para ${asistentes}:`)
+    cierto(d.logistica.cocineros_requeridos >= 2, 'menos de 2 cocineros en una cena')
+  }
+})
+await t('API: si el servicio no es una cena, la regla no aplica y son 0 cocineros (cóctel con 100, buffet con 480)', async () => {
+  for (const [servicio, asistentes] of [['coctel', 100], ['buffet', 480], ['refrigerio', 60], ['otro', 200]]) {
+    const r = await eventoCocina(asistentes, servicio)
+    igual(r.estado, 201, `${servicio}:`)
+    const d = (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo
+    igual(d.logistica.cocineros_requeridos, 0, `${servicio} ${asistentes}:`)
+    igual(d.logistica.meseros_requeridos, meserosEsperados(asistentes), `los meseros no cambian (${servicio}):`)
+  }
+})
+await t('API: el tipo de servicio es obligatorio y debe ser de la lista; el detalle trae la regla de cocina', async () => {
+  const sin = await api('/eventos', { method: 'POST', body: { nombre_evento: 'Sin servicio' + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes: 100 } })
+  igual(sin.estado, 400, 'sin tipo_servicio:')
+  for (const raro of ['CENA', 'cóctel', 'dinner', '', null, 5]) {
+    igual((await eventoCocina(100, raro)).estado, 400, `tipo_servicio ${JSON.stringify(raro)}:`)
+  }
+  const d = (await api(`/eventos/${(await eventoCocina(90, 'cena')).cuerpo.evento.id}`)).cuerpo
+  igual(d.logistica.regla_cocina, '2 cocineros por cada 30 asistentes (mínimo 2), solo en cenas', 'regla:')
+})
+await t('Registro (paso 1): el servicio de comida es obligatorio', async () => {
+  await page.goto(`${URL}/eventos/nuevo`)
+  await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', 'Sin servicio UI' + sufijo)
+  await page.selectOption('#tipo', 'Boda'); await page.fill('input[type=date]', fechaLibre()); await page.fill('input[placeholder="Ej. 6"]', '5')
+  await page.getByLabel('Número de asistentes').fill('90')
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.waitForSelector('text=Selecciona el servicio de comida')
+  igual(await page.getByRole('tab', { name: /Alimentos/ }).count(), 0, 'avanzó al paso 2:')
+})
+await t('Registro (paso 1): la vista previa calcula los cocineros en vivo (cena 90 → 6), dice «No aplica» en un cóctel y «—» fuera de rango', async () => {
+  await nuevoEvento('Vista cocina' + sufijo, 90)
+  const valorDe = (e) => page.waitForFunction((et) => [...document.querySelectorAll('dl > div')].some((d) => d.textContent.trim().startsWith('Cocineros') && d.textContent.trim().endsWith(et)), e)
+  await valorDe('6')
+  await page.getByLabel('Número de asistentes').fill('40'); await valorDe('4')
+  await page.selectOption('#servicio', 'coctel'); await valorDe('No aplica')
+  await page.selectOption('#servicio', 'cena'); await page.getByLabel('Número de asistentes').fill('30'); await valorDe('—')
+  await page.getByLabel('Número de asistentes').fill('90'); await valorDe('6')
+})
+await t('Registro (paso 3): el resumen muestra servicio y cocineros antes de guardar', async () => {
+  await aRequerimientos()
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.getByRole('button', { name: 'Guardar evento' }).waitFor()
+  const txt = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
+  cierto(txt.includes('Servicio de comida Cena'), 'no muestra «Servicio de comida Cena»')
+  cierto(txt.includes('Cocineros requeridos 6 (2 cocineros por cada 30 asistentes (mínimo 2))'), 'no muestra «Cocineros requeridos 6 (…)»')
+})
+await t('Detalle: muestra los cocineros con la cuenta (90 ÷ 30 = 3 × 2 = 6) y coincide con la API', async () => {
+  await page.getByRole('button', { name: 'Guardar evento' }).click()
+  await page.waitForURL('**/eventos?evento=*')
+  const id = Number(new globalThis.URL(page.url()).searchParams.get('evento'))
+  await page.waitForSelector('[aria-label="Cocineros requeridos"]')
+  igual((await page.locator('[aria-label="Cocineros requeridos"]').innerText()).trim(), '6', 'valor en pantalla:')
+  igual((await api(`/eventos/${id}`)).cuerpo.logistica.cocineros_requeridos, 6, 'valor de la API:')
+  const txt = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
+  cierto(txt.includes('90 ÷ 30 = 3 × 2 = 6 cocineros'), 'sin la cuenta explicada')
+  cierto(txt.includes('Servicio: Cena'), 'no dice el servicio')
+})
+await t('Detalle: con redondeo hacia arriba (40 asistentes) se explica «1,33 → 2 grupos × 2 = 4»', async () => {
+  const r = await eventoCocina(40, 'cena')
+  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
+  await page.waitForSelector('[aria-label="Cocineros requeridos"]')
+  igual((await page.locator('[aria-label="Cocineros requeridos"]').innerText()).trim(), '4')
+  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('40 ÷ 30 = 1,33 → 2 grupos × 2 = 4 cocineros'), 'sin la cuenta con redondeo')
+})
+await t('Detalle: en un cóctel dice «Cocineros: no aplica» y no muestra número', async () => {
+  const r = await eventoCocina(100, 'coctel')
+  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
+  await page.waitForSelector('[aria-label="Cocineros requeridos: no aplica"]')
+  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('Cocineros: no aplica (el servicio es cóctel; solo las cenas lo calculan)'), 'sin el mensaje de no aplica')
+  igual(await page.locator('[aria-label="Cocineros requeridos"]').count(), 0, 'muestra un número de cocineros:')
+})
+
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {
@@ -1064,7 +1153,7 @@ grupo = 'Cor. unidades por persona (RF-22 / RN-15)'
 const MSG_UNIDADES = 'Las unidades por persona deben ser un número entero de 1 a 10'
 const nuevaBebidaCatalogo = (nombre, porcion) => api('/catalogo', { method: 'POST', body: { nombre, clasificacion: 'bebida_general', tipo_calculo: 'unidad_persona', porcion_por_persona: porcion } })
 const eventoConUnidades = async (productoId, porcion) => {
-  return api('/eventos', { method: 'POST', body: { nombre_evento: 'Unidades' + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes: 100, productos: [{ producto_id: productoId, porcion_por_persona: porcion, precio_unitario: 3000 }] } })
+  return api('/eventos', { method: 'POST', body: { nombre_evento: 'Unidades' + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', tipo_servicio: 'cena', duracion_horas: 5, asistentes: 100, productos: [{ producto_id: productoId, porcion_por_persona: porcion, precio_unitario: 3000 }] } })
 }
 const poker = (await api('/catalogo')).cuerpo.find((p) => p.nombre === 'Poker')
 

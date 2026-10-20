@@ -24,6 +24,7 @@ import { useEventos } from '@/hooks/useEventos'
 const VALORES_INICIALES: ValoresEvento = {
   nombre: '',
   tipo: '',
+  servicio: '',
   fecha: '',
   duracion: '',
   asistentes: '',
@@ -108,6 +109,7 @@ export function NuevoEventoPage() {
       const { evento } = await eventosService.crear({
         nombre_evento: valores.nombre.trim(),
         tipo_evento: valores.tipo,
+        tipo_servicio: valores.servicio,
         fecha_evento: valores.fecha,
         duracion_horas: Number(valores.duracion),
         asistentes: Number(valores.asistentes),

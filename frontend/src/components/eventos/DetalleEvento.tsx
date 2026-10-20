@@ -4,7 +4,7 @@
  * propio y cuánto hay que alquilar según el inventario actual (HU-12). Las bebidas generales
  * y las de coctelería se muestran en secciones separadas, cada una con su costo (HU-13).
  */
-import { RotateCw, Users } from 'lucide-react'
+import { ChefHat, RotateCw, Users } from 'lucide-react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -22,10 +22,17 @@ import {
   type TipoBebida,
 } from '@/lib/categorias'
 import { capitalizar, formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
-import { calcularMeseros, explicarMeseros, relacionMeseros } from '@/lib/reglasPersonal'
+import {
+  calcularCocineros,
+  calcularMeseros,
+  explicarCocineros,
+  explicarMeseros,
+  reglaCocina,
+  relacionMeseros,
+} from '@/lib/reglasPersonal'
 import { describirHoras } from '@/lib/reglasServicios'
 import { cn } from '@/lib/utils'
-import type { EventoDetalle, EventoListado } from '@/types/evento'
+import { etiquetaServicioComida, type EventoDetalle, type EventoListado } from '@/types/evento'
 import { AvisoAlquiler, OrigenBadge } from './AlquilerMobiliario'
 import { BuffetBadge, EstadoBadge } from './EstadoBadge'
 
@@ -145,7 +152,9 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
           {evento.es_modalidad_buffet && <BuffetBadge className="rounded-full px-2.5 py-1 text-[12.5px]" />}
         </div>
         <h2 className="font-display text-2xl leading-tight font-bold break-words">{evento.nombre_evento}</h2>
-        <span className="text-sm text-subtle">{capitalizar(evento.tipo_evento)}</span>
+        <span className="text-sm text-subtle">
+          {capitalizar(evento.tipo_evento)} · Servicio: {etiquetaServicioComida(evento.tipo_servicio)}
+        </span>
       </div>
 
       <dl className="grid grid-cols-2 gap-3">
@@ -170,6 +179,30 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
           {formatearNumero(calcularMeseros(evento.asistentes))}
         </span>
       </div>
+
+      {/* HU-22: personal de cocina. Solo las cenas lo calculan: (asistentes ÷ 30, hacia arriba) × 2, con mínimo de 2 */}
+      {evento.tipo_servicio === 'cena' ? (
+        <div className="flex items-center gap-3.5 rounded-[10px] bg-accent px-3.5 py-3 text-accent-foreground">
+          <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-card">
+            <ChefHat className="size-5" />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-xs font-semibold">Cocineros requeridos · {reglaCocina}</span>
+            <span className="text-[12.5px] opacity-80">{explicarCocineros(evento.asistentes)}</span>
+          </div>
+          <span aria-label="Cocineros requeridos" className="font-display text-3xl leading-none font-extrabold">
+            {formatearNumero(calcularCocineros(evento.asistentes, evento.tipo_servicio))}
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 rounded-[10px] bg-background px-3.5 py-3 text-sm text-muted-foreground">
+          <ChefHat aria-hidden="true" className="size-5 shrink-0" />
+          <span aria-label="Cocineros requeridos: no aplica">
+            Cocineros: no aplica
+            {evento.tipo_servicio ? ` (el servicio es ${etiquetaServicioComida(evento.tipo_servicio).toLowerCase()}; solo las cenas lo calculan)` : ' (el evento no tiene servicio de comida definido)'}
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <span className="text-xs font-bold text-muted-foreground">Observaciones</span>

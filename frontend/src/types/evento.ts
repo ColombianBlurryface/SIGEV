@@ -6,6 +6,18 @@ export const TIPOS_EVENTO = ['Boda', 'Corporativo', 'Quinceañero', 'Gala', 'Cum
 
 export type TipoEvento = (typeof TIPOS_EVENTO)[number]
 
+// HU-22: tipo de servicio de comida del evento. Hoy solo la cena calcula cocineros (RF-29, RN-05).
+export const TIPOS_SERVICIO_COMIDA = [
+  { valor: 'cena', etiqueta: 'Cena' },
+  { valor: 'coctel', etiqueta: 'Cóctel' },
+  { valor: 'buffet', etiqueta: 'Buffet' },
+  { valor: 'refrigerio', etiqueta: 'Refrigerio' },
+  { valor: 'otro', etiqueta: 'Otro' },
+] as const
+
+export const etiquetaServicioComida = (valor: string | null | undefined) =>
+  TIPOS_SERVICIO_COMIDA.find((t) => t.valor === valor)?.etiqueta ?? 'Sin definir'
+
 export type EstadoEvento = 'planificacion' | 'confirmado' | 'realizado' | 'cancelado'
 
 export interface Evento {
@@ -13,6 +25,8 @@ export interface Evento {
   nombre_evento: string
   fecha_evento: string
   tipo_evento: string
+  // HU-22: cena, coctel, buffet, refrigerio u otro. Los eventos anteriores a esta historia no lo tienen (null).
+  tipo_servicio: string | null
   duracion_horas: string
   asistentes: number
   estado: EstadoEvento
@@ -32,6 +46,8 @@ export interface RequerimientoAdicionalPayload {
   tipo: string
   descripcion: string
   cantidad?: number
+  // RN-18: horas del servicio (no aplica al mobiliario)
+  horas?: number
   notas?: string
   // Solo para mobiliario: elemento del inventario con el que se relaciona (HU-12)
   producto_id?: number
@@ -41,6 +57,7 @@ export interface NuevoEvento {
   nombre_evento: string
   fecha_evento: string
   tipo_evento: string
+  tipo_servicio: string
   duracion_horas: number
   asistentes: number
   observaciones_generales?: string
@@ -107,6 +124,9 @@ export interface LogisticaEvento {
   meseros_requeridos: number
   asistentes_por_mesero: number
   relacion_meseros: string
+  // HU-22 (RF-29, RN-05): solo en cenas; en los demás servicios es 0
+  cocineros_requeridos: number
+  regla_cocina: string
 }
 
 export interface EventoDetalle extends EventoListado {

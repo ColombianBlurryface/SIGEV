@@ -11,7 +11,10 @@ const pool = require('../config/db');
 const { esUnidadesPorPersonaValida } = require('../config/reglasBebidas');
 const { MAXIMO_POR_CATEGORIA, formatearCantidad } = require('../config/limitesInventario');
 const { LIMITES } = require('../config/reglasEvento');
-const { ASISTENTES_POR_MESERO, calcularMeseros } = require('../config/reglasPersonal');
+const {
+  ASISTENTES_POR_MESERO, calcularMeseros,
+  ASISTENTES_POR_GRUPO_COCINA, COCINEROS_POR_GRUPO, MINIMO_COCINEROS_CENA, calcularCocineros
+} = require('../config/reglasPersonal');
 
 // Redondea hacia arriba evitando errores de precisión decimal de JavaScript.
 // Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
@@ -36,6 +39,7 @@ const crearEvento = async (req, res) => {
       nombre_evento,
       fecha_evento,
       tipo_evento,
+      tipo_servicio,
       duracion_horas,
       asistentes,
       observaciones_generales,
@@ -64,14 +68,15 @@ const crearEvento = async (req, res) => {
     }
     // 1. Insertar el evento base (RF-01, RF-02)
     const queryEvento = `
-      INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, tipo_servicio, duracion_horas, asistentes, observaciones_generales)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *;
     `;
     const resEvento = await client.query(queryEvento, [
       nombre_evento.trim(),
       fecha_evento,
       tipo_evento,
+      tipo_servicio,
       duracion_horas,
       asistentes,
       (typeof observaciones_generales === 'string' && observaciones_generales.trim()) || null
@@ -276,6 +281,7 @@ const listarEventos = async (req, res) => {
         nombre_evento,
         fecha_evento,
         tipo_evento,
+        tipo_servicio,
         duracion_horas,
         asistentes,
         estado,
@@ -390,7 +396,10 @@ const obtenerDetalleEvento = async (req, res) => {
       logistica: {
         meseros_requeridos: calcularMeseros(asistentes),
         asistentes_por_mesero: ASISTENTES_POR_MESERO,
-        relacion_meseros: `1 por cada ${ASISTENTES_POR_MESERO} asistentes`
+        relacion_meseros: `1 por cada ${ASISTENTES_POR_MESERO} asistentes`,
+        // HU-22 · cocineros para una cena (RF-29, RN-05): solo si el servicio de comida es una cena; si no, 0
+        cocineros_requeridos: calcularCocineros(asistentes, resEvento.rows[0].tipo_servicio),
+        regla_cocina: `${COCINEROS_POR_GRUPO} cocineros por cada ${ASISTENTES_POR_GRUPO_COCINA} asistentes (mínimo ${MINIMO_COCINEROS_CENA}), solo en cenas`
       },
       productos_calculados: resProductos.rows,
       servicios_adicionales: resServicios.rows

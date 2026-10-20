@@ -50,7 +50,7 @@ const fechaLibre = () => {
   }
   return new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 }
-const ev = (o = {}) => ({ nombre_evento: n('Explo'), fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 4, asistentes: 100, ...o })
+const ev = (o = {}) => ({ nombre_evento: n('Explo'), fecha_evento: fechaLibre(), tipo_evento: 'Boda', tipo_servicio: 'cena', duracion_horas: 4, asistentes: 100, ...o })
 const m = (r) => ({ s: r.s, nota: r.c?.error || r.c?.detalle || '' })
 
 const filas = []
@@ -134,6 +134,10 @@ const ayer = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZ
 await caso('Fecha de ayer', [400], async () => m(await await_call_eventos(ev({ fecha_evento: ayer }))))
 await caso('Fecha de hoy (se acepta)', [201, 400], async () => m(await await_call_eventos(ev({ fecha_evento: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }) }))))
 await caso('Fecha en el año 3000', [400], async () => m(await await_call_eventos(ev({ fecha_evento: '3000-01-01' }))))
+await caso('Sin tipo de servicio de comida', [400], async () => { const c = ev(); delete c.tipo_servicio; return m(await await_call_eventos(c)) })
+for (const raro of ['CENA', 'cóctel', 'dinner', '', 7]) {
+  await caso(`Tipo de servicio inventado ${JSON.stringify(raro)}`, [400], async () => m(await await_call_eventos(ev({ tipo_servicio: raro }))))
+}
 await caso('Tipo de evento inventado', [400], async () => m(await await_call_eventos(ev({ tipo_evento: 'Fiesta ilegal' }))))
 await caso('Nombre solo con espacios', [400], async () => m(await await_call_eventos(ev({ nombre_evento: '     ' }))))
 await caso('Observaciones de 1 millón de caracteres', [400, 413], async () => m(await await_call_eventos(ev({ observaciones_generales: 'x'.repeat(1000000) }))))

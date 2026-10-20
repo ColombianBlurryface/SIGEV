@@ -286,6 +286,7 @@ Activa o desactiva un producto. Un producto desactivado deja de ofrecerse en los
   "nombre_evento": "Boda Martínez & Gómez",
   "fecha_evento": "2026-11-14",
   "tipo_evento": "Boda",
+  "tipo_servicio": "cena",
   "duracion_horas": 6,
   "asistentes": 250,
   "observaciones_generales": "Menú sin mariscos.",
@@ -317,6 +318,7 @@ Respuesta `201`: `{ "mensaje": "...", "evento": { "id": 4, "estado": "planificac
 | --- | --- |
 | Nombre | Texto con contenido, máximo 150 caracteres |
 | Tipo de evento | Uno de: Boda, Corporativo, Quinceañero, Gala, Cumpleaños, Otro |
+| Tipo de servicio (`tipo_servicio`, HU-22) | **Obligatorio.** Uno de: `cena`, `coctel`, `buffet`, `refrigerio`, `otro`. Solo la cena calcula cocineros |
 | Fecha | Día real `AAAA-MM-DD`, desde hoy (hora de Colombia) hasta 5 años adelante, y máximo 3 eventos activos por día (RN-13) |
 | Duración | Número de 3 a 8 horas (RN-14); un texto como «4 horas» no vale |
 | Asistentes | Entero de 40 a 600 (RN-01) |
@@ -347,6 +349,13 @@ Datos del evento más:
 ```
 
   `meseros_requeridos` es el techo de asistentes ÷ 20: 45 → 2,25 → **3**; 60 → **3**; 12 → 0,6 → **1**; 0 → **0**. El cálculo vive en [`src/config/reglasPersonal.js`](src/config/reglasPersonal.js) y se prueba con `npm test` (los cuatro escenarios de la historia; los de 12 y 0 asistentes solo se pueden probar ahí porque un evento real exige 40 a 600, RN-01).
+- Dentro de `logistica`, además (HU-22 · RF-29, RN-05), los cocineros de una cena:
+
+```json
+{ "cocineros_requeridos": 6, "regla_cocina": "2 cocineros por cada 30 asistentes (mínimo 2), solo en cenas" }
+```
+
+  Si el `tipo_servicio` del evento es `cena`: `cocineros_requeridos = max(2, techo(asistentes ÷ 30) × 2)`: 90 → **6**, 40 → **4**, 10 → **2**. En cualquier otro servicio (o en un evento anterior a esta historia, sin `tipo_servicio`) es **0**. El detalle y la lista de eventos devuelven también `tipo_servicio`. Se prueba con `npm test` junto con los meseros.
 - `aviso_alquiler`: `true` si el evento supera el umbral de asistentes (200 por defecto).
 - `estado_alquiler` (RN-03):
 

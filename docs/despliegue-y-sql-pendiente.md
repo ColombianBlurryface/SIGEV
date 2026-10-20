@@ -53,8 +53,9 @@ Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Su
 | --- | --- | --- | --- | --- |
 | 1 | *(Opcional)* Empezar de cero: borra eventos e inventario, conserva usuarios y catálogo | `qa/reiniciar-datos-qa.sql` | No | ⬜ |
 | 2 | Revisar y quitar eventos con duración fuera de 3 a 8 horas (sin esto el paso 3 falla) | `SELECT id, nombre_evento, duracion_horas FROM eventos WHERE duracion_horas < 3 OR duracion_horas > 8;` y luego, si son de prueba, `DELETE FROM eventos WHERE duracion_horas < 3 OR duracion_horas > 8;` | No | ⬜ |
-| 3 | Restricción de duración (COR-01) | las 4 sentencias `ALTER TABLE eventos …` que están al final de `eventos` en `backend/src/db/schema.sql` | No | ⬜ |
+| 3 | Restricción de duración (COR-01) | las 3 sentencias `ALTER TABLE eventos …` que están al final de `eventos` en `backend/src/db/schema.sql` | No | ⬜ |
 | 4 ⚠️ | Columna de horas de los servicios (RN-18) | `ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);` | **Sí: antes de desplegar el código de RN-18** | ⬜ |
+| 4b ⚠️ | Tipo de servicio de comida del evento (HU-22) | las 3 sentencias `ALTER TABLE eventos … tipo_servicio …` de `backend/src/db/schema.sql` (columna opcional + restricción) | **Sí: antes de desplegar el código de la HU-22** | ⬜ |
 | 5 | Bebidas marcadas como alquiladas (COR-08). Innecesario si hiciste el paso 1 | `backend/src/db/cor-08-bebidas-no-alquilables.sql` | No | ⬜ |
 | 6 | *(Opcional)* Precios de referencia del catálogo | `backend/src/db/precios-catalogo.sql` | No | ⬜ |
 | 7 | *(Opcional)* Datos de prueba (inventario + 6 eventos «[Demo]») | `backend/src/db/datos-de-prueba.sql` | No | ⬜ |
@@ -64,8 +65,9 @@ Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Su
 | Orden | Qué | Archivo o SQL | ¿Antes del código? | Estado |
 | --- | --- | --- | --- | --- |
 | 1 | Revisar eventos con duración fuera de 3 a 8 horas; corregirlos o borrarlos si son de prueba | el `SELECT` del paso 2 de QA | No | ⬜ |
-| 2 | Restricción de duración (COR-01) | las 4 sentencias `ALTER TABLE eventos …` de `schema.sql` | No | ⬜ |
+| 2 | Restricción de duración (COR-01) | las 3 sentencias `ALTER TABLE eventos …` de `schema.sql` | No | ⬜ |
 | 3 ⚠️ | Columna de horas de los servicios (RN-18) | `ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);` | **Sí: antes de publicar** | ⬜ |
+| 3b ⚠️ | Tipo de servicio de comida del evento (HU-22) | las 3 sentencias `ALTER TABLE eventos … tipo_servicio …` de `backend/src/db/schema.sql` | **Sí: antes de publicar** | ⬜ |
 | 4 | Bebidas marcadas como alquiladas, si las hay | `backend/src/db/cor-08-bebidas-no-alquilables.sql` | No | ⬜ |
 | 5 | *(Si el Product Owner lo pide)* Datos de prueba para que ningún módulo se vea vacío | `backend/src/db/datos-de-prueba.sql` (y `datos-de-prueba-quitar.sql` para quitarlos) | No | ⬜ |
 

@@ -57,6 +57,8 @@ export function validarAsistentes(valor: string): ValidacionAsistentes {
 export interface ValoresEvento {
   nombre: string
   tipo: string
+  // HU-22: tipo de servicio de comida (cena, coctel, buffet, refrigerio, otro)
+  servicio: string
   fecha: string
   duracion: string
   asistentes: string
@@ -76,6 +78,7 @@ export function validarEvento(valores: ValoresEvento, eventosEnFecha=0): Errores
   else if (valores.nombre.trim().length > 150) errores.nombre = 'El nombre admite máximo 150 caracteres.'
 
   if (!valores.tipo) errores.tipo = 'Selecciona el tipo de evento.'
+  if (!valores.servicio) errores.servicio = 'Selecciona el servicio de comida (de él depende el personal de cocina).'
   if (!valores.fecha) {
     errores.fecha = 'Selecciona la fecha del evento.'
   } else if (valores.fecha < hoyIso()) {
