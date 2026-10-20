@@ -98,8 +98,9 @@ const registrarElemento = async (req, res) => {
     if (!esCategoriaValida(categoria_inventario)) {
         return categoriaInvalida(res, categoria_inventario);
     }
-    if (!esCantidadValida(cantidad_propia)) {
-        return datosInvalidos(res, 'La cantidad disponible debe ser un número entero mayor o igual a 0.');
+    // COR-04: un elemento nuevo se registra con al menos 1 unidad (los ajustes posteriores sí pueden dejarlo en 0)
+    if (!esCantidadValida(cantidad_propia) || cantidad_propia < 1) {
+        return datosInvalidos(res, 'La cantidad inicial debe ser un número entero mayor o igual a 1.');
     }
     if (cantidad_propia > MAXIMO_POR_CATEGORIA[categoria_inventario]) {
         return datosInvalidos(res, `No se pueden registrar ${formatearCantidad(cantidad_propia)} unidades. ${mensajeMaximo(categoria_inventario)}`);
@@ -124,15 +125,13 @@ const registrarElemento = async (req, res) => {
         );
         const elemento = result.rows[0];
 
-        if (cantidad_propia > 0) {
-            await registrarMovimiento(client, {
-                productoId: elemento.id,
-                tipo: 'registro',
-                cantidad: cantidad_propia,
-                cantidadResultante: cantidad_propia,
-                notas: 'Registro inicial del elemento'
-            });
-        }
+        await registrarMovimiento(client, {
+            productoId: elemento.id,
+            tipo: 'registro',
+            cantidad: cantidad_propia,
+            cantidadResultante: cantidad_propia,
+            notas: 'Registro inicial del elemento'
+        });
 
         await client.query('COMMIT');
         res.status(201).json(elemento);

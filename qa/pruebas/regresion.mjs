@@ -462,7 +462,15 @@ await t('Cantidad negativa o nombre vacío: validación', async () => {
   await page.getByLabel('Cantidad disponible').fill('-3')
   await page.getByRole('button', { name: 'Registrar elemento' }).click()
   await page.waitForSelector('text=Escribe el nombre del elemento')
-  await page.waitForSelector('text=/entero mayor o igual a 0/')
+  await page.waitForSelector('text=/entero mayor o igual a 1/')
+})
+await t('COR-04: cantidad 0 no se puede registrar (el campo no baja de 1 y avisa al enviar)', async () => {
+  await page.getByLabel('Nombre del elemento').fill('Cero ' + NOMBRE_INV)
+  await page.selectOption('#inventario-categoria', 'Mobiliario')
+  await page.getByLabel('Cantidad disponible').fill('0')
+  await page.getByRole('button', { name: 'Registrar elemento' }).click()
+  await page.waitForSelector('text=/entero mayor o igual a 1/')
+  igual(await page.getByText('registrado como propio').count(), 0, 'se registró con 0:')
 })
 await t('Nombre repetido dentro del inventario: «Ya existe un elemento»', async () => {
   await page.getByLabel('Nombre del elemento').fill(NOMBRE_INV)

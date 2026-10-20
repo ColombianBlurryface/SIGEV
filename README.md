@@ -175,7 +175,7 @@ SIGEV/
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
 │   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-├── qa/                      Pruebas automáticas (117 de regresión y 76 casos límite)
+├── qa/                      Pruebas automáticas (118 de regresión y 87 casos límite)
 ├── docs/
 │   ├── imagenes/            Capturas usadas en la documentación
 │   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
@@ -243,7 +243,7 @@ Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del m
 
 ## Pruebas y entorno de QA
 
-El proyecto trae pruebas automáticas en [`qa/`](qa) (117 pruebas de los checklists y 76 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+El proyecto trae pruebas automáticas en [`qa/`](qa) (118 pruebas de los checklists y 87 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
 
 - [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
 - [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.
@@ -290,6 +290,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 - El costo estimado solo incluye alimentos y bebidas; el mobiliario y los servicios se cotizan aparte.
 - Todo elemento del inventario tiene **una de cuatro categorías**: Mobiliario, Bebidas Generales, Licores para Cócteles o Vajilla. Cualquier otro valor (por ejemplo «Decoración») se rechaza, tanto en la API como en la base de datos (RF-10 / HU-09).
 - Cada elemento del inventario tiene un **máximo de unidades según su categoría**: mobiliario 2.000, vajilla 6.000, bebidas generales y licores 4.000. Se aplica al registrar, al actualizar la cantidad y al adquirir; una adquisición que se pasa se rechaza y dice cuántas unidades se pueden adquirir como mucho (RF-11, RF-13 / RN-16).
+- Un elemento nuevo se registra con **al menos 1 unidad** (no se puede registrar con 0) en todas las categorías; después, «Actualizar» sí puede dejarlo en 0 (COR-04).
 - En el inventario, la suma de los movimientos de cada elemento siempre es igual a su cantidad disponible.
 
 ---
