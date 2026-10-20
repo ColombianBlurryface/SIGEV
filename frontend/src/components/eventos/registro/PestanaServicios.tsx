@@ -3,6 +3,7 @@
  * Sin cálculo automático; se guardan como requerimientos adicionales.
  *
  * RN-18: cada servicio admite de 1 a 5 unidades y sus horas no pueden superar la duración del evento.
+ * COR-06: las horas van de 1 a 5 y cada tipo tiene un tope de unidades por evento (3 DJs, 2 de sonido...).
  */
 import { Info, Music, Plus, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
@@ -17,8 +18,13 @@ import { formatearNumero } from '@/lib/formato'
 import {
   describirHoras,
   errorHoras,
+  errorUnidadesPorTipo,
   esUnidadesServicioValida,
+  HORAS_SERVICIO_MIN,
   leerHoras,
+  MAXIMO_UNIDADES_POR_TIPO,
+  maximoHoras,
+  unidadesDisponibles,
   MENSAJE_UNIDADES_SERVICIO,
   UNIDADES_SERVICIO_MAX,
   UNIDADES_SERVICIO_MIN,
@@ -34,8 +40,8 @@ interface PestanaServiciosProps {
 }
 
 export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar }: PestanaServiciosProps) {
-  // Por defecto el servicio dura todo el evento (se puede bajar)
-  const horasPorDefecto = Number.isFinite(duracionHoras) ? String(duracionHoras) : ''
+  // Por defecto el servicio dura todo el evento (hasta 5 horas); se puede bajar
+  const horasPorDefecto = Number.isFinite(duracionHoras) ? String(maximoHoras(duracionHoras)) : ''
   const [tipo, setTipo] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [unidades, setUnidades] = useState('1')
@@ -44,7 +50,11 @@ export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar
   const [errorForm, setErrorForm] = useState<string | null>(null)
 
   // Los errores de unidades y horas se avisan apenas se escriben, sin esperar a «Agregar»
-  const errorUnidades = unidades.trim() !== '' && !esUnidadesServicioValida(unidades) ? MENSAJE_UNIDADES_SERVICIO : undefined
+  const errorUnidades =
+    unidades.trim() !== '' && !esUnidadesServicioValida(unidades)
+      ? MENSAJE_UNIDADES_SERVICIO
+      : errorUnidadesPorTipo(tipo, unidades, servicios, etiquetaServicio(tipo))
+  const topeTipo = tipo ? MAXIMO_UNIDADES_POR_TIPO[tipo] : undefined
   const horasMostradas = horas === '' ? horasPorDefecto : horas
   const errorDeHoras = horas.trim() !== '' ? errorHoras(horas, duracionHoras) : undefined
 
@@ -53,6 +63,8 @@ export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar
     if (!tipo) return setErrorForm('Selecciona el tipo de servicio.')
     if (!descripcion.trim()) return setErrorForm('Escribe una descripción del servicio.')
     if (!esUnidadesServicioValida(unidades)) return setErrorForm(MENSAJE_UNIDADES_SERVICIO)
+    const mensajeUnidades = errorUnidadesPorTipo(tipo, unidades, servicios, etiquetaServicio(tipo))
+    if (mensajeUnidades) return setErrorForm(mensajeUnidades)
     const mensajeHoras = errorHoras(horasMostradas, duracionHoras)
     if (mensajeHoras) return setErrorForm(mensajeHoras)
 
@@ -111,7 +123,11 @@ export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar
             <FormField
               id="servicio-cantidad"
               label="Unidades"
-              hint={`De ${UNIDADES_SERVICIO_MIN} a ${UNIDADES_SERVICIO_MAX}`}
+              hint={
+                topeTipo === undefined
+                  ? `De ${UNIDADES_SERVICIO_MIN} a ${UNIDADES_SERVICIO_MAX}`
+                  : `Máximo ${topeTipo} por evento · quedan ${unidadesDisponibles(tipo, servicios)}`
+              }
               error={errorUnidades}
             >
               <Input
@@ -131,7 +147,11 @@ export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar
             <FormField
               id="servicio-horas"
               label="Horas de servicio"
-              hint={Number.isFinite(duracionHoras) ? `Máximo ${formatearNumero(duracionHoras)} h: lo que dura el evento` : 'Indica primero la duración del evento'}
+              hint={
+                Number.isFinite(duracionHoras)
+                  ? `De ${HORAS_SERVICIO_MIN} a ${formatearNumero(maximoHoras(duracionHoras))} h${duracionHoras < 5 ? ': lo que dura el evento' : ''}`
+                  : 'Indica primero la duración del evento'
+              }
               error={errorDeHoras}
             >
               <Input

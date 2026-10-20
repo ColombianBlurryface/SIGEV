@@ -244,11 +244,11 @@ FROM (VALUES
     ('[Demo] Cumpleaños de Camila',       'mobiliario', 'Silla Chiavari',             NULL,                           80, NULL, NULL),
     ('[Demo] Cumpleaños de Camila',       'mobiliario', 'Mesa de cóctel (alta)',      NULL,                            6, NULL, NULL),
     ('[Demo] Reunión de directivos',      'mobiliario', 'Silla Chiavari',             NULL,                           45, NULL, NULL),
-    -- Servicios (RN-18): de 1 a 5 unidades y horas que no pasan la duración del evento
-    ('[Demo] Boda Martínez & Gómez',      'dj',         NULL,                         'DJ para recepción y fiesta',    1,    6, 'Incluye luces básicas'),
-    ('[Demo] Boda Martínez & Gómez',      'iluminacion',NULL,                         'Iluminación ambiental',         2,    6, NULL),
+    -- Servicios (RN-18, COR-06): de 1 a 5 unidades (con tope por tipo) y de 1 a 5 horas sin pasar la duración del evento
+    ('[Demo] Boda Martínez & Gómez',      'dj',         NULL,                         'DJ para recepción y fiesta',    1,    5, 'Incluye luces básicas'),
+    ('[Demo] Boda Martínez & Gómez',      'iluminacion',NULL,                         'Iluminación ambiental',         2,    5, NULL),
     ('[Demo] Quince años de Valentina',   'dj',         NULL,                         'DJ y animación',                1,    5, NULL),
-    ('[Demo] Congreso Médico Andino',     'sonido',     NULL,                         'Sonido para conferencias',      2,    8, NULL)
+    ('[Demo] Congreso Médico Andino',     'sonido',     NULL,                         'Sonido para conferencias',      2,    5, NULL)
 ) AS v(evento, tipo, elemento, descripcion, cantidad, horas, notas)
 JOIN eventos e ON e.nombre_evento = v.evento
 LEFT JOIN catalogo_productos c ON c.nombre = v.elemento AND c.categoria_inventario = 'Mobiliario'

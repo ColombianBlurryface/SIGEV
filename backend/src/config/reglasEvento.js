@@ -18,6 +18,18 @@ const TIPOS_SERVICIO = Object.keys(ETIQUETA_SERVICIO);
 
 // RN-18 (RF-06): cada servicio admite de 1 a 5 unidades (no hay «DJ ilimitados») y sus horas no pueden superar la
 // duración del evento (no hay 300 horas de DJ en un evento de 3). Las horas van de media en media hora.
+// COR-06: además, las horas de un servicio van de 1 a 5 (nadie contrata 8 horas seguidas de DJ) y cada tipo de
+// servicio tiene un tope de unidades POR EVENTO, sumando todas sus líneas (3 DJs, no 6 líneas de 5 DJs).
+const HORAS_SERVICIO_MIN = 1;
+const HORAS_SERVICIO_MAX = 5;
+const MAXIMO_UNIDADES_POR_TIPO = {
+  dj: 3,
+  musica_en_vivo: 3,
+  sonido: 2,
+  iluminacion: 2,
+  entretenimiento: 3,
+  otro: 5
+};
 
 const LIMITES = {
   anticipacionAnios: 5,        // un evento no se registra para más de 5 años adelante
@@ -32,4 +44,7 @@ const LIMITES = {
   gramosPorPersonaMax: 1000    // un alimento no pasa de 1 kg por persona
 };
 
-module.exports = { TIPOS_EVENTO, TIPOS_SERVICIO, ETIQUETA_SERVICIO, LIMITES };
+module.exports = {
+  TIPOS_EVENTO, TIPOS_SERVICIO, ETIQUETA_SERVICIO, LIMITES,
+  HORAS_SERVICIO_MIN, HORAS_SERVICIO_MAX, MAXIMO_UNIDADES_POR_TIPO
+};

@@ -175,7 +175,7 @@ SIGEV/
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
 │   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-├── qa/                      Pruebas automáticas (118 de regresión y 87 casos límite)
+├── qa/                      Pruebas automáticas (118 de regresión y 94 casos límite)
 ├── docs/
 │   ├── imagenes/            Capturas usadas en la documentación
 │   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
@@ -243,7 +243,7 @@ Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del m
 
 ## Pruebas y entorno de QA
 
-El proyecto trae pruebas automáticas en [`qa/`](qa) (118 pruebas de los checklists y 87 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+El proyecto trae pruebas automáticas en [`qa/`](qa) (118 pruebas de los checklists y 94 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
 
 - [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
 - [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.
@@ -273,7 +273,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 
 - Un evento debe tener **entre 40 y 600 asistentes** (RN-01 / HU-07).
 - La **duración** de un evento va de **3 a 8 horas** y la **fecha** debe ser **hoy o posterior** (nunca el pasado) y no pasar de 5 años adelante; no puede haber más de **3 eventos activos el mismo día** (RN-13, RN-14).
-- Cada **servicio adicional** (DJ, música en vivo, sonido, iluminación, entretenimiento) admite de **1 a 5 unidades** y sus **horas no pueden superar la duración del evento**: no hay «DJ ilimitados» ni 300 horas de DJ en un evento de 3. Si se acorta la duración del evento después de agregar servicios, el sistema avisa y no deja continuar hasta corregirlo (RN-18).
+- Cada **servicio adicional** (DJ, música en vivo, sonido, iluminación, entretenimiento) admite de **1 a 5 unidades** y sus **horas no pueden superar la duración del evento**: no hay «DJ ilimitados» ni 300 horas de DJ en un evento de 3. Si se acorta la duración del evento después de agregar servicios, el sistema avisa y no deja continuar hasta corregirlo (RN-18). Además (COR-06), las horas de un servicio van **de 1 a 5** aunque el evento dure más, y cada tipo tiene un **tope de unidades por evento, sumando todas sus líneas**: DJ 3, música en vivo 3, entretenimiento 3, sonido 2, iluminación 2 y otro 5 (no caben seis líneas de DJ). La pantalla muestra cuántas unidades quedan.
 - Con **más de 300 asistentes** el evento es de modalidad **buffet** (RN-02).
 - Los **meseros** requeridos son **1 por cada 20 asistentes**, siempre **redondeados hacia arriba** para que nunca falte personal (RN-04, RN-12). Se calculan al consultar el evento, no se guardan, así que siempre coinciden con los asistentes. Es la primera historia del módulo de personal de servicio (HU-21); las siguientes se suman una por una.
 - Con **más de 200 asistentes** (valor por defecto del umbral) se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).

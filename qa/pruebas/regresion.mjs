@@ -906,7 +906,7 @@ await t('Fecha de hace un año y de dentro de 10 años también se bloquean; la 
   await page.fill('input[type=date]', fechaLibre()); await page.getByRole('button', { name: /^Siguiente/ }).click()
   await page.getByRole('tab', { name: /Alimentos/ }).waitFor()
 })
-await t('Servicios: unidades 0 y 6 se rechazan; 1 y 5 se aceptan', async () => {
+await t('Servicios: unidades 0 y 6 se rechazan; 1 y 5 se aceptan (5 en «Otro», que admite hasta 5)', async () => {
   await pestana('Servicios')
   for (const u of ['0', '6', '2,5', '-1']) {
     await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ prueba'); await page.fill('#servicio-cantidad', u)
@@ -916,8 +916,8 @@ await t('Servicios: unidades 0 y 6 se rechazan; 1 y 5 se aceptan', async () => {
   }
   await agregarServicio({ descripcion: 'DJ una unidad', unidades: 1, horas: 3 })
   await page.waitForSelector('text=DJ una unidad')
-  await agregarServicio({ tipo: 'sonido', descripcion: 'Sonido cinco', unidades: 5, horas: 3 })
-  await page.waitForSelector('text=Sonido cinco')
+  await agregarServicio({ tipo: 'otro', descripcion: 'Otro cinco', unidades: 5, horas: 3 })
+  await page.waitForSelector('text=Otro cinco')
 })
 await t('Servicios: horas mayores a la duración se rechazan; iguales se aceptan', async () => {
   // el evento dura 5 horas (nuevoEvento)
@@ -954,12 +954,41 @@ await t('El detalle del evento muestra las unidades y las horas del servicio', a
   const d = (await api(`/eventos/${id}`)).cuerpo
   const dj = d.servicios_adicionales.find((x) => x.descripcion === 'DJ una unidad')
   igual(dj.cantidad, 1, 'unidades:'); igual(Number(dj.horas), 3, 'horas:')
-  const sonido = d.servicios_adicionales.find((x) => x.descripcion === 'Sonido cinco')
-  igual(sonido.cantidad, 5, 'unidades sonido:')
-  await page.waitForSelector('text=Sonido cinco')
+  const otro = d.servicios_adicionales.find((x) => x.descripcion === 'Otro cinco')
+  igual(otro.cantidad, 5, 'unidades otro:')
+  await page.waitForSelector('text=Otro cinco')
   cierto(/5 und/.test(await page.locator('body').innerText()), 'el detalle no muestra «5 und»')
 })
 
+
+await t('COR-06 pantalla: 4 DJs y 6 horas se rechazan; el tope de DJs cuenta todas las líneas', async () => {
+  await nuevoEvento('Tope servicios' + sufijo, 100)
+  await page.fill('#duracion', '8')
+  await aRequerimientos()
+  await pestana('Servicios')
+  // horas: el evento dura 8 h pero un servicio admite hasta 5
+  await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ largo'); await page.fill('#servicio-horas', '6')
+  await page.waitForSelector('text=Las horas de un servicio van de 1 a 5')
+  await page.fill('#servicio-horas', '0,5'); await page.waitForSelector('text=Las horas de un servicio van de 1 a 5')
+  // unidades: más de 3 DJs en una línea
+  await page.fill('#servicio-horas', '4'); await page.fill('#servicio-cantidad', '4')
+  await page.waitForSelector('text=Un evento admite máximo 3 de «DJ»')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  igual(await page.getByText('Todavía no has agregado servicios adicionales').count(), 1, 'se agregaron 4 DJs:')
+  // 2 DJs y luego 2 más: el segundo grupo ya no cabe, solo queda 1
+  await page.fill('#servicio-cantidad', '2'); await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.waitForSelector('text=DJ largo')
+  await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ otro'); await page.fill('#servicio-cantidad', '2')
+  await page.waitForSelector('text=solo puedes agregar 1 más')
+  await page.fill('#servicio-cantidad', '1'); await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.waitForSelector('text=DJ otro')
+  // ya están los 3: un DJ más se avisa de inmediato
+  await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ cuarto'); await page.fill('#servicio-cantidad', '1')
+  await page.waitForSelector('text=Ya agregaste el máximo de «DJ» para un evento (3)')
+  // las horas que propone el formulario no pasan de 5 aunque el evento dure 8
+  await page.selectOption('#servicio-tipo', 'sonido')
+  igual(await page.inputValue('#servicio-horas'), '5', 'horas por defecto:')
+})
 
 
 // ============ HU-21 · Calcular meseros (RF-28, RN-04, RN-12) ============
