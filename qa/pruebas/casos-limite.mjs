@@ -181,6 +181,20 @@ await caso('La tabla de eventos sigue existiendo', [200], async () => ({ s: (awa
 
 console.log('\n== Inventario: límites y concurrencia')
 await caso('Nombre de elemento de 151 caracteres', [400], async () => m(await call('/inventario', { method: 'POST', body: { nombre: 'y'.repeat(151), categoria_inventario: 'Mobiliario', cantidad_propia: 1 } })))
+console.log('\n== COR-04: un elemento nuevo se registra con al menos 1 unidad (en las 4 categorías)')
+for (const cat of ['Mobiliario', 'Vajilla', 'Bar/Bebidas', 'Bebidas de Coctelería']) {
+  await caso(`${cat}: registrar con cantidad 0`, [400], async () => m(await call('/inventario', { method: 'POST', body: { nombre: n('Cero ' + cat.slice(0, 4)), categoria_inventario: cat, cantidad_propia: 0 } })))
+  await caso(`${cat}: registrar con cantidad 1 (límite exacto)`, [201], async () => m(await call('/inventario', { method: 'POST', body: { nombre: n('Uno ' + cat.slice(0, 4)), categoria_inventario: cat, cantidad_propia: 1 } })))
+}
+await caso('Registrar sin enviar la cantidad', [400], async () => m(await call('/inventario', { method: 'POST', body: { nombre: n('SinCantidad'), categoria_inventario: 'Mobiliario' } })))
+await caso('Registrar con cantidad -0 / null', [400], async () => {
+  const r = await Promise.all([-0, null].map(async (c) => (await call('/inventario', { method: 'POST', body: { nombre: n('Nulo'), categoria_inventario: 'Mobiliario', cantidad_propia: c } })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Un elemento ya registrado sí puede quedar en 0 con «Actualizar»', [200], async () => {
+  const e = (await call('/inventario', { method: 'POST', body: { nombre: n('A cero'), categoria_inventario: 'Mobiliario', cantidad_propia: 5 } })).c
+  return m(await call(`/inventario/${e.id}/cantidad`, { method: 'PATCH', body: { cantidad_propia: 0 } }))
+})
 await caso('Cantidad inicial decimal', [400], async () => m(await call('/inventario', { method: 'POST', body: { nombre: n('Decimal'), categoria_inventario: 'Mobiliario', cantidad_propia: 1.5 } })))
 await caso('Cantidad inicial de inventario gigantesca (10^12)', [400, 201], async () => m(await call('/inventario', { method: 'POST', body: { nombre: n('Gigante'), categoria_inventario: 'Mobiliario', cantidad_propia: 1e12 } })))
 await caso('Nombre con emoji y acentos', [201], async () => m(await call('/inventario', { method: 'POST', body: { nombre: n('Copa 🍷 piña ñandú'), categoria_inventario: 'Vajilla', cantidad_propia: 3 } })))
@@ -191,8 +205,8 @@ await caso('10 bajas simultáneas de 3 sobre un stock de 10: solo 3 caben', [3],
   const fin = (await call('/inventario')).c.find((x) => x.id === e1.id)
   return { s: rs.filter((r) => r.s === 201).length, nota: `quedaron ${fin.cantidad_propia} (nunca negativo: ${fin.cantidad_propia >= 0})` }
 })
-const e2 = (await call('/inventario', { method: 'POST', body: { nombre: n('Concurrencia 2'), categoria_inventario: 'Mobiliario', cantidad_propia: 0 } })).c
-await caso('20 adquisiciones simultáneas de 5 suman exactamente 100', [100], async () => {
+const e2 = (await call('/inventario', { method: 'POST', body: { nombre: n('Concurrencia 2'), categoria_inventario: 'Mobiliario', cantidad_propia: 1 } })).c
+await caso('20 adquisiciones simultáneas de 5 suman exactamente 101 (1 inicial + 100)', [101], async () => {
   await Promise.all(Array.from({ length: 20 }, () => call(`/inventario/${e2.id}/adquisiciones`, { method: 'POST', body: { cantidad: 5 } })))
   return { s: (await call('/inventario')).c.find((x) => x.id === e2.id).cantidad_propia }
 })
