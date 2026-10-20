@@ -7,7 +7,10 @@
  * elemento sea mobiliario, las porciones según el tipo de cálculo) lo revisa el controlador.
  */
 const { MAXIMO_POR_CATEGORIA, formatearCantidad } = require('../config/limitesInventario');
-const { TIPOS_EVENTO, TIPOS_SERVICIO, ETIQUETA_SERVICIO, LIMITES } = require('../config/reglasEvento');
+const {
+  TIPOS_EVENTO, TIPOS_SERVICIO, ETIQUETA_SERVICIO, LIMITES,
+  HORAS_SERVICIO_MIN, HORAS_SERVICIO_MAX, MAXIMO_UNIDADES_POR_TIPO
+} = require('../config/reglasEvento');
 
 const rechazar = (res, detalle, error = 'Datos inválidos') => res.status(400).json({ error, detalle });
 
@@ -100,6 +103,7 @@ const validarCreacionEvento = (req, res, next) => {
     if (!Array.isArray(servicios_adicionales) || servicios_adicionales.length > LIMITES.serviciosMax) {
       return rechazar(res, `servicios_adicionales debe ser una lista de máximo ${LIMITES.serviciosMax} elementos.`);
     }
+    const unidadesPorTipo = {};
     for (const [i, s] of servicios_adicionales.entries()) {
       if (!esObjeto(s)) return rechazar(res, `El requerimiento ${i + 1} de la lista no es válido.`);
       const esMobiliario = s.tipo === 'mobiliario';
@@ -147,6 +151,26 @@ const validarCreacionEvento = (req, res, next) => {
             'Regla de negocio no cumplida (RN-18)'
           );
         }
+        // COR-06: de 1 a 5 horas por servicio, aunque el evento dure más
+        if (horas < HORAS_SERVICIO_MIN || horas > HORAS_SERVICIO_MAX) {
+          return rechazar(
+            res,
+            `Las horas del servicio «${etiqueta}» deben estar entre ${HORAS_SERVICIO_MIN} y ${HORAS_SERVICIO_MAX}; se pidieron ${horas}.`,
+            'Regla de negocio no cumplida (COR-06)'
+          );
+        }
+        unidadesPorTipo[s.tipo] = (unidadesPorTipo[s.tipo] || 0) + cantidad;
+      }
+    }
+    // COR-06: tope de unidades por tipo de servicio en todo el evento (sumando sus líneas)
+    for (const [tipo, total] of Object.entries(unidadesPorTipo)) {
+      const maximo = MAXIMO_UNIDADES_POR_TIPO[tipo];
+      if (total > maximo) {
+        return rechazar(
+          res,
+          `Un evento admite máximo ${maximo} ${maximo === 1 ? 'unidad' : 'unidades'} del servicio «${ETIQUETA_SERVICIO[tipo]}» en total; se pidieron ${total}.`,
+          'Regla de negocio no cumplida (COR-06)'
+        );
       }
     }
   }

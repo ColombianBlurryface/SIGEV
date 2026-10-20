@@ -68,6 +68,8 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **Unidades de 1 a 5.** Prueba 0, 1, 5 y 6 (también 2,5 y −1): 0, 6, 2,5 y −1 dan «Las unidades deben ser un número entero de 1 a 5».
 - [ ] 🤖👀 **Las horas no pueden superar la duración del evento.** En un evento de 5 h: 6 y 300 se rechazan con «no pueden superar la duración del evento (5 h)»; 5 pasa; 3,5 pasa; 3,25 no.
 - [ ] 🤖👀 **Si reduces la duración después de agregar un servicio:** Atrás → cambia la duración a 3 → sale una alerta amarilla «La duración no alcanza para los servicios agregados»; en el paso 2 hay otra alerta y *Siguiente: Resumen* no avanza («No se puede continuar»). Quitando el servicio, ya avanza.
+- [ ] 🤖👀 **COR-06 · Horas de 1 a 5:** en un evento de 8 h, un servicio de 6 h o de 0,5 h se rechaza («Las horas de un servicio van de 1 a 5»); 1, 1,5 y 5 pasan. El formulario propone 5 h (no 8).
+- [ ] 🤖👀 **COR-06 · Tope de unidades por tipo en todo el evento:** DJ 3, música en vivo 3, entretenimiento 3, sonido 2, iluminación 2, otro 5. Probar: 4 DJs en una línea → «Un evento admite máximo 3 de «DJ»»; 2 + 2 DJs en dos líneas → la segunda dice «solo puedes agregar 1 más»; con los 3 ya agregados → «Ya agregaste el máximo». La API rechaza seis líneas de un DJ (el caso de la captura del PO).
 - [ ] 🤖 El tipo de servicio inventado y la descripción en blanco se rechazan.
 - [ ] 👀 El resumen y el detalle del evento muestran «2 und · 4 horas».
 

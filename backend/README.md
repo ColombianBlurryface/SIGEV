@@ -323,7 +323,7 @@ Respuesta `201`: `{ "mensaje": "...", "evento": { "id": 4, "estado": "planificac
 | Observaciones | Texto de máximo 2.000 caracteres |
 | Productos | Lista de máximo 100; `producto_id` entero que exista y esté activo; sin repetir un producto; alimentos de 1 a 1.000 g por persona; bebidas individuales de 1 a 10 unidades por persona (RN-15); el valor unitario, mayor o igual a 0 |
 | Mobiliario | Entero de 1 a 2.000 por línea (RN-17); «Otro» exige descripción |
-| Servicios (DJ, música en vivo, sonido, iluminación, entretenimiento, otro) | **RN-18:** `cantidad` (unidades) entera de 1 a 5 y `horas` en horas completas o medias horas, mayores a 0 y **sin superar la duración del evento**; tipo de la lista; descripción obligatoria (máximo 300 caracteres); notas de máximo 300 |
+| Servicios (DJ, música en vivo, sonido, iluminación, entretenimiento, otro) | **RN-18:** `cantidad` (unidades) entera de 1 a 5 y `horas` en horas completas o medias horas, **de 1 a 5** y **sin superar la duración del evento**; **COR-06:** tope de unidades por tipo en todo el evento, sumando las líneas (`dj` 3, `musica_en_vivo` 3, `entretenimiento` 3, `sonido` 2, `iluminacion` 2, `otro` 5); tipo de la lista; descripción obligatoria (máximo 300 caracteres); notas de máximo 300 |
 
 El registro de un evento toma un candado por fecha dentro de la transacción: con varias peticiones simultáneas para el mismo día entran 3 como máximo, no más. Las horas de cada servicio se guardan en la columna `horas` de `requerimientos_adicionales` (opcional, por eso los servicios guardados antes de esta regla no la tienen). Si se crea la base de cero con `schema.sql` ya viene incluida; en una base existente hay que agregarla (ver `docs/despliegue-y-sql-pendiente.md`).
 
