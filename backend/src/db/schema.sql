@@ -187,3 +187,32 @@ ALTER TABLE movimientos_inventario ADD CONSTRAINT chk_cantidad_por_tipo CHECK (
     OR (tipo = 'ajuste' AND cantidad <> 0)
     OR (tipo = 'baja' AND cantidad < 0)
 );
+-- 1. Tabla de cócteles
+CREATE TABLE IF NOT EXISTS cocteles (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL UNIQUE,
+    descripcion TEXT,
+    activo BOOLEAN NOT NULL DEFAULT true,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Tabla relacional de la receta (licores y mililitros)
+CREATE TABLE IF NOT EXISTS coctel_ingredientes (
+    id SERIAL PRIMARY KEY,
+    coctel_id INTEGER NOT NULL REFERENCES cocteles(id) ON DELETE CASCADE,
+    licor_id INTEGER NOT NULL REFERENCES catalogo_productos(id) ON DELETE RESTRICT,
+    mililitros NUMERIC(8, 2) NOT NULL,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    -- Criterio HU-44 acotado: mayor a 0 y máximo 250 ml por cóctel
+    CONSTRAINT chk_mililitros_rango CHECK (mililitros > 0 AND mililitros <= 250),
+    CONSTRAINT uq_coctel_licor UNIQUE (coctel_id, licor_id)
+);
+
+-- Para bases de datos donde la tabla ya existía con la restricción anterior sin límite superior:
+ALTER TABLE coctel_ingredientes DROP CONSTRAINT IF EXISTS chk_mililitros_positivos;
+ALTER TABLE coctel_ingredientes DROP CONSTRAINT IF EXISTS chk_mililitros_rango;
+ALTER TABLE coctel_ingredientes ADD CONSTRAINT chk_mililitros_rango 
+    CHECK (mililitros > 0 AND mililitros <= 250);
+
+CREATE INDEX IF NOT EXISTS idx_coctel_ingredientes_coctel ON coctel_ingredientes(coctel_id);
