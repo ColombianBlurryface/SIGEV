@@ -82,3 +82,28 @@ VALUES
 ('Ginebra Tanqueray', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 750, 50, 120000),
 ('Tequila José Cuervo Especial', 'bar_cocteleria', 'botella_compartida', 0, 'botellas', 750, 50, 110000)
 ON CONFLICT (nombre) WHERE categoria_inventario IS NULL DO NOTHING;
+-- 3. Criterio HU-44: Insertar los 3 cócteles de prueba obligatorios
+INSERT INTO cocteles (nombre, descripcion) VALUES
+('Gin Tonic', 'Cóctel a base de ginebra y agua tónica (Dato de prueba)'),
+('Whisky Sour', 'Cóctel a base de whisky y limón (Dato de prueba)'),
+('Mojito', 'Cóctel refrescante a base de ron blanco y hierbabuena (Dato de prueba)')
+ON CONFLICT (nombre) DO NOTHING;
+
+-- Enlazar los licores de coctelería existentes en catalogo_productos
+INSERT INTO coctel_ingredientes (coctel_id, licor_id, mililitros)
+SELECT c.id, p.id, 50.00
+FROM cocteles c, catalogo_productos p
+WHERE c.nombre = 'Gin Tonic' AND p.nombre ILIKE '%Ginebra%' AND p.clasificacion = 'bar_cocteleria'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO coctel_ingredientes (coctel_id, licor_id, mililitros)
+SELECT c.id, p.id, 60.00
+FROM cocteles c, catalogo_productos p
+WHERE c.nombre = 'Whisky Sour' AND p.nombre ILIKE '%Whisky%' AND p.clasificacion = 'bar_cocteleria'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO coctel_ingredientes (coctel_id, licor_id, mililitros)
+SELECT c.id, p.id, 50.00
+FROM cocteles c, catalogo_productos p
+WHERE c.nombre = 'Mojito' AND p.nombre ILIKE '%Ron%' AND p.clasificacion = 'bar_cocteleria'
+ON CONFLICT DO NOTHING;
