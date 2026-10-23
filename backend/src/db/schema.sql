@@ -216,3 +216,18 @@ ALTER TABLE coctel_ingredientes ADD CONSTRAINT chk_mililitros_rango
     CHECK (mililitros > 0 AND mililitros <= 250);
 
 CREATE INDEX IF NOT EXISTS idx_coctel_ingredientes_coctel ON coctel_ingredientes(coctel_id);
+-- =============================================================================
+-- HU-45 (RF-53, RN-15, RN-19): Cócteles asignados al evento
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS evento_cocteles (
+    id SERIAL PRIMARY KEY,
+    evento_id INTEGER NOT NULL REFERENCES eventos(id) ON DELETE CASCADE,
+    coctel_id INTEGER NOT NULL REFERENCES cocteles(id) ON DELETE RESTRICT,
+    cocteles_por_persona INTEGER NOT NULL,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    -- RN-15: entero de 1 a 10 por persona
+    CONSTRAINT chk_cocteles_persona_rango CHECK (cocteles_por_persona >= 1 AND cocteles_por_persona <= 10),
+    CONSTRAINT uq_evento_coctel UNIQUE (evento_id, coctel_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evento_cocteles_evento ON evento_cocteles(evento_id);
