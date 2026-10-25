@@ -235,6 +235,21 @@ await caso('El mismo nombre creado 5 veces a la vez: solo uno', [1], async () =>
   return { s: rs.filter((r) => r.s === 201).length }
 })
 
+console.log('\n== HU-22: cocineros (2 por cada 25 asistentes, hacia arriba) · se calculan siempre en el servidor')
+const cocinerosDelEvento = async (cuerpo) => {
+  const r = await call('/eventos', { method: 'POST', body: ev(cuerpo) })
+  if (r.s !== 201) return { s: r.s, nota: JSON.stringify(r.c).slice(0, 90) }
+  return { s: (await call(`/eventos/${r.c.evento.id}`)).c.logistica.cocineros_requeridos }
+}
+for (const [a, esperado] of [[40, 4], [50, 4], [51, 6], [600, 48]]) {
+  await caso(`${a} asistentes → ${esperado} cocineros`, [esperado], async () => cocinerosDelEvento({ asistentes: a }))
+}
+await caso('El cliente no puede fijar los cocineros (cocineros_requeridos: 99 se ignora → 4)', [4], async () => cocinerosDelEvento({ asistentes: 40, cocineros_requeridos: 99 }))
+await caso('El cliente no puede mandar un tipo de comida que cambie el cálculo (tipo_servicio: «cena» se ignora → 4)', [4], async () => cocinerosDelEvento({ asistentes: 40, tipo_servicio: 'cena', menu: 'buffet' }))
+await caso('Cocineros con 39 asistentes (bajo el mínimo del evento)', [400], async () => m(await call('/eventos', { method: 'POST', body: ev({ asistentes: 39 }) })))
+await caso('Cocineros con 601 asistentes (sobre el máximo del evento)', [400], async () => m(await call('/eventos', { method: 'POST', body: ev({ asistentes: 601 }) })))
+await caso('Cocineros con 40,5 asistentes (decimal)', [400], async () => m(await call('/eventos', { method: 'POST', body: ev({ asistentes: 40.5 }) })))
+
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)
 const conocidos = filas.filter((x) => x.conocido)
 const bien = filas.filter((x) => x.ok).length

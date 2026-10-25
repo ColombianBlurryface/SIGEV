@@ -91,7 +91,7 @@ Comprueba que responde en <http://localhost:3000/api/health>.
 npm test
 ```
 
-Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros de la HU-21. Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
+Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros (HU-21) y los cocineros (HU-22). Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
 
 ---
 
@@ -340,11 +340,16 @@ Datos del evento más:
 - `productos_calculados`: nombre, clasificación, porción, `cantidad_neta`, `cantidad_con_margen`, `unidad_entrega`, `precio_unitario`, `costo_estimado` y `componentes_menu`.
 - `servicios_adicionales`: `tipo`, `descripcion`, `cantidad` y `notas` (incluye el mobiliario).
 - En el mobiliario, además (HU-12): `producto_id`, `disponible_inventario` (stock actual), `unidades_propias` y `unidades_alquilar`. En los demás servicios esos campos llegan en `null`.
-- `logistica` (HU-21 · RF-28, RN-04, RN-12): el personal de servicio, calculado al consultar (no se guarda). Hoy solo trae los meseros:
+- `logistica` (HU-21 · RF-28, RN-04, RN-12): el personal de servicio, calculado al consultar (no se guarda). Hoy trae los meseros y, desde la HU-22 (RF-29, RN-05), los cocineros:
 
 ```json
-{ "meseros_requeridos": 3, "asistentes_por_mesero": 20, "relacion_meseros": "1 por cada 20 asistentes" }
+{
+  "meseros_requeridos": 3, "asistentes_por_mesero": 20, "relacion_meseros": "1 por cada 20 asistentes",
+  "cocineros_requeridos": 4, "asistentes_por_grupo_cocina": 25, "cocineros_por_grupo": 2, "relacion_cocineros": "2 por cada 25 asistentes"
+}
 ```
+
+  `cocineros_requeridos` = techo(asistentes ÷ 25) × 2, **igual para todos los eventos** (no depende del tipo de evento, de la comida ni de los productos): 40 → **4**; 100 → **8**; 200 → **16**; 320 → 12,8 → 13 → **26**; 600 → **48**; 50 → **4** y 51 → **6** (el techo se aplica a los grupos antes de multiplicar por 2). Se calcula en el servidor con los asistentes ya validados (40 a 600); un valor `cocineros_requeridos` enviado en el cuerpo se ignora.
 
   `meseros_requeridos` es el techo de asistentes ÷ 20: 45 → 2,25 → **3**; 60 → **3**; 12 → 0,6 → **1**; 0 → **0**. El cálculo vive en [`src/config/reglasPersonal.js`](src/config/reglasPersonal.js) y se prueba con `npm test` (los cuatro escenarios de la historia; los de 12 y 0 asistentes solo se pueden probar ahí porque un evento real exige 40 a 600, RN-01).
 - `aviso_alquiler`: `true` si el evento supera el umbral de asistentes (200 por defecto).

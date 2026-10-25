@@ -3,7 +3,7 @@
  */
 import { Card } from '@/components/ui/card'
 import { formatearFecha } from '@/lib/formato'
-import { calcularMeseros } from '@/lib/reglasPersonal'
+import { calcularCocineros, calcularMeseros } from '@/lib/reglasPersonal'
 import { validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
 
 export function VistaPreviaEvento({ valores }: { valores: ValoresEvento }) {
@@ -19,6 +19,8 @@ export function VistaPreviaEvento({ valores }: { valores: ValoresEvento }) {
     { etiqueta: 'Modalidad', valor: modalidad },
     // HU-21: 1 mesero por cada 20 asistentes, redondeado hacia arriba (solo con un número de asistentes válido)
     { etiqueta: 'Meseros', valor: valido ? calcularMeseros(asistentes.cantidad) : '—' },
+    // HU-22: 2 cocineros por cada 25 asistentes (hacia arriba), sin importar la comida ni el tipo de evento
+    { etiqueta: 'Cocineros', valor: valido ? calcularCocineros(asistentes.cantidad) : '—' },
   ]
 
   return (

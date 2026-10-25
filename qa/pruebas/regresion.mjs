@@ -1050,6 +1050,84 @@ await t('Detalle del evento: un múltiplo exacto (60 asistentes) muestra 3 sin r
 })
 
 
+// ============ HU-22 · Calcular cocineros (RF-29, RN-05, RN-12) ============
+grupo = 'HU-22 Cocineros (RF-29 / RN-05 / RN-12)'
+const eventoCocineros = (asistentes, extra = {}) => api('/eventos', { method: 'POST', body: { nombre_evento: `Cocineros ${asistentes}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes, ...extra } })
+const cocinerosEsperados = (a) => Math.floor((a + 24) / 25) * 2 // techo de a / 25 con enteros, por 2
+const cocinerosDe = async (r) => (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo.logistica
+
+await t('API: 2 cocineros por cada 25 asistentes, redondeado hacia arriba (40 → 4, 50 → 4, 51 → 6, 100 → 8, 200 → 16, 320 → 26, 600 → 48)', async () => {
+  for (const [asistentes, esperado] of [[40, 4], [50, 4], [51, 6], [100, 8], [200, 16], [300, 24], [301, 26], [320, 26], [599, 48], [600, 48]]) {
+    const r = await eventoCocineros(asistentes)
+    igual(r.estado, 201, `${asistentes} asistentes:`)
+    igual((await cocinerosDe(r)).cocineros_requeridos, esperado, `${asistentes} asistentes:`)
+    igual(esperado, cocinerosEsperados(asistentes), `control del esperado para ${asistentes}:`)
+  }
+})
+await t('API: el detalle trae la relación (2 por cada 25 asistentes) dentro de logistica', async () => {
+  const l = await cocinerosDe(await eventoCocineros(100))
+  igual(l.asistentes_por_grupo_cocina, 25, 'asistentes por grupo:'); igual(l.cocineros_por_grupo, 2, 'cocineros por grupo:')
+  igual(l.relacion_cocineros, '2 por cada 25 asistentes', 'relación:'); igual(l.cocineros_requeridos, 8, 'cocineros:')
+  igual(l.meseros_requeridos, 5, 'los meseros no cambian:')
+})
+await t('API: no depende del tipo de evento ni de la comida (40 asistentes → 4 en todos)', async () => {
+  const alimento = (await api('/catalogo?clasificacion=alimento')).cuerpo[0]
+  const variantes = [
+    { tipo_evento: 'Boda' }, { tipo_evento: 'Corporativo' }, { tipo_evento: 'Gala' }, { tipo_evento: 'Cumpleaños' }, { tipo_evento: 'Otro' },
+    { tipo_evento: 'Boda', productos: [{ producto_id: alimento.id, porcion_por_persona: 150, componentes_menu: 'Buffet' }] },
+    { tipo_evento: 'Boda', productos: [{ producto_id: alimento.id, porcion_por_persona: 40, componentes_menu: 'Snacks ligeros' }] },
+  ]
+  for (const v of variantes) {
+    const r = await eventoCocineros(40, v)
+    igual(r.estado, 201, `${JSON.stringify(v).slice(0, 60)}:`)
+    igual((await cocinerosDe(r)).cocineros_requeridos, 4, `${JSON.stringify(v).slice(0, 60)}:`)
+  }
+})
+await t('API: un evento buffet de más de 300 asistentes usa la misma regla (320 → 26)', async () => {
+  const r = await eventoCocineros(320)
+  const d = (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo
+  igual(d.es_modalidad_buffet, true, 'es buffet:'); igual(d.logistica.cocineros_requeridos, 26, 'cocineros:')
+})
+await t('Registro (paso 1): la vista previa calcula los cocineros en vivo (45 → 4, 51 → 6) y no muestra nada con asistentes fuera de rango', async () => {
+  await nuevoEvento('Vista cocineros' + sufijo, 45)
+  const espera = (re) => page.waitForFunction((r) => [...document.querySelectorAll('dl > div')].some((d) => /^Cocineros/.test(d.textContent) && new RegExp(r).test(d.textContent.trim())), re.source)
+  await espera(/4$/)
+  await page.getByLabel('Número de asistentes').fill('51'); await espera(/6$/)
+  await page.getByLabel('Número de asistentes').fill('100'); await espera(/8$/)
+  await page.getByLabel('Número de asistentes').fill('30'); await espera(/—$/)
+  await page.getByLabel('Número de asistentes').fill('45'); await espera(/4$/)
+})
+await t('Registro (paso 3): el resumen muestra los cocineros requeridos antes de guardar', async () => {
+  await aRequerimientos()
+  await page.getByRole('button', { name: /^Siguiente/ }).click()
+  await page.getByRole('button', { name: 'Guardar evento' }).waitFor()
+  const txt = (await page.locator('main').innerText()).replace(/\n/g, ' ')
+  cierto(/Cocineros requeridos\s*4 \(2 por cada 25 asistentes\)/.test(txt), 'el resumen no muestra «Cocineros requeridos 4 (2 por cada 25 asistentes)»')
+})
+await t('Detalle del evento: muestra los cocineros con la cuenta (45 ÷ 25 = 1,8 → redondea hacia arriba a 2 grupos × 2 = 4) y coincide con la API', async () => {
+  await page.getByRole('button', { name: 'Guardar evento' }).click()
+  await page.waitForURL('**/eventos?evento=*')
+  const id = Number(new globalThis.URL(page.url()).searchParams.get('evento'))
+  await page.waitForSelector('[aria-label="Cocineros requeridos"]')
+  igual((await page.locator('[aria-label="Cocineros requeridos"]').innerText()).trim(), '4', 'valor en pantalla:')
+  igual((await api(`/eventos/${id}`)).cuerpo.logistica.cocineros_requeridos, 4, 'valor de la API:')
+  const txt = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
+  cierto(txt.includes('45 ÷ 25 = 1,8 → se redondea hacia arriba a 2 grupos × 2 = 4 cocineros'), 'sin la cuenta explicada')
+  cierto(txt.includes('Cocineros requeridos · 2 por cada 25 asistentes'), 'sin la relación')
+})
+await t('Detalle del evento: múltiplo exacto (100 → 8) y buffet (320 → 26) con el mismo cálculo', async () => {
+  const exacto = await eventoCocineros(100)
+  await page.goto(`${URL}/eventos?evento=${exacto.cuerpo.evento.id}`)
+  await page.waitForSelector('[aria-label="Cocineros requeridos"]')
+  igual((await page.locator('[aria-label="Cocineros requeridos"]').innerText()).trim(), '8')
+  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('100 ÷ 25 = 4 grupos × 2 = 8 cocineros'), 'sin «100 ÷ 25 = 4 grupos × 2 = 8»')
+  const buffet = await eventoCocineros(320)
+  await page.goto(`${URL}/eventos?evento=${buffet.cuerpo.evento.id}`)
+  await page.waitForFunction(() => document.querySelector('[aria-label="Cocineros requeridos"]')?.textContent.trim() === '26')
+  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('320 ÷ 25 = 12,8 → se redondea hacia arriba a 13 grupos × 2 = 26 cocineros'), 'sin la cuenta de 320')
+})
+
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {
