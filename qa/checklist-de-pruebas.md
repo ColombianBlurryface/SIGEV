@@ -135,7 +135,7 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 
 ---
 
-## 11. Personal de servicio · meseros (HU-21)
+## 11. Personal de servicio · meseros (HU-21) y cocineros (HU-22)
 
 > Módulo nuevo que se construye **una historia a la vez**; esta sección crece con cada una.
 
@@ -144,6 +144,16 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **Se muestra dentro del evento:** en el detalle, el recuadro «Meseros requeridos · 1 por cada 20 asistentes» con el número grande y la cuenta («45 ÷ 20 = 2,25 → se redondea hacia arriba a 3»; en un múltiplo exacto, «60 ÷ 20 = 3»).
 - [ ] 🤖👀 **También antes de guardar:** en el paso 1 la vista previa cambia en vivo al escribir los asistentes (45 → 3, 61 → 4) y muestra «—» con asistentes fuera de rango; el resumen del paso 3 dice «Meseros requeridos: 3 (1 por cada 20 asistentes)».
 - [ ] 🤖 La API trae `logistica.meseros_requeridos`, `asistentes_por_mesero` y `relacion_meseros`; el número de la pantalla coincide con el de la API.
+
+### HU-22 · Cocineros (RF-29, RN-05, RN-12) — una sola regla para todos los eventos
+
+- [ ] 🤖 **Cocineros = (asistentes ÷ 25, hacia arriba) × 2.** 40 → 4; 100 → 8; 200 → 16; 300 → 24; 320 → 26; 600 → 48.
+- [ ] 🤖 **Casos límite:** 50 → 4 y 51 → 6 (el techo va antes de multiplicar por 2: no sale 5).
+- [ ] 🤖 **No depende del tipo de evento ni de la comida:** dos eventos de 40 asistentes, uno con alimentos «Buffet» y otro con «Snacks ligeros» (y de tipo Boda, Corporativo, Gala…), dan 4 cocineros cada uno. Un buffet de más de 300 (320) también: 26. Ya no existe el campo «Servicio de comida».
+- [ ] 🤖👀 **Se muestra dentro del evento:** en el detalle, el recuadro «Cocineros requeridos · 2 por cada 25 asistentes» con el número grande y la cuenta («45 ÷ 25 = 1,8 → se redondea hacia arriba a 2 grupos × 2 = 4 cocineros»; en un múltiplo exacto, «100 ÷ 25 = 4 grupos × 2 = 8 cocineros»).
+- [ ] 🤖👀 **Si cambia el número de asistentes, el cálculo se actualiza:** en el paso 1 la vista previa cambia en vivo (45 → 4, 51 → 6, 100 → 8) y muestra «—» fuera de rango; el resumen del paso 3 dice «Cocineros requeridos: 4 (2 por cada 25 asistentes)».
+- [ ] 🤖 La API trae `logistica.cocineros_requeridos` y la relación; el número de la pantalla coincide con el de la API. El cliente no puede fijarlo (se ignora `cocineros_requeridos` en el cuerpo) y los asistentes fuera de 40–600 o decimales se rechazan (400).
+- [ ] 🤖 Los escenarios con menos de 40 asistentes y 0 solo se prueban a nivel de cálculo: `cd backend && npm test`.
 
 ---
 

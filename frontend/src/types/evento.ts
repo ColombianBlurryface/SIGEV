@@ -107,6 +107,11 @@ export interface LogisticaEvento {
   meseros_requeridos: number
   asistentes_por_mesero: number
   relacion_meseros: string
+  // HU-22 (RF-29, RN-05): cocineros, una sola regla para todos los eventos (2 por cada 25 asistentes)
+  cocineros_requeridos: number
+  asistentes_por_grupo_cocina: number
+  cocineros_por_grupo: number
+  relacion_cocineros: string
 }
 
 export interface EventoDetalle extends EventoListado {
