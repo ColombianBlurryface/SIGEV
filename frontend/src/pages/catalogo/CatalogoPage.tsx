@@ -22,6 +22,7 @@ import { ApiError } from '@/services/api'
 import { catalogoService } from '@/services/catalogoService'
 import type { GrupoCatalogo, ProductoCatalogo } from '@/types/catalogo'
 import { RecetasCoctel } from '@/components/catalogo/RecetasCoctel'
+import { RecetasPlato } from '@/components/catalogo/RecetasPlato'
 type Filtro = GrupoCatalogo | 'todos'
 
 export function CatalogoPage() {
@@ -32,7 +33,7 @@ export function CatalogoPage() {
   const [editando, setEditando] = useState<ProductoCatalogo | null>(null)
   const [cambiandoId, setCambiandoId] = useState<number | null>(null)
   const [aviso, setAviso] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null)
-  const [pestana, setPestana] = useState<'productos' | 'recetas'>('productos')
+  const [pestana, setPestana] = useState<'productos' | 'recetas' | 'platos'>('productos')
   const termino = normalizar(busqueda.trim())
   const visibles = productos.filter(
     (p) => (filtro === 'todos' || p.clasificacion === filtro) && (termino === '' || normalizar(p.nombre).includes(termino)),
@@ -119,11 +120,23 @@ export function CatalogoPage() {
         >
           Recetas de Cóctel
         </button>
+        <button
+          type="button"
+          onClick={() => setPestana('platos')}
+          className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
+            pestana === 'platos'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Recetas de Platos
+        </button>
       </div>
 
       {/* ============================================================== */}
       {/* 2. CONDICIÓN: SI ES 'productos' MUESTRA TU CÓDIGO ACTUAL,      */}
-      {/*    SI ES 'recetas' MUESTRA EL COMPONENTE DE LA HU-44           */}
+      {/*    SI ES 'recetas' MUESTRA EL COMPONENTE DE LA HU-44,           */}
+      {/*    SI ES 'platos' MUESTRA LAS RECETAS DE PLATOS (HU-46)         */}
       {/* ============================================================== */}
       {pestana === 'productos' ? (
         <div className="grid items-start gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
@@ -214,8 +227,10 @@ export function CatalogoPage() {
             )}
           </div>
         </div>
-      ) : (
+      ) : pestana === 'recetas' ? (
         <RecetasCoctel />
+      ) : (
+        <RecetasPlato />
       )}
     </div>
   )

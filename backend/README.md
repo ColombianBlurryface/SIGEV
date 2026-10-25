@@ -91,7 +91,7 @@ Comprueba que responde en <http://localhost:3000/api/health>.
 npm test
 ```
 
-Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros (HU-21) y los cocineros (HU-22). Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
+Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros (HU-21), los cocineros (HU-22) y las reglas de las recetas de platos (HU-46). Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
 
 ---
 
@@ -147,7 +147,8 @@ backend/src/
 ├── scripts/crearUsuario.js      Alta de usuarios desde la terminal
 └── db/
     ├── schema.sql               Tablas, tipos y restricciones
-    └── seeds.sql                Productos iniciales del catálogo
+    ├── seeds.sql                Productos iniciales del catálogo y las recetas de ejemplo (HU-46)
+    └── recetas-de-prueba.sql    Solo las recetas de ejemplo, para cargarlas en QA o producción
 ```
 
 ---
@@ -178,6 +179,10 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | POST | `/catalogo` | Crear un producto del catálogo |
 | PUT | `/catalogo/:id` | Editar un producto del catálogo |
 | PATCH | `/catalogo/:id/estado` | Activar o desactivar un producto |
+| GET | `/catalogo/recetas` | Resumen: cuántos ingredientes tiene la receta de cada plato (HU-46) |
+| GET | `/catalogo/ingredientes` | El maestro de ingredientes con su unidad de compra (HU-46) |
+| GET | `/catalogo/:id/receta` | La receta de un plato (HU-46) |
+| PUT | `/catalogo/:id/receta` | Registrar o reemplazar la receta de un plato (HU-46) |
 | POST | `/eventos` | Registrar un evento con sus requerimientos |
 | GET | `/eventos` | Lista de eventos ordenada por fecha |
 | GET | `/eventos/:id` | Detalle de un evento con sus requerimientos |
@@ -268,6 +273,41 @@ La unidad de medida se deduce del tipo. Los números deben enviarse como número
 #### `PUT /api/catalogo/:id`
 
 Edita un producto; se envían todos los campos, igual que al crearlo. Si el producto **ya se usó en algún evento**, no se puede cambiar su `clasificacion` ni su `tipo_calculo` (`409`); sí el nombre, las porciones y el precio. Los eventos ya guardados conservan sus cantidades y costos.
+
+#### `PUT /api/catalogo/:id/receta` y `GET /api/catalogo/:id/receta` (HU-46 · RF-54)
+
+La receta de un **plato** (un alimento del catálogo): sus ingredientes, la cantidad que consume **una persona** y la unidad. `PUT` registra o **reemplaza la receta completa** en una transacción (o se guarda entera o no se guarda nada); `GET` la devuelve.
+
+```json
+{
+  "ingredientes": [
+    { "nombre_ingrediente": "Arroz",     "unidad_compra": "kilo",  "cantidad_porcion": 80, "unidad_porcion": "gramo" },
+    { "nombre_ingrediente": "Almendras", "unidad_compra": "libra", "cantidad_porcion": 15, "unidad_porcion": "gramo" }
+  ]
+}
+```
+
+Respuesta `200` (la misma de `GET`):
+
+```json
+{
+  "plato_id": 3, "plato": "Arroz Verde con Almendras", "es_dato_prueba": false,
+  "receta": [
+    { "ingrediente_id": 1, "ingrediente": "Arroz", "cantidad_porcion": 80, "unidad_porcion": "gramo", "unidad_compra": "kilo", "es_dato_prueba": false }
+  ]
+}
+```
+
+| Regla | Detalle |
+| --- | --- |
+| Unidades | Únicas: `gramo`, `kilo`, `libra`, `arroba` (en `unidad_compra` y `unidad_porcion`). También se entienden `GRAM`, `KILO`, `POUND`, `ARROBA`, el plural y `g`, `kg`, `lb`, `@`. Cualquier otra (litros, paquetes…) da `400` con «Las unidades permitidas son solo gramos, kilos, libras o arrobas.» |
+| Cantidad | `cantidad_porcion` es un número **mayor a 0** (no texto), con máximo 3 decimales y sin pasar de **1 kg por persona** en gramos equivalentes (libra = 500 g, arroba = 12,5 kg) |
+| Ingredientes | De 1 a 30 por receta; nombre de 1 a 100 caracteres; no se repite en la receta (sin importar mayúsculas, tildes ni espacios) |
+| Plato | Debe existir (`404`) y ser un alimento del catálogo (`400` si es una bebida; un elemento del inventario es `404`); un `id` que no es un entero positivo da `400` |
+| Maestro | Un ingrediente que no existe se crea al vuelo; si existe, se reutiliza con su nombre original. Su **unidad de compra es del ingrediente**: si otra receta ya lo compra distinto, `409`; si solo lo usa esta receta, se corrige |
+| Datos de prueba | `es_dato_prueba` es `true` mientras la receta sea la de ejemplo; al guardar la receta real pasa a `false`. El cliente no puede marcarla |
+
+`GET /api/catalogo/recetas` devuelve, por plato, `ingredientes` (cantidad de líneas; 0 = sin receta) y `es_dato_prueba`. `GET /api/catalogo/ingredientes` devuelve el maestro (`nombre`, `unidad_compra`, `platos` que lo usan). Las reglas están en [`src/config/reglasReceta.js`](src/config/reglasReceta.js) y se prueban con `npm test`.
 
 #### `PATCH /api/catalogo/:id/estado`
 

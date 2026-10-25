@@ -43,6 +43,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-12 | Diferenciar lo propio de lo alquilado: cada elemento del inventario se registra como **Propio** o **Alquilado** (con filtro por propiedad), cada línea de mobiliario del evento dice cuántas unidades son propias y cuántas se alquilan, y se avisa de alquiler cuando el evento supera el umbral de asistentes (200 por defecto). | `/inventario`, nuevo evento · paso 2 y 3, detalle del evento |
 | HU-21 | **Calcular los meseros** de cada evento: 1 por cada 20 asistentes, siempre redondeado hacia arriba (45 asistentes → 2,25 → 3 meseros; 60 → 3). Se muestra dentro del detalle del evento con la cuenta explicada, y también en la vista previa y en el resumen del registro. Es la primera historia del módulo de **personal de servicio**, que se construye una historia a la vez. | Detalle del evento, nuevo evento · paso 1 y 3 |
 | HU-22 | **Calcular los cocineros** de cada evento con una sola regla general: 2 cocineros por cada 25 asistentes, con los grupos de 25 redondeados hacia arriba (100 asistentes → 8; 320 → 12,8 → 13 grupos → 26; 51 → 6). **No depende del tipo de evento ni de la comida** (cena, buffet, cóctel…): aplica igual a todos, también a los buffet de más de 300 asistentes. Se muestra en el detalle con la cuenta explicada, en la vista previa (cambia al escribir los asistentes) y en el resumen del registro. | Nuevo evento · paso 1 y 3, detalle del evento |
+| HU-46 | **Registrar la receta de cada plato:** los ingredientes de un plato del catálogo (alimento), cada uno con la **cantidad que consume una persona** (mayor a 0), su **unidad** (gramos, kilos, libras o arrobas, únicas permitidas) y **cómo se compra** en el mercado (kilo, libra o arroba). La receta se edita y se guarda completa; el sistema trae tres platos de ejemplo marcados como **datos de prueba**: Arroz verde con almendras (arroz 80 g / kilo, almendras 15 g / libra, cilantro 10 g / libra), Pechuga a la plancha (pechuga de pollo 200 g / kilo) y Papa salada (papa 150 g / arroba). Es la base para que una historia futura calcule las compras. | Catálogo · pestaña «Recetas de Platos» |
 
 Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
 
@@ -110,6 +111,10 @@ Aquí se mantienen los productos que se ofrecen al registrar un evento. Cada uno
 
 ![Pantalla de catálogo](docs/imagenes/catalogo.png)
 
+**Recetas de platos (HU-46).** En la pestaña «Recetas de Platos» se elige un plato y se registran sus ingredientes: nombre, cantidad que consume **una persona**, unidad (gramos, kilos, libras o arrobas) y cómo se compra (kilo, libra o arroba). La cantidad debe ser mayor a 0 (máximo 3 decimales y 1 kg por persona) y no se repite un ingrediente en la misma receta. Un ingrediente nuevo se crea al escribirlo; si ya existe, se reutiliza y se compra igual que en las otras recetas (la unidad de compra es del ingrediente). Guardar reemplaza la receta completa, y las recetas de ejemplo se marcan como «Datos de prueba» hasta que se guarda la real.
+
+![Receta de un plato en el catálogo](docs/imagenes/recetas-platos.png)
+
 ### Inventario (HU-08 y HU-09)
 
 Registro de elementos y adquisiciones, tabla con búsqueda y filtros por categoría, y el historial de movimientos (registros, adquisiciones y ajustes).
@@ -168,7 +173,7 @@ SIGEV/
 │   │   ├── controllers/     Lógica de cada ruta: validaciones, cálculos y consultas SQL
 │   │   ├── middlewares/     Validaciones previas y verificación del token
 │   │   ├── scripts/         Crear usuarios y generar el SQL del entorno de QA
-│   │   └── db/              schema.sql, seeds.sql, catálogo del mercado colombiano y usuario local
+│   │   └── db/              schema.sql, seeds.sql (incluye las recetas de ejemplo), catálogo del mercado colombiano y usuario local
 │   ├── .env.example         Plantilla de variables de entorno (apunta a la base local)
 │   ├── vercel.json          Configuración del despliegue de la API
 │   └── README.md            Documentación de la API
@@ -176,7 +181,7 @@ SIGEV/
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
 │   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-├── qa/                      Pruebas automáticas (127 de regresión y 114 casos límite)
+├── qa/                      Pruebas automáticas (151 de regresión y 124 casos límite)
 ├── docs/
 │   ├── imagenes/            Capturas usadas en la documentación
 │   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
@@ -244,7 +249,7 @@ Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del m
 
 ## Pruebas y entorno de QA
 
-El proyecto trae pruebas automáticas en [`qa/`](qa) (127 pruebas de los checklists y 114 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+El proyecto trae pruebas automáticas en [`qa/`](qa) (151 pruebas de los checklists y 124 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
 
 - [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
 - [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.

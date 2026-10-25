@@ -231,3 +231,35 @@ CREATE TABLE IF NOT EXISTS evento_cocteles (
 );
 
 CREATE INDEX IF NOT EXISTS idx_evento_cocteles_evento ON evento_cocteles(evento_id);
+
+-- =============================================================================
+-- HU-46 (RF-54): Recetas de los platos
+--   ingredientes        el maestro: cada ingrediente y cómo se compra en el mercado (kilo, libra o arroba)
+--   plato_ingredientes  la receta: qué ingredientes lleva un plato (alimento del catálogo) y cuánto consume
+--                       UNA persona, con su unidad. Unidades permitidas: gramo, kilo, libra, arroba.
+-- Solo agrega tablas nuevas: no cambia ni borra nada de lo que ya hay.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS ingredientes (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    unidad_compra VARCHAR(10) NOT NULL,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_ingrediente_unidad_compra CHECK (unidad_compra IN ('gramo', 'kilo', 'libra', 'arroba'))
+);
+-- Un nombre una sola vez, sin importar mayúsculas
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ingredientes_nombre ON ingredientes (lower(nombre));
+
+CREATE TABLE IF NOT EXISTS plato_ingredientes (
+    id SERIAL PRIMARY KEY,
+    plato_id INTEGER NOT NULL REFERENCES catalogo_productos(id) ON DELETE CASCADE,
+    ingrediente_id INTEGER NOT NULL REFERENCES ingredientes(id) ON DELETE RESTRICT,
+    cantidad_porcion NUMERIC(10, 3) NOT NULL,
+    unidad_porcion VARCHAR(10) NOT NULL,
+    -- true en las recetas de ejemplo; al guardar la receta real del plato deja de ser dato de prueba
+    es_dato_prueba BOOLEAN NOT NULL DEFAULT false,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_plato_ingrediente_cantidad CHECK (cantidad_porcion > 0),
+    CONSTRAINT chk_plato_ingrediente_unidad CHECK (unidad_porcion IN ('gramo', 'kilo', 'libra', 'arroba')),
+    CONSTRAINT uq_plato_ingrediente UNIQUE (plato_id, ingrediente_id)
+);
+CREATE INDEX IF NOT EXISTS idx_plato_ingredientes_plato ON plato_ingredientes(plato_id);

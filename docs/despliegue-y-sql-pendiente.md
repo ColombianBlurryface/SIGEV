@@ -58,6 +58,7 @@ Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Su
 | 5 | Bebidas marcadas como alquiladas (COR-08). Innecesario si hiciste el paso 1 | `backend/src/db/cor-08-bebidas-no-alquilables.sql` | No | ⬜ |
 | 6 | *(Opcional)* Precios de referencia del catálogo | `backend/src/db/precios-catalogo.sql` | No | ⬜ |
 | 7 | *(Opcional)* Datos de prueba (inventario + 6 eventos «[Demo]») | `backend/src/db/datos-de-prueba.sql` | No | ⬜ |
+| 8 ⚠️ | Recetas de platos (HU-46): tablas `ingredientes` y `plato_ingredientes` + tres recetas de ejemplo | [`docs/sql-hu-46-recetas-de-platos.sql`](sql-hu-46-recetas-de-platos.sql) (la parte 2, datos de prueba, es opcional) | **Sí: antes de desplegar el código de la HU-46** (sin las tablas, la pestaña «Recetas de Platos» da 500) | ⬜ |
 
 ### Producción
 
@@ -68,6 +69,7 @@ Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Su
 | 3 ⚠️ | Columna de horas de los servicios (RN-18) | `ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);` | **Sí: antes de publicar** | ⬜ |
 | 4 | Bebidas marcadas como alquiladas, si las hay | `backend/src/db/cor-08-bebidas-no-alquilables.sql` | No | ⬜ |
 | 5 | *(Si el Product Owner lo pide)* Datos de prueba para que ningún módulo se vea vacío | `backend/src/db/datos-de-prueba.sql` (y `datos-de-prueba-quitar.sql` para quitarlos) | No | ⬜ |
+| 6 ⚠️ | Recetas de platos (HU-46): tablas `ingredientes` y `plato_ingredientes` (la parte 2 del archivo, datos de prueba, solo si el PO lo pide) | [`docs/sql-hu-46-recetas-de-platos.sql`](sql-hu-46-recetas-de-platos.sql) | **Sí: antes de publicar** | ⬜ |
 
 **Nunca se corre en producción:** `qa/reiniciar-datos-qa.sql` (tiene un candado que lo impide: solo funciona donde existe el usuario `qa`) ni `qa/limpiar-datos-qa.sql`.
 
