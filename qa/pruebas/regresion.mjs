@@ -1371,6 +1371,131 @@ await t('Pantalla: un ingrediente que otra receta ya compra se rellena con esa u
 })
 
 
+// ============ HU-47 · Ingredientes a comprar (RF-55, RN-09, RN-20) ============
+grupo = 'HU-47 Ingredientes a comprar (RF-55 / RN-20)'
+const platoConReceta = async (nombre, lineas) => { const p = await nuevoPlato(nombre + sufijo); cierto((await guardarReceta(p.id, lineas)).estado === 200, 'no se guardó la receta de ' + nombre); return p }
+const eventoCon = (asistentes, platos, extra = {}) => api('/eventos', { method: 'POST', body: { nombre_evento: `Compras ${asistentes}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes, productos: platos.map((p) => ({ producto_id: p.id, porcion_por_persona: 150 })), ...extra } })
+const comprasDe = async (r) => (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo.compras_ingredientes
+const compra = (c, nombre) => c.items.find((i) => i.ingrediente === nombre)
+const techoCompra = (asist, gramosPorPersona, gramosUnidad) => Math.floor((asist * gramosPorPersona * 110 + gramosUnidad * 100 - 1) / (gramosUnidad * 100)) // control con enteros
+const PECHUGA = NOMBRE_ING('Pechuga de pollo'), CILANTRO = NOMBRE_ING('Cilantro'), PAPA = NOMBRE_ING('Papa')
+
+await t('Escenario 1: 100 asistentes × 200 g de pechuga = 20.000 g → 22.000 g con margen → 22 kilos', async () => {
+  const plato = await platoConReceta('Pechuga compras', [ing(PECHUGA, { unidad_compra: 'kilo', cantidad_porcion: 200 })])
+  const c = await comprasDe(await eventoCon(100, [plato]))
+  const i = compra(c, PECHUGA)
+  igual(i.cantidad_a_comprar, 22, 'cantidad:'); igual(i.unidad_compra, 'kilo', 'unidad:'); igual(i.gramos_base, 20000, 'base:'); igual(i.gramos_con_margen, 22000, 'con margen:')
+  igual(c.margen_porcentaje, 10, 'margen:'); igual(c.asistentes, 100, 'asistentes:')
+})
+await t('Escenario 2: el cilantro de dos platos (10 g y 5 g) con 50 asistentes se suma en un solo total: 750 g → 825 g → 1,65 libras → 2 libras', async () => {
+  const a = await platoConReceta('Plato A cilantro', [ing(CILANTRO, { unidad_compra: 'libra', cantidad_porcion: 10 })])
+  const b = await platoConReceta('Plato B cilantro', [ing(CILANTRO, { unidad_compra: 'libra', cantidad_porcion: 5 })])
+  const c = await comprasDe(await eventoCon(50, [a, b]))
+  igual(c.items.length, 1, 'un solo total:'); const i = c.items[0]
+  igual(i.gramos_base, 750); igual(i.gramos_con_margen, 825); igual(i.cantidad_exacta, 1.65); igual(i.cantidad_a_comprar, 2); igual(i.unidad_compra, 'libra'); igual(i.platos.length, 2, 'platos que lo usan:')
+})
+await t('Escenario 3: 200 asistentes × 150 g de papa = 30.000 g → 33.000 g → 2,64 arrobas → 3 arrobas; y 40 asistentes → 6.600 g → 1 arroba', async () => {
+  const plato = await platoConReceta('Papa compras', [ing(PAPA, { unidad_compra: 'arroba', cantidad_porcion: 150 })])
+  let i = compra(await comprasDe(await eventoCon(200, [plato])), PAPA)
+  igual(i.cantidad_a_comprar, 3); igual(i.unidad_compra, 'arroba'); igual(i.gramos_con_margen, 33000); igual(i.cantidad_exacta, 2.64)
+  i = compra(await comprasDe(await eventoCon(40, [plato])), PAPA)
+  igual(i.gramos_con_margen, 6600); igual(i.cantidad_a_comprar, 1)
+})
+await t('Con más o menos asistentes el cálculo se actualiza y siempre alcanza sin comprar de más (40 a 600)', async () => {
+  const plato = await platoConReceta('Papa variable', [ing(NOMBRE_ING('Papa variable'), { unidad_compra: 'arroba', cantidad_porcion: 150 })])
+  let anterior = 0
+  for (const n of [40, 41, 75, 100, 167, 250, 333, 400, 599, 600]) {
+    const i = compra(await comprasDe(await eventoCon(n, [plato])), NOMBRE_ING('Papa variable'))
+    igual(i.cantidad_a_comprar, techoCompra(n, 150, 12500), `${n} asistentes:`)
+    cierto(i.cantidad_a_comprar >= anterior, `${n} asistentes bajó`); anterior = i.cantidad_a_comprar
+  }
+})
+await t('Las porciones en libras, kilos o arrobas se convierten a gramos antes de calcular (100 asistentes × 0,4 libras = 20.000 g)', async () => {
+  const plato = await platoConReceta('Porción en libras', [ing(NOMBRE_ING('Lentejas'), { unidad_compra: 'libra', cantidad_porcion: 0.4, unidad_porcion: 'libra' }), ing(NOMBRE_ING('Harina'), { unidad_compra: 'kilo', cantidad_porcion: 0.2, unidad_porcion: 'kilo' })])
+  const c = await comprasDe(await eventoCon(100, [plato]))
+  igual(compra(c, NOMBRE_ING('Lentejas')).gramos_base, 20000); igual(compra(c, NOMBRE_ING('Lentejas')).cantidad_a_comprar, 44)
+  igual(compra(c, NOMBRE_ING('Harina')).gramos_base, 20000); igual(compra(c, NOMBRE_ING('Harina')).cantidad_a_comprar, 22)
+})
+await t('El margen se aplica una sola vez sobre el total sumado (3 platos de 3 g, 50 asistentes: 450 g → 495 g → 1 libra, no 3)', async () => {
+  const sal = NOMBRE_ING('Sal compras')
+  const platos = await Promise.all([1, 2, 3].map((n) => platoConReceta(`Plato sal ${n}`, [ing(sal, { unidad_compra: 'libra', cantidad_porcion: 3 })])))
+  const c = await comprasDe(await eventoCon(50, platos))
+  igual(compra(c, sal).cantidad_a_comprar, 1); igual(compra(c, sal).gramos_con_margen, 495)
+})
+await t('Un plato sin receta se avisa aparte; las bebidas y el mobiliario no cuentan; un evento sin alimentos da la lista vacía', async () => {
+  const sinReceta = await nuevoPlato('Plato sin receta compras' + sufijo)
+  const conReceta = await platoConReceta('Plato con receta compras', [ing(NOMBRE_ING('Aceite compras'), { unidad_compra: 'libra', cantidad_porcion: 5 })])
+  const bebida = (await api('/catalogo?clasificacion=bebida_general')).cuerpo[0]
+  const r = await eventoCon(100, [sinReceta, conReceta], { productos: [{ producto_id: sinReceta.id, porcion_por_persona: 100 }, { producto_id: conReceta.id, porcion_por_persona: 100 }, { producto_id: bebida.id, porcion_por_persona: 2 }] })
+  igual(r.estado, 201); const c = await comprasDe(r)
+  igual(c.platos_con_receta, 1, 'platos con receta:'); igual(c.platos_sin_receta.length, 1, 'platos sin receta:'); igual(c.platos_sin_receta[0].producto_id, sinReceta.id)
+  igual(c.items.length, 1, 'solo el ingrediente del plato con receta:')
+  const vacio = await comprasDe(await eventoCon(100, []))
+  igual(vacio.items.length, 0); igual(vacio.platos_con_receta, 0); igual(vacio.platos_sin_receta.length, 0)
+})
+await t('Si se edita la receta, el detalle del evento ya guardado muestra la compra con la receta nueva (se calcula al consultar)', async () => {
+  const plato = await platoConReceta('Plato editable compras', [ing(NOMBRE_ING('Arvejas'), { unidad_compra: 'kilo', cantidad_porcion: 100 })])
+  const r = await eventoCon(100, [plato])
+  igual(compra(await comprasDe(r), NOMBRE_ING('Arvejas')).cantidad_a_comprar, 11)
+  await guardarReceta(plato.id, [ing(NOMBRE_ING('Arvejas'), { unidad_compra: 'kilo', cantidad_porcion: 200 })])
+  igual(compra(await comprasDe(r), NOMBRE_ING('Arvejas')).cantidad_a_comprar, 22)
+})
+await t('Cálculo previo (antes de guardar): POST /eventos/calcular-compras da lo mismo que el detalle, ignora ids repetidos y sin platos da lista vacía', async () => {
+  const plato = await platoConReceta('Plato previo', [ing(NOMBRE_ING('Zapallo'), { unidad_compra: 'arroba', cantidad_porcion: 150 })])
+  const previo = await api('/eventos/calcular-compras', { method: 'POST', body: { asistentes: 200, productos: [plato.id, plato.id] } })
+  igual(previo.estado, 200); igual(compra(previo.cuerpo, NOMBRE_ING('Zapallo')).cantidad_a_comprar, 3); igual(previo.cuerpo.items.length, 1)
+  igual(JSON.stringify(previo.cuerpo.items), JSON.stringify((await comprasDe(await eventoCon(200, [plato]))).items), 'igual al detalle:')
+  igual((await api('/eventos/calcular-compras', { method: 'POST', body: { asistentes: 200, productos: [] } })).cuerpo.items.length, 0)
+})
+await t('Cálculo previo: asistentes fuera de 40–600, decimales o texto; platos que no existen, bebidas o ids inválidos dan 400; sin sesión 401', async () => {
+  const plato = await platoConReceta('Plato previo 2', [ing(NOMBRE_ING('Berenjena'), { cantidad_porcion: 100 })])
+  const bebida = (await api('/catalogo?clasificacion=bebida_general')).cuerpo[0]
+  const malos = [{ asistentes: 39, productos: [plato.id] }, { asistentes: 601, productos: [plato.id] }, { asistentes: 100.5, productos: [plato.id] }, { asistentes: '100', productos: [plato.id] }, { asistentes: null, productos: [] }, {},
+    { asistentes: 100, productos: 'x' }, { asistentes: 100 }, { asistentes: 100, productos: [1.5] }, { asistentes: 100, productos: ['3'] }, { asistentes: 100, productos: [0] }, { asistentes: 100, productos: [-1] },
+    { asistentes: 100, productos: [99999999] }, { asistentes: 100, productos: [bebida.id] }, { asistentes: 100, productos: Array.from({ length: 101 }, (_, i) => i + 1) }]
+  for (const body of malos) igual((await api('/eventos/calcular-compras', { method: 'POST', body })).estado, 400, JSON.stringify(body).slice(0, 60) + ':')
+  igual((await api('/eventos/calcular-compras', { method: 'POST', body: { asistentes: 40, productos: [plato.id] } })).estado, 200, '40 (límite exacto):')
+  igual((await api('/eventos/calcular-compras', { method: 'POST', body: { asistentes: 600, productos: [plato.id] } })).estado, 200, '600 (límite exacto):')
+  igual(await fetch(`${API}/eventos/calcular-compras`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then((r) => r.status), 401)
+})
+
+// --- Pantalla
+await t('Pantalla (registro, paso 3): el resumen calcula los ingredientes a comprar de los platos elegidos antes de guardar', async () => {
+  const plato = await platoConReceta('Plato resumen compras', [ing(NOMBRE_ING('Pechuga resumen'), { unidad_compra: 'kilo', cantidad_porcion: 200 }), ing(NOMBRE_ING('Cilantro resumen'), { unidad_compra: 'libra', cantidad_porcion: 10 })])
+  await nuevoEvento('Resumen compras' + sufijo, 100); await aRequerimientos()
+  await page.waitForSelector('#alimento-producto option[value]', { state: 'attached' })
+  await page.selectOption('#alimento-producto', await optVal(page, '#alimento-producto', plato.nombre))
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click(); await page.waitForSelector(`text=${plato.nombre}`)
+  await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.getByRole('button', { name: 'Guardar evento' }).waitFor()
+  const lista = page.getByRole('list', { name: 'Lista de ingredientes a comprar' }); await lista.waitFor()
+  igual((await lista.locator(`[data-ingrediente="${NOMBRE_ING('Pechuga resumen')}"]`).innerText()).trim(), '22 kilos', 'pechuga:')
+  igual((await lista.locator(`[data-ingrediente="${NOMBRE_ING('Cilantro resumen')}"]`).innerText()).trim(), '3 libras', 'cilantro (1.100 g con margen → 2,2 libras):')
+  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('Para 100 asistentes, con 10 % de margen'), 'sin la explicación del margen')
+})
+await t('Pantalla (detalle del evento): muestra lo que hay que comprar, en su unidad, coincide con la API y avisa de los platos sin receta', async () => {
+  const sinReceta = await nuevoPlato('Plato detalle sin receta' + sufijo)
+  const plato = await platoConReceta('Plato detalle compras', [ing(NOMBRE_ING('Arroz detalle'), { unidad_compra: 'kilo', cantidad_porcion: 80 }), ing(NOMBRE_ING('Papa detalle'), { unidad_compra: 'arroba', cantidad_porcion: 150 })])
+  const r = await eventoCon(200, [plato, sinReceta])
+  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
+  const lista = page.getByRole('list', { name: 'Lista de ingredientes a comprar' }); await lista.waitFor()
+  const api_ = await comprasDe(r)
+  for (const nombre of [NOMBRE_ING('Arroz detalle'), NOMBRE_ING('Papa detalle')]) {
+    const i = compra(api_, nombre); const esperado = `${i.cantidad_a_comprar} ${i.cantidad_a_comprar === 1 ? i.unidad_compra : i.unidad_compra + 's'}`
+    igual((await lista.locator(`[data-ingrediente="${nombre}"]`).innerText()).trim(), esperado, nombre + ':')
+  }
+  igual((await lista.locator(`[data-ingrediente="${NOMBRE_ING('Arroz detalle')}"]`).innerText()).trim(), '18 kilos', 'arroz: 200 × 80 g × 1,10 = 17,6 kg → 18:')
+  igual((await lista.locator(`[data-ingrediente="${NOMBRE_ING('Papa detalle')}"]`).innerText()).trim(), '3 arrobas', 'papa:')
+  const txt = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
+  cierto(txt.includes('Este plato no tiene receta') && txt.includes('Plato detalle sin receta'), 'sin el aviso del plato sin receta')
+  cierto(txt.includes('33.000 g con margen'), 'sin los gramos con margen de la papa')
+})
+await t('Pantalla (detalle): un evento sin alimentos explica que no hay ingredientes que calcular', async () => {
+  const r = await eventoCon(100, [])
+  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
+  await page.waitForSelector('text=no tiene alimentos, así que no hay ingredientes que calcular')
+})
+
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {

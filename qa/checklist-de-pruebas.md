@@ -173,6 +173,23 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖 **Todo o nada:** un guardado con una línea inválida no cambia nada (la receta anterior queda intacta y no se crean ingredientes sueltos). 12 guardados simultáneos terminan con una receta completa, y el mismo ingrediente nuevo desde varios platos queda una sola vez.
 - [ ] 🤖 Sin sesión: 401. Plato inexistente: 404; id con texto: 400; una bebida: 400; un elemento del inventario: 404.
 
+
+---
+
+## 13. Ingredientes a comprar (HU-47)
+
+> Requiere las recetas de la HU-46 (las de ejemplo sirven: `backend/src/db/recetas-de-prueba.sql`). No necesita SQL propio.
+
+- [ ] 🤖👀 **Escenario 1 · kilos con margen:** un evento de 100 asistentes con «Pechuga a la plancha» (pechuga de pollo 200 g, se compra por kilo) muestra **22 kilos** de pechuga de pollo (20.000 g → 22.000 g con margen).
+- [ ] 🤖👀 **Escenario 2 · un solo total y libras:** 50 asistentes con dos platos que usan cilantro (10 g y 5 g, por libra) muestran **un solo renglón**: 750 g → 825 g (1,65 libras exactas) → **2 libras**, con los dos platos nombrados.
+- [ ] 🤖👀 **Escenario 3 · arrobas:** 200 asistentes con «Papa salada» (150 g, por arroba) → 33.000 g con margen → **3 arrobas**. Con 40 asistentes: 6.600 g → **1 arroba**.
+- [ ] 🤖 **Equivalencias:** 1 kg = 1.000 g, 1 libra = 500 g, 1 arroba = 12,5 kg; las porciones escritas en kilos, libras o arrobas se convierten a gramos antes de calcular. El redondeo es siempre hacia arriba y nunca cae en un número de más por decimales (20.000 g × 1,10 = 22 kilos exactos, no 23).
+- [ ] 🤖 **El margen del 10 % se aplica una sola vez** sobre el total sumado (3 platos de 3 g con 50 asistentes: 495 g → 1 libra, no 3).
+- [ ] 🤖👀 **Si cambia el número de asistentes, el cálculo se actualiza** (40 a 600: siempre alcanza y no sobra una unidad entera); y si se edita la receta de un plato, el evento ya guardado muestra la compra con la receta nueva.
+- [ ] 🤖👀 **Donde se ve:** en el detalle del evento («Ingredientes a comprar», con «N g con margen» y los platos que lo usan) y en el paso 3 del registro, **antes de guardar**.
+- [ ] 🤖👀 **Platos sin receta:** el evento avisa «Este plato no tiene receta: … No se calcularon sus ingredientes» y no inventa números. Un evento sin alimentos dice que no hay ingredientes que calcular. Las bebidas y el mobiliario no cuentan.
+- [ ] 🤖 **API:** `GET /api/eventos/:id` trae `compras_ingredientes`; `POST /api/eventos/calcular-compras` da lo mismo antes de guardar y rechaza (400) asistentes fuera de 40–600, decimales o texto, ids inválidos, bebidas o platos que no existen; sin sesión, 401. Un cliente no puede fijar el resultado.
+
 ---
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)

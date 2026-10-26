@@ -274,6 +274,32 @@ await caso('Cuerpo que no es un objeto (lista, texto, número)', [400], async ()
 })
 await caso('Receta de 30 ingredientes con nombres de 100 caracteres', [200], async () => recetaLim(Array.from({ length: 30 }, (_, i) => ingLim({ nombre_ingrediente: `${i}`.padStart(3, '0') + 'x'.repeat(90) + n('').slice(0, 7), cantidad_porcion: 1 }))))
 
+console.log('\n== HU-47: ingredientes a comprar (RF-55, RN-20) · entradas raras del cálculo previo')
+const previo = async (body) => m(await call('/eventos/calcular-compras', { method: 'POST', body }))
+await caso('Compras: 40 asistentes sin platos (límite inferior)', [200], async () => previo({ asistentes: 40, productos: [] }))
+await caso('Compras: 600 asistentes sin platos (límite superior)', [200], async () => previo({ asistentes: 600, productos: [] }))
+await caso('Compras: 39 asistentes', [400], async () => previo({ asistentes: 39, productos: [] }))
+await caso('Compras: 601 asistentes', [400], async () => previo({ asistentes: 601, productos: [] }))
+await caso('Compras: asistentes en notación científica (1e3)', [400], async () => previo({ asistentes: 1e3, productos: [] }))
+await caso('Compras: cuerpo que no es un objeto (lista, texto, número, null)', [400], async () => {
+  const r = await Promise.all([[], 'hola', 5, null].map(async (b) => (await call('/eventos/calcular-compras', { method: 'POST', body: b })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Compras: id de plato gigante (2^31) y con texto', [400], async () => {
+  const r = await Promise.all([2147483648, 'abc', 1e21].map(async (id) => (await call('/eventos/calcular-compras', { method: 'POST', body: { asistentes: 100, productos: [id] } })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Compras: el detalle de un evento sin alimentos trae la lista vacía (no un error)', [0], async () => {
+  const r = await call('/eventos', { method: 'POST', body: ev({ asistentes: 100 }) })
+  const d = await call(`/eventos/${r.c.evento.id}`)
+  return { s: d.c.compras_ingredientes.items.length }
+})
+await caso('Compras: un cliente no puede mandar sus propios ingredientes al crear el evento (compras_ingredientes se ignora)', [0], async () => {
+  const r = await call('/eventos', { method: 'POST', body: ev({ asistentes: 100, compras_ingredientes: { items: [{ ingrediente: 'Falso', cantidad_a_comprar: 999 }] } }) })
+  const d = await call(`/eventos/${r.c.evento.id}`)
+  return { s: d.c.compras_ingredientes.items.length }
+})
+
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)
 const conocidos = filas.filter((x) => x.conocido)
 const bien = filas.filter((x) => x.ok).length

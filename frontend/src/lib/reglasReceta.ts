@@ -76,3 +76,8 @@ export function errorReceta(lineas: LineaEditable[]): string | undefined {
   const hayErrores = lineas.some((l) => Object.keys(erroresLinea(l, lineas)).length > 0)
   return hayErrores ? 'Corrige los ingredientes marcados antes de guardar.' : undefined
 }
+
+const SINGULAR_UNIDAD: Record<UnidadReceta, string> = { gramo: 'gramo', kilo: 'kilo', libra: 'libra', arroba: 'arroba' }
+/** «1 kilo», «22 kilos», «1 arroba», «3 arrobas»: la unidad en singular o plural según la cantidad. */
+export const unidadConCantidad = (cantidad: number, unidad: UnidadReceta) =>
+  `${formatearNumero(cantidad)} ${cantidad === 1 ? SINGULAR_UNIDAD[unidad] : etiquetaUnidad(unidad)}`

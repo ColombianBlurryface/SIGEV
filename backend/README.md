@@ -91,7 +91,7 @@ Comprueba que responde en <http://localhost:3000/api/health>.
 npm test
 ```
 
-Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros (HU-21), los cocineros (HU-22) y las reglas de las recetas de platos (HU-46). Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
+Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros (HU-21), los cocineros (HU-22), las reglas de las recetas de platos (HU-46) y el cálculo de ingredientes a comprar (HU-47). Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
 
 ---
 
@@ -186,6 +186,7 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | POST | `/eventos` | Registrar un evento con sus requerimientos |
 | GET | `/eventos` | Lista de eventos ordenada por fecha |
 | GET | `/eventos/:id` | Detalle de un evento con sus requerimientos |
+| POST | `/eventos/calcular-compras` | Ingredientes a comprar de unos platos y unos asistentes, antes de guardar el evento (HU-47) |
 | POST | `/inventario` | Registrar un elemento del inventario |
 | GET | `/inventario` | Elementos del inventario (filtro `?categoria=`) |
 | PATCH | `/inventario/:id/categoria` | Cambiar la categoría de un elemento |
@@ -309,6 +310,10 @@ Respuesta `200` (la misma de `GET`):
 
 `GET /api/catalogo/recetas` devuelve, por plato, `ingredientes` (cantidad de líneas; 0 = sin receta) y `es_dato_prueba`. `GET /api/catalogo/ingredientes` devuelve el maestro (`nombre`, `unidad_compra`, `platos` que lo usan). Las reglas están en [`src/config/reglasReceta.js`](src/config/reglasReceta.js) y se prueban con `npm test`.
 
+#### `POST /api/eventos/calcular-compras` (HU-47 · RF-55)
+
+El mismo cálculo de `compras_ingredientes`, pero **antes de guardar el evento** (lo usa el resumen del registro): `{ "asistentes": 100, "productos": [3, 22] }`, donde `productos` son los ids de los platos (alimentos) elegidos. Responde `200` con la misma estructura que `compras_ingredientes`. `asistentes` debe ser un entero de 40 a 600 (RN-01); `productos`, una lista de máximo 100 ids enteros positivos de alimentos del catálogo (los repetidos se cuentan una vez; una bebida o un id inexistente dan `400`). Sin sesión, `401`.
+
 #### `PATCH /api/catalogo/:id/estado`
 
 ```json
@@ -380,6 +385,19 @@ Datos del evento más:
 - `productos_calculados`: nombre, clasificación, porción, `cantidad_neta`, `cantidad_con_margen`, `unidad_entrega`, `precio_unitario`, `costo_estimado` y `componentes_menu`.
 - `servicios_adicionales`: `tipo`, `descripcion`, `cantidad` y `notas` (incluye el mobiliario).
 - En el mobiliario, además (HU-12): `producto_id`, `disponible_inventario` (stock actual), `unidades_propias` y `unidades_alquilar`. En los demás servicios esos campos llegan en `null`.
+- `compras_ingredientes` (HU-47 · RF-55, RN-09, RN-20): los ingredientes a comprar, calculados al consultar con las recetas de los platos (alimentos) del evento y sus asistentes:
+
+```json
+{
+  "margen_porcentaje": 10, "asistentes": 50, "platos_con_receta": 2, "platos_sin_receta": [],
+  "items": [
+    { "ingrediente_id": 7, "ingrediente": "Cilantro", "cantidad_a_comprar": 2, "unidad_compra": "libra",
+      "cantidad_exacta": 1.65, "gramos_base": 750, "gramos_con_margen": 825, "platos": ["Plato A", "Plato B"] }
+  ]
+}
+```
+
+  `cantidad_a_comprar` = techo( asistentes × cantidad por porción en gramos × 1,10 ÷ gramos de la unidad de compra ): 100 asistentes × 200 g de pechuga → 22.000 g → **22 kilos**; 50 asistentes con cilantro de dos platos (10 g + 5 g) → 750 g → 825 g → 1,65 → **2 libras**; 200 asistentes × 150 g de papa → 33.000 g → 2,64 → **3 arrobas**. Equivalencias: 1 kg = 1.000 g, 1 libra = 500 g, 1 arroba = 12.500 g. El ingrediente que usan varios platos va en **un solo total** (el margen y el redondeo se aplican una vez, sobre la suma). Todo se calcula con enteros (miligramos): 20.000 g × 1,10 son exactamente 22.000 g y no 22.000,000000000004, que el techo subiría a 23 kilos. Un plato del evento **sin receta** no aporta ingredientes y aparece en `platos_sin_receta`. Se calcula con la receta vigente al consultar (si se edita la receta, el evento ya guardado se actualiza); las bebidas y el mobiliario no cuentan. No necesita tablas nuevas. El cálculo está en [`src/config/reglasCompras.js`](src/config/reglasCompras.js) y se prueba con `npm test`.
 - `logistica` (HU-21 · RF-28, RN-04, RN-12): el personal de servicio, calculado al consultar (no se guarda). Hoy trae los meseros y, desde la HU-22 (RF-29, RN-05), los cocineros:
 
 ```json
