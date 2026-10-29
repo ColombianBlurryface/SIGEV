@@ -250,6 +250,56 @@ await caso('Cocineros con 39 asistentes (bajo el mínimo del evento)', [400], as
 await caso('Cocineros con 601 asistentes (sobre el máximo del evento)', [400], async () => m(await call('/eventos', { method: 'POST', body: ev({ asistentes: 601 }) })))
 await caso('Cocineros con 40,5 asistentes (decimal)', [400], async () => m(await call('/eventos', { method: 'POST', body: ev({ asistentes: 40.5 }) })))
 
+console.log('\n== HU-46: recetas de platos (RF-54) · entradas raras')
+const platoLimite = (await call('/catalogo', { method: 'POST', body: { nombre: n('Plato límite'), clasificacion: 'alimento', tipo_calculo: 'porcion_persona', porcion_por_persona: 100 } })).c
+const ingLim = (o = {}) => ({ nombre_ingrediente: n('Ing'), unidad_compra: 'kilo', cantidad_porcion: 50, unidad_porcion: 'gramo', ...o })
+const recetaLim = async (lineas, cuerpo) => m(await call(`/catalogo/${platoLimite.id}/receta`, { method: 'PUT', body: cuerpo ?? { ingredientes: lineas } }))
+await caso('Receta con ingrediente de nombre HTML (se guarda como texto)', [200], async () => recetaLim([ingLim({ nombre_ingrediente: n('<img src=x onerror=alert(1)>') })]))
+await caso('Receta con comilla y punto y coma en el nombre (no rompe la consulta)', [200], async () => recetaLim([ingLim({ nombre_ingrediente: n("Robert'); DROP TABLE ingredientes;--") })]))
+await caso('Receta con emoji y acentos en el nombre', [200], async () => recetaLim([ingLim({ nombre_ingrediente: n('Piña 🍍 ñame') })]))
+await caso('Cantidad en notación científica enorme (1e21)', [400], async () => recetaLim([ingLim({ cantidad_porcion: 1e21 })]))
+await caso('Cantidad diminuta (1e-7)', [400], async () => recetaLim([ingLim({ cantidad_porcion: 1e-7 })]))
+await caso('Unidad de compra como objeto o lista', [400], async () => {
+  const r = await Promise.all([{ k: 1 }, ['kilo']].map(async (u) => (await call(`/catalogo/${platoLimite.id}/receta`, { method: 'PUT', body: { ingredientes: [ingLim({ unidad_compra: u })] } })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Campos de más en un ingrediente se ignoran', [200], async () => recetaLim([ingLim({ es_dato_prueba: true, ingrediente_id: 1, extra: 'x' })]))
+await caso('Un cliente no puede marcar su receta como dato de prueba', [false], async () => {
+  const r = await call(`/catalogo/${platoLimite.id}/receta`)
+  return { s: r.c.es_dato_prueba }
+})
+await caso('Cuerpo que no es un objeto (lista, texto, número)', [400], async () => {
+  const r = await Promise.all([[], 'hola', 5].map(async (b) => (await call(`/catalogo/${platoLimite.id}/receta`, { method: 'PUT', body: b })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Receta de 30 ingredientes con nombres de 100 caracteres', [200], async () => recetaLim(Array.from({ length: 30 }, (_, i) => ingLim({ nombre_ingrediente: `${i}`.padStart(3, '0') + 'x'.repeat(90) + n('').slice(0, 7), cantidad_porcion: 1 }))))
+
+console.log('\n== HU-47: ingredientes a comprar (RF-55, RN-20) · entradas raras del cálculo previo')
+const previo = async (body) => m(await call('/eventos/calcular-compras', { method: 'POST', body }))
+await caso('Compras: 40 asistentes sin platos (límite inferior)', [200], async () => previo({ asistentes: 40, productos: [] }))
+await caso('Compras: 600 asistentes sin platos (límite superior)', [200], async () => previo({ asistentes: 600, productos: [] }))
+await caso('Compras: 39 asistentes', [400], async () => previo({ asistentes: 39, productos: [] }))
+await caso('Compras: 601 asistentes', [400], async () => previo({ asistentes: 601, productos: [] }))
+await caso('Compras: asistentes en notación científica (1e3)', [400], async () => previo({ asistentes: 1e3, productos: [] }))
+await caso('Compras: cuerpo que no es un objeto (lista, texto, número, null)', [400], async () => {
+  const r = await Promise.all([[], 'hola', 5, null].map(async (b) => (await call('/eventos/calcular-compras', { method: 'POST', body: b })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Compras: id de plato gigante (2^31) y con texto', [400], async () => {
+  const r = await Promise.all([2147483648, 'abc', 1e21].map(async (id) => (await call('/eventos/calcular-compras', { method: 'POST', body: { asistentes: 100, productos: [id] } })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Compras: el detalle de un evento sin alimentos trae la lista vacía (no un error)', [0], async () => {
+  const r = await call('/eventos', { method: 'POST', body: ev({ asistentes: 100 }) })
+  const d = await call(`/eventos/${r.c.evento.id}`)
+  return { s: d.c.compras_ingredientes.items.length }
+})
+await caso('Compras: un cliente no puede mandar sus propios ingredientes al crear el evento (compras_ingredientes se ignora)', [0], async () => {
+  const r = await call('/eventos', { method: 'POST', body: ev({ asistentes: 100, compras_ingredientes: { items: [{ ingrediente: 'Falso', cantidad_a_comprar: 999 }] } }) })
+  const d = await call(`/eventos/${r.c.evento.id}`)
+  return { s: d.c.compras_ingredientes.items.length }
+})
+
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)
 const conocidos = filas.filter((x) => x.conocido)
 const bien = filas.filter((x) => x.ok).length

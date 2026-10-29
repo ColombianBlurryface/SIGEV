@@ -23,6 +23,7 @@ const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
 // RN-03 (P-05): con más asistentes que este umbral se avisa que probablemente haya que alquilar
 // mobiliario. No es un número fijo: sale de MAX_OWNED_CAPACITY_THRESHOLD (ver config/parametros.js).
 const { UMBRAL_ALQUILER } = require('../config/parametros');
+const { comprasDeEvento } = require('./comprasController');
 
 /**
  * POST /api/eventos
@@ -400,6 +401,8 @@ const obtenerDetalleEvento = async (req, res) => {
         cocineros_por_grupo: COCINEROS_POR_GRUPO,
         relacion_cocineros: `${COCINEROS_POR_GRUPO} por cada ${ASISTENTES_POR_GRUPO_COCINA} asistentes`
       },
+      // Ingredientes a comprar (HU-47 · RF-55, RN-09, RN-20): salen de las recetas de los platos y los asistentes
+      compras_ingredientes: await comprasDeEvento(pool, id, asistentes),
       productos_calculados: resProductos.rows,
       servicios_adicionales: resServicios.rows
     });

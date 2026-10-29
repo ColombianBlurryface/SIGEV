@@ -1128,6 +1128,374 @@ await t('Detalle del evento: múltiplo exacto (100 → 8) y buffet (320 → 26) 
 })
 
 
+// ============ HU-46 · Recetas de platos (RF-54) ============
+grupo = 'HU-46 Recetas de platos (RF-54)'
+const nuevoPlato = async (nombre) => (await api('/catalogo', { method: 'POST', body: { nombre, clasificacion: 'alimento', tipo_calculo: 'porcion_persona', porcion_por_persona: 100, precio_unitario: 1000 } })).cuerpo
+const ing = (nombre, o = {}) => ({ nombre_ingrediente: nombre, unidad_compra: 'kilo', cantidad_porcion: 80, unidad_porcion: 'gramo', ...o })
+const guardarReceta = (id, ingredientes) => api(`/catalogo/${id}/receta`, { method: 'PUT', body: { ingredientes } })
+const verReceta = async (id) => (await api(`/catalogo/${id}/receta`)).cuerpo
+const PLATO_API = await nuevoPlato('Plato receta API' + sufijo)
+const NOMBRE_ING = (n) => `${n} QA${sufijo}`
+
+await t('Datos de prueba (escenario 3): el «Arroz verde con almendras» trae exactamente 3 ingredientes (arroz 80 g / kilo, almendras 15 g / libra, cilantro 10 g / libra)', async () => {
+  const resumen = (await api('/catalogo/recetas')).cuerpo
+  const arroz = resumen.find((p) => p.plato.toLowerCase() === 'arroz verde con almendras')
+  cierto(arroz, 'no existe el plato «Arroz verde con almendras»')
+  const r = await verReceta(arroz.plato_id)
+  igual(r.receta.length, 3, 'ingredientes:'); igual(r.es_dato_prueba, true, 'marcado como dato de prueba:')
+  const dato = (n) => r.receta.find((x) => x.ingrediente === n)
+  for (const [n, cant, compra] of [['Arroz', 80, 'kilo'], ['Almendras', 15, 'libra'], ['Cilantro', 10, 'libra']]) {
+    igual(dato(n)?.cantidad_porcion, cant, `${n} cantidad:`); igual(dato(n)?.unidad_porcion, 'gramo', `${n} unidad:`); igual(dato(n)?.unidad_compra, compra, `${n} compra:`)
+  }
+})
+await t('Datos de prueba: «Pechuga a la plancha» (pechuga de pollo 200 g / kilo) y «Papa salada» (papa 150 g / arroba)', async () => {
+  const resumen = (await api('/catalogo/recetas')).cuerpo
+  for (const [plato, ingrediente, cant, compra] of [['pechuga a la plancha', 'Pechuga de pollo', 200, 'kilo'], ['papa salada', 'Papa', 150, 'arroba']]) {
+    const p = resumen.find((x) => x.plato.toLowerCase() === plato); cierto(p, `no existe ${plato}`)
+    const r = await verReceta(p.plato_id)
+    igual(r.receta.length, 1, `${plato} ingredientes:`); igual(r.receta[0].ingrediente, ingrediente); igual(r.receta[0].cantidad_porcion, cant); igual(r.receta[0].unidad_compra, compra)
+  }
+})
+await t('Registrar la receta de un plato (escenario 1): 200 con cantidad, unidad de porción y unidad de compra; se puede consultar', async () => {
+  const r = await guardarReceta(PLATO_API.id, [ing(NOMBRE_ING('Papa'), { unidad_compra: 'arroba', cantidad_porcion: 150 })])
+  igual(r.estado, 200, 'estado:'); igual(r.cuerpo.plato_id, PLATO_API.id); igual(r.cuerpo.plato, PLATO_API.nombre)
+  igual(r.cuerpo.es_dato_prueba, false, 'es_dato_prueba:')
+  const l = r.cuerpo.receta[0]
+  igual(l.ingrediente, NOMBRE_ING('Papa')); igual(l.cantidad_porcion, 150); igual(l.unidad_porcion, 'gramo'); igual(l.unidad_compra, 'arroba')
+  igual(JSON.stringify((await verReceta(PLATO_API.id)).receta), JSON.stringify(r.cuerpo.receta), 'GET igual al PUT:')
+})
+await t('Un plato sin receta responde 200 con la lista vacía', async () => {
+  const p = await nuevoPlato('Plato sin receta' + sufijo)
+  const r = await api(`/catalogo/${p.id}/receta`)
+  igual(r.estado, 200); igual(r.cuerpo.receta.length, 0); igual(r.cuerpo.es_dato_prueba, false)
+})
+await t('Editar la receta: la nueva reemplaza a la anterior (varios ingredientes, cantidades con decimales)', async () => {
+  const r = await guardarReceta(PLATO_API.id, [
+    ing(NOMBRE_ING('Arroz'), { cantidad_porcion: 80 }),
+    ing(NOMBRE_ING('Azafrán'), { unidad_compra: 'gramo', cantidad_porcion: 0.5 }),
+    ing(NOMBRE_ING('Aceite'), { unidad_compra: 'libra', cantidad_porcion: 1.25, unidad_porcion: 'libra' }),
+  ])
+  igual(r.estado, 200); igual(r.cuerpo.receta.length, 3, 'ingredientes:')
+  igual(r.cuerpo.receta[1].cantidad_porcion, 0.5, 'decimal:'); igual(r.cuerpo.receta[2].unidad_porcion, 'libra', 'unidad porción:')
+  cierto(!(await verReceta(PLATO_API.id)).receta.some((x) => x.ingrediente === NOMBRE_ING('Papa')), 'la papa anterior sigue en la receta')
+})
+await t('Las unidades de la historia (GRAM, KILO, POUND, ARROBA), el plural y las abreviaturas también se aceptan', async () => {
+  const p = await nuevoPlato('Plato unidades' + sufijo)
+  const r = await guardarReceta(p.id, [
+    ing(NOMBRE_ING('U1'), { unidad_compra: 'KILO', unidad_porcion: 'GRAM' }), ing(NOMBRE_ING('U2'), { unidad_compra: 'POUND', unidad_porcion: 'g' }),
+    ing(NOMBRE_ING('U3'), { unidad_compra: 'ARROBA', unidad_porcion: 'Gramos' }), ing(NOMBRE_ING('U4'), { unidad_compra: 'libras', unidad_porcion: 'KG', cantidad_porcion: 0.1 }),
+  ])
+  igual(r.estado, 200); igual(r.cuerpo.receta.map((x) => x.unidad_compra).join(), 'kilo,libra,arroba,libra', 'compra:'); igual(r.cuerpo.receta[3].unidad_porcion, 'kilo', 'KG:')
+})
+await t('Unidades no permitidas (escenario 2): LITROS, PAQUETES y otras dan 400 diciendo que solo son gramos, kilos, libras o arrobas', async () => {
+  for (const mala of ['LITROS', 'PAQUETES', 'ml', 'onza', '', null, 5]) {
+    for (const campo of ['unidad_compra', 'unidad_porcion']) {
+      const r = await guardarReceta(PLATO_API.id, [ing(NOMBRE_ING('Mala'), { [campo]: mala })])
+      igual(r.estado, 400, `${campo}=${mala}:`)
+      cierto(/solo gramos, kilos, libras o arrobas/.test(r.cuerpo.detalle), `mensaje de ${campo}=${mala}: ${r.cuerpo.detalle}`)
+    }
+  }
+})
+await t('La cantidad por porción debe ser mayor a 0: 0, negativos, texto, vacío, más de 3 decimales y más de 1 kg dan 400', async () => {
+  for (const [mala, motivo] of [[0, 'cero'], [-1, 'negativo'], ['80', 'texto'], [null, 'nulo'], [12.3456, '4 decimales'], [1001, 'más de 1000 g'], [2, 'kilos de más (con kilo)']]) {
+    const r = await guardarReceta(PLATO_API.id, [ing(NOMBRE_ING('Cant'), { cantidad_porcion: mala, ...(motivo.includes('kilos') ? { unidad_porcion: 'kilo' } : {}) })])
+    igual(r.estado, 400, `${motivo}:`)
+  }
+  igual((await guardarReceta(PLATO_API.id, [ing(NOMBRE_ING('Cant'), { cantidad_porcion: 1000 })])).estado, 200, '1000 g (límite exacto):')
+  igual((await guardarReceta(PLATO_API.id, [ing(NOMBRE_ING('Cant'), { cantidad_porcion: 0.001 })])).estado, 200, '0,001 (mínimo con 3 decimales):')
+})
+await t('La receta necesita al menos un ingrediente (máximo 30), una lista válida y nombres sin repetir', async () => {
+  for (const cuerpo of [{ ingredientes: [] }, {}, { ingredientes: 'x' }, { ingredientes: [null] }, { ingredientes: [5] }]) {
+    igual((await api(`/catalogo/${PLATO_API.id}/receta`, { method: 'PUT', body: cuerpo })).estado, 400, JSON.stringify(cuerpo) + ':')
+  }
+  igual((await guardarReceta(PLATO_API.id, Array.from({ length: 31 }, (_, i) => ing(NOMBRE_ING(`Mucho${i}`))))).estado, 400, '31 ingredientes:')
+  igual((await guardarReceta(PLATO_API.id, Array.from({ length: 30 }, (_, i) => ing(NOMBRE_ING(`Treinta${i}`), { cantidad_porcion: 10 })))).estado, 200, '30 ingredientes:')
+  for (const [a, b] of [['Pimentón', 'pimenton'], ['Sal', ' sal '], ['Pechuga de pollo', 'PECHUGA  DE POLLO']]) {
+    const r = await guardarReceta(PLATO_API.id, [ing(NOMBRE_ING(a)), ing(NOMBRE_ING(b))])
+    igual(r.estado, 400, `${a}/${b}:`)
+  }
+  for (const nombre of ['', '   ', 'x'.repeat(101)]) igual((await guardarReceta(PLATO_API.id, [ing(nombre)])).estado, 400, `nombre «${nombre.slice(0, 5)}…»:`)
+})
+await t('Un guardado inválido no cambia nada: la receta anterior sigue intacta (todo o nada)', async () => {
+  const p = await nuevoPlato('Plato atómico' + sufijo)
+  igual((await guardarReceta(p.id, [ing(NOMBRE_ING('Bueno'))])).estado, 200)
+  const r = await guardarReceta(p.id, [ing(NOMBRE_ING('Nuevo')), ing(NOMBRE_ING('Malo'), { unidad_compra: 'LITROS' })])
+  igual(r.estado, 400)
+  const despues = await verReceta(p.id)
+  igual(despues.receta.length, 1); igual(despues.receta[0].ingrediente, NOMBRE_ING('Bueno'))
+  cierto(!(await api('/catalogo/ingredientes')).cuerpo.some((x) => x.nombre === NOMBRE_ING('Nuevo')), 'se creó un ingrediente de un guardado rechazado')
+})
+await t('Plato inexistente: 404; id con texto, cero o negativo: 400; una bebida o un elemento del inventario no tienen receta', async () => {
+  igual((await api('/catalogo/99999999/receta')).estado, 404); igual((await guardarReceta(99999999, [ing('X')])).estado, 404)
+  for (const id of ['abc', '0', '-3', '1.5', '99999999999']) igual((await api(`/catalogo/${id}/receta`)).estado, 400, `id ${id}:`)
+  const bebida = (await api('/catalogo?clasificacion=bebida_general')).cuerpo[0]
+  const r = await guardarReceta(bebida.id, [ing('Agua')])
+  igual(r.estado, 400); cierto(/Solo los alimentos/.test(r.cuerpo.detalle), 'mensaje de bebida')
+  const elemento = (await api('/inventario')).cuerpo[0]
+  igual((await api(`/catalogo/${elemento.id}/receta`)).estado, 404, 'elemento de inventario:')
+})
+await t('La unidad de compra es del ingrediente: otra receta que ya lo compra distinto da 409; si solo lo usa esta receta, se corrige', async () => {
+  const a = await nuevoPlato('Plato compra A' + sufijo), b = await nuevoPlato('Plato compra B' + sufijo)
+  const harina = NOMBRE_ING('Harina')
+  igual((await guardarReceta(a.id, [ing(harina, { unidad_compra: 'kilo' })])).estado, 200)
+  const conflicto = await guardarReceta(b.id, [ing(harina.toUpperCase(), { unidad_compra: 'libra' })])
+  igual(conflicto.estado, 409, 'otra receta con libra:'); cierto(/ya se compra por kilos/.test(conflicto.cuerpo.detalle), conflicto.cuerpo.detalle)
+  igual((await verReceta(b.id)).receta.length, 0, 'la receta B quedó vacía:')
+  const igualUnidad = await guardarReceta(b.id, [ing(harina.toLowerCase(), { unidad_compra: 'kilo', cantidad_porcion: 30 })])
+  igual(igualUnidad.estado, 200, 'misma unidad:'); igual(igualUnidad.cuerpo.receta[0].ingrediente, harina, 'conserva el nombre del maestro:')
+  // solo A usa «Solo A»: se puede corregir su unidad
+  const solo = NOMBRE_ING('Solo A')
+  await guardarReceta(a.id, [ing(solo, { unidad_compra: 'kilo' })])
+  const corregido = await guardarReceta(a.id, [ing(solo, { unidad_compra: 'arroba' })])
+  igual(corregido.estado, 200, 'corregir unidad propia:'); igual(corregido.cuerpo.receta[0].unidad_compra, 'arroba')
+  const maestro = (await api('/catalogo/ingredientes')).cuerpo.find((x) => x.nombre === harina)
+  igual(maestro.platos, 1, 'platos que lo usan (solo B; A pasó a «Solo A»):'); igual(maestro.unidad_compra, 'kilo')
+})
+await t('Guardados simultáneos: 12 a la vez sobre el mismo plato terminan con UNA receta completa (sin mezclas ni errores)', async () => {
+  const p = await nuevoPlato('Plato concurrente' + sufijo)
+  const rs = await Promise.all(Array.from({ length: 12 }, (_, i) => guardarReceta(p.id, [ing(NOMBRE_ING(`Conc${i}`), { cantidad_porcion: i + 1 }), ing(NOMBRE_ING(`Conc${i}b`), { cantidad_porcion: i + 1 })])))
+  igual(rs.filter((r) => r.estado === 200).length, 12, 'respuestas 200:')
+  const final = await verReceta(p.id)
+  igual(final.receta.length, 2, 'ingredientes:'); igual(final.receta[0].cantidad_porcion, final.receta[1].cantidad_porcion, 'las dos líneas son del mismo guardado:')
+})
+await t('El mismo ingrediente nuevo creado a la vez desde varios platos queda una sola vez en el maestro', async () => {
+  const platos = await Promise.all(Array.from({ length: 8 }, (_, i) => nuevoPlato(`Plato carrera ${i}` + sufijo)))
+  const nombre = NOMBRE_ING('Carrera')
+  const rs = await Promise.all(platos.map((p, i) => guardarReceta(p.id, [ing(i % 2 ? nombre.toUpperCase() : nombre)])))
+  igual(rs.filter((r) => r.estado === 500).length, 0, 'errores 500:'); igual(rs.filter((r) => r.estado === 200).length, 8, 'respuestas 200:')
+  igual((await api('/catalogo/ingredientes')).cuerpo.filter((x) => x.nombre.toLowerCase() === nombre.toLowerCase()).length, 1, 'copias en el maestro:')
+})
+await t('Sin sesión no se ve ni se guarda ninguna receta (401)', async () => {
+  const sin = (ruta, op = {}) => fetch(`${API}${ruta}`, { headers: { 'Content-Type': 'application/json' }, ...op }).then((r) => r.status)
+  igual(await sin(`/catalogo/${PLATO_API.id}/receta`), 401); igual(await sin('/catalogo/recetas'), 401); igual(await sin('/catalogo/ingredientes'), 401)
+  igual(await sin(`/catalogo/${PLATO_API.id}/receta`, { method: 'PUT', body: JSON.stringify({ ingredientes: [ing('X')] }) }), 401)
+})
+
+// --- Pantalla: Catálogo → Recetas de Platos
+const PLATO_UI = await nuevoPlato('Plato receta UI' + sufijo)
+const abrirRecetas = async () => {
+  await page.goto(`${URL}/catalogo`)
+  await page.getByRole('button', { name: 'Recetas de Platos' }).click()
+  await page.getByRole('list', { name: 'Platos del catálogo' }).waitFor()
+}
+const elegirPlato = async (nombre) => {
+  await page.getByRole('button', { name: new RegExp(nombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first().click()
+  await page.getByRole('heading', { name: new RegExp(`Receta de «${nombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}»`) }).waitFor()
+}
+await t('Pantalla: la pestaña «Recetas de Platos» lista los platos con su estado (3 ingredientes, «Datos de prueba», «Sin receta»)', async () => {
+  await abrirRecetas()
+  const lista = (await page.getByRole('list', { name: 'Platos del catálogo' }).innerText()).replace(/\s+/g, ' ')
+  cierto(/Arroz Verde con Almendras 3 ingredientes Datos de prueba/i.test(lista), 'falta el arroz con 3 ingredientes y «Datos de prueba»: ' + lista.slice(0, 200))
+  cierto(/Papa salada 1 ingrediente Datos de prueba/i.test(lista), 'falta la papa salada')
+  cierto(/Plato receta UI.* Sin receta/.test(lista), 'falta «Sin receta» en el plato nuevo')
+})
+await t('Pantalla: el buscador filtra los platos por nombre y avisa cuando ninguno coincide', async () => {
+  await page.fill('#buscar-plato', 'papa sal')
+  await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Platos del catálogo"] > li').length === 1)
+  cierto(/Papa salada/.test(await page.getByRole('list', { name: 'Platos del catálogo' }).innerText()), 'no quedó «Papa salada»')
+  await page.fill('#buscar-plato', 'zzzz-no-existe'); await page.waitForSelector('text=Ningún plato coincide con la búsqueda')
+  await page.fill('#buscar-plato', '')
+})
+await t('Pantalla: abrir una receta de ejemplo muestra sus ingredientes, la cantidad, la unidad, cómo se compra y el aviso de dato de prueba', async () => {
+  await elegirPlato('Arroz Verde con Almendras')
+  await page.waitForSelector('text=dato de prueba')
+  const ol = page.getByRole('list', { name: 'Ingredientes de la receta' })
+  igual(await ol.locator('li').count(), 3, 'filas:')
+  igual(await page.locator('#rec-nombre-0').inputValue(), 'Arroz'); igual(await page.locator('#rec-cantidad-0').inputValue(), '80')
+  igual(await page.locator('#rec-unidad-0').inputValue(), 'gramo'); igual(await page.locator('#rec-compra-0').inputValue(), 'kilo')
+  igual(await page.locator('#rec-compra-1').inputValue(), 'libra', 'almendras se compran por libra:')
+})
+await t('Pantalla: registrar la receta de un plato nuevo (ingrediente, cantidad, unidad, compra) y verla guardada al volver', async () => {
+  await elegirPlato(PLATO_UI.nombre)
+  await page.fill('#rec-nombre-0', NOMBRE_ING('Zanahoria')); await page.fill('#rec-cantidad-0', '120,5')
+  await page.selectOption('#rec-compra-0', 'libra')
+  await page.getByRole('button', { name: 'Agregar ingrediente' }).click()
+  await page.fill('#rec-nombre-1', NOMBRE_ING('Mantequilla')); await page.fill('#rec-cantidad-1', '0,5'); await page.selectOption('#rec-unidad-1', 'libra'); await page.selectOption('#rec-compra-1', 'kilo')
+  await page.waitForSelector('text=250 g')
+  await page.getByRole('button', { name: 'Guardar receta' }).click()
+  await page.waitForSelector(`text=Receta de «${PLATO_UI.nombre}» guardada: 2 ingredientes`)
+  const r = await verReceta(PLATO_UI.id)
+  igual(r.receta.length, 2); igual(r.receta[0].cantidad_porcion, 120.5, 'coma decimal:'); igual(r.receta[0].unidad_compra, 'libra'); igual(r.receta[1].unidad_porcion, 'libra'); igual(r.es_dato_prueba, false)
+  await abrirRecetas()
+  cierto(/Plato receta UI.* 2 ingredientes/.test((await page.getByRole('list', { name: 'Platos del catálogo' }).innerText()).replace(/\s+/g, ' ')), 'la lista no muestra 2 ingredientes')
+})
+await t('Pantalla: editar la receta (cambiar cantidad, quitar un ingrediente) muestra «Cambios sin guardar» y se guarda', async () => {
+  await elegirPlato(PLATO_UI.nombre)
+  await page.fill('#rec-cantidad-0', '100')
+  await page.waitForSelector('text=Cambios sin guardar')
+  await page.getByRole('button', { name: /Quitar el ingrediente 2/ }).click()
+  await page.getByRole('button', { name: 'Guardar receta' }).click()
+  await page.waitForSelector('text=guardada: 1 ingrediente')
+  const r = await verReceta(PLATO_UI.id)
+  igual(r.receta.length, 1); igual(r.receta[0].cantidad_porcion, 100)
+  igual(await page.getByText('Cambios sin guardar').count(), 0, 'sigue el aviso de cambios:')
+})
+await t('Pantalla: «Descartar cambios» devuelve la receta guardada', async () => {
+  await page.fill('#rec-cantidad-0', '999'); await page.waitForSelector('text=Cambios sin guardar')
+  await page.getByRole('button', { name: 'Descartar cambios' }).click()
+  igual(await page.locator('#rec-cantidad-0').inputValue(), '100')
+})
+await t('Pantalla: cantidad 0, negativa, con texto, con más de 3 decimales o de más de 1 kg se rechazan con su mensaje y no se guardan', async () => {
+  const antes = JSON.stringify((await verReceta(PLATO_UI.id)).receta)
+  for (const [valor, mensaje, unidad] of [['0', 'mayor a 0'], ['-5', 'mayor a 0'], ['abc', 'mayor a 0'], ['12,3456', 'Máximo 3 decimales'], ['1500', 'el máximo es 1.000 g'], ['2', 'el máximo es 1.000 g', 'kilo']]) {
+    await page.selectOption('#rec-unidad-0', unidad || 'gramo')
+    await page.fill('#rec-cantidad-0', valor)
+    await page.waitForSelector(`text=${mensaje}`)
+    await page.getByRole('button', { name: 'Guardar receta' }).click()
+    await page.waitForSelector('text=Corrige los ingredientes marcados')
+  }
+  igual(JSON.stringify((await verReceta(PLATO_UI.id)).receta), antes, 'la receta cambió:')
+  await page.getByRole('button', { name: 'Descartar cambios' }).click()
+})
+await t('Pantalla: ingrediente repetido o sin nombre se rechaza; no se puede dejar la receta sin ingredientes (la última fila no se quita)', async () => {
+  await page.getByRole('button', { name: 'Agregar ingrediente' }).click()
+  await page.fill('#rec-nombre-1', NOMBRE_ING('Zanahoria').toUpperCase()); await page.fill('#rec-cantidad-1', '10')
+  await page.waitForSelector('text=está repetido')
+  await page.getByRole('button', { name: 'Guardar receta' }).click()
+  await page.waitForSelector('text=Corrige los ingredientes marcados')
+  await page.fill('#rec-nombre-1', ''); await page.waitForSelector('text=Escribe el nombre del ingrediente')
+  await page.getByRole('button', { name: /Quitar el ingrediente 2/ }).click()
+  igual(await page.getByRole('button', { name: /Quitar el ingrediente 1/ }).isDisabled(), true, 'la única fila quedó habilitada para quitar:')
+  igual(await page.getByText('Cambios sin guardar').count(), 0, 'quitar la fila nueva debía dejar la receta como estaba:')
+})
+await t('Pantalla: un ingrediente que otra receta ya compra se rellena con esa unidad de compra y no se puede cambiar', async () => {
+  const otro = await nuevoPlato('Plato compra UI' + sufijo)
+  await abrirRecetas(); await elegirPlato(otro.nombre)
+  await page.fill('#rec-nombre-0', 'arroz')   // ya existe en el maestro (kilo), lo usa el plato de ejemplo
+  igual(await page.locator('#rec-compra-0').inputValue(), 'kilo', 'unidad rellenada:')
+  igual(await page.locator('#rec-compra-0').isDisabled(), true, 'select bloqueado:')
+  await page.waitForSelector('text=Ya se compra por kilos')
+  await page.fill('#rec-nombre-0', NOMBRE_ING('Nuevo libre'))
+  igual(await page.locator('#rec-compra-0').isDisabled(), false, 'un ingrediente nuevo sí se elige:')
+  await page.goto(`${URL}/catalogo`) // vuelve a la pestaña de productos: los grupos siguientes parten de ahí
+})
+
+
+// ============ HU-47 · Ingredientes a comprar (RF-55, RN-09, RN-20) ============
+grupo = 'HU-47 Ingredientes a comprar (RF-55 / RN-20)'
+const platoConReceta = async (nombre, lineas) => { const p = await nuevoPlato(nombre + sufijo); cierto((await guardarReceta(p.id, lineas)).estado === 200, 'no se guardó la receta de ' + nombre); return p }
+const eventoCon = (asistentes, platos, extra = {}) => api('/eventos', { method: 'POST', body: { nombre_evento: `Compras ${asistentes}` + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes, productos: platos.map((p) => ({ producto_id: p.id, porcion_por_persona: 150 })), ...extra } })
+const comprasDe = async (r) => (await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo.compras_ingredientes
+const compra = (c, nombre) => c.items.find((i) => i.ingrediente === nombre)
+const techoCompra = (asist, gramosPorPersona, gramosUnidad) => Math.floor((asist * gramosPorPersona * 110 + gramosUnidad * 100 - 1) / (gramosUnidad * 100)) // control con enteros
+const PECHUGA = NOMBRE_ING('Pechuga de pollo'), CILANTRO = NOMBRE_ING('Cilantro'), PAPA = NOMBRE_ING('Papa')
+
+await t('Escenario 1: 100 asistentes × 200 g de pechuga = 20.000 g → 22.000 g con margen → 22 kilos', async () => {
+  const plato = await platoConReceta('Pechuga compras', [ing(PECHUGA, { unidad_compra: 'kilo', cantidad_porcion: 200 })])
+  const c = await comprasDe(await eventoCon(100, [plato]))
+  const i = compra(c, PECHUGA)
+  igual(i.cantidad_a_comprar, 22, 'cantidad:'); igual(i.unidad_compra, 'kilo', 'unidad:'); igual(i.gramos_base, 20000, 'base:'); igual(i.gramos_con_margen, 22000, 'con margen:')
+  igual(c.margen_porcentaje, 10, 'margen:'); igual(c.asistentes, 100, 'asistentes:')
+})
+await t('Escenario 2: el cilantro de dos platos (10 g y 5 g) con 50 asistentes se suma en un solo total: 750 g → 825 g → 1,65 libras → 2 libras', async () => {
+  const a = await platoConReceta('Plato A cilantro', [ing(CILANTRO, { unidad_compra: 'libra', cantidad_porcion: 10 })])
+  const b = await platoConReceta('Plato B cilantro', [ing(CILANTRO, { unidad_compra: 'libra', cantidad_porcion: 5 })])
+  const c = await comprasDe(await eventoCon(50, [a, b]))
+  igual(c.items.length, 1, 'un solo total:'); const i = c.items[0]
+  igual(i.gramos_base, 750); igual(i.gramos_con_margen, 825); igual(i.cantidad_exacta, 1.65); igual(i.cantidad_a_comprar, 2); igual(i.unidad_compra, 'libra'); igual(i.platos.length, 2, 'platos que lo usan:')
+})
+await t('Escenario 3: 200 asistentes × 150 g de papa = 30.000 g → 33.000 g → 2,64 arrobas → 3 arrobas; y 40 asistentes → 6.600 g → 1 arroba', async () => {
+  const plato = await platoConReceta('Papa compras', [ing(PAPA, { unidad_compra: 'arroba', cantidad_porcion: 150 })])
+  let i = compra(await comprasDe(await eventoCon(200, [plato])), PAPA)
+  igual(i.cantidad_a_comprar, 3); igual(i.unidad_compra, 'arroba'); igual(i.gramos_con_margen, 33000); igual(i.cantidad_exacta, 2.64)
+  i = compra(await comprasDe(await eventoCon(40, [plato])), PAPA)
+  igual(i.gramos_con_margen, 6600); igual(i.cantidad_a_comprar, 1)
+})
+await t('Con más o menos asistentes el cálculo se actualiza y siempre alcanza sin comprar de más (40 a 600)', async () => {
+  const plato = await platoConReceta('Papa variable', [ing(NOMBRE_ING('Papa variable'), { unidad_compra: 'arroba', cantidad_porcion: 150 })])
+  let anterior = 0
+  for (const n of [40, 41, 75, 100, 167, 250, 333, 400, 599, 600]) {
+    const i = compra(await comprasDe(await eventoCon(n, [plato])), NOMBRE_ING('Papa variable'))
+    igual(i.cantidad_a_comprar, techoCompra(n, 150, 12500), `${n} asistentes:`)
+    cierto(i.cantidad_a_comprar >= anterior, `${n} asistentes bajó`); anterior = i.cantidad_a_comprar
+  }
+})
+await t('Las porciones en libras, kilos o arrobas se convierten a gramos antes de calcular (100 asistentes × 0,4 libras = 20.000 g)', async () => {
+  const plato = await platoConReceta('Porción en libras', [ing(NOMBRE_ING('Lentejas'), { unidad_compra: 'libra', cantidad_porcion: 0.4, unidad_porcion: 'libra' }), ing(NOMBRE_ING('Harina'), { unidad_compra: 'kilo', cantidad_porcion: 0.2, unidad_porcion: 'kilo' })])
+  const c = await comprasDe(await eventoCon(100, [plato]))
+  igual(compra(c, NOMBRE_ING('Lentejas')).gramos_base, 20000); igual(compra(c, NOMBRE_ING('Lentejas')).cantidad_a_comprar, 44)
+  igual(compra(c, NOMBRE_ING('Harina')).gramos_base, 20000); igual(compra(c, NOMBRE_ING('Harina')).cantidad_a_comprar, 22)
+})
+await t('El margen se aplica una sola vez sobre el total sumado (3 platos de 3 g, 50 asistentes: 450 g → 495 g → 1 libra, no 3)', async () => {
+  const sal = NOMBRE_ING('Sal compras')
+  const platos = await Promise.all([1, 2, 3].map((n) => platoConReceta(`Plato sal ${n}`, [ing(sal, { unidad_compra: 'libra', cantidad_porcion: 3 })])))
+  const c = await comprasDe(await eventoCon(50, platos))
+  igual(compra(c, sal).cantidad_a_comprar, 1); igual(compra(c, sal).gramos_con_margen, 495)
+})
+await t('Un plato sin receta se avisa aparte; las bebidas y el mobiliario no cuentan; un evento sin alimentos da la lista vacía', async () => {
+  const sinReceta = await nuevoPlato('Plato sin receta compras' + sufijo)
+  const conReceta = await platoConReceta('Plato con receta compras', [ing(NOMBRE_ING('Aceite compras'), { unidad_compra: 'libra', cantidad_porcion: 5 })])
+  const bebida = (await api('/catalogo?clasificacion=bebida_general')).cuerpo[0]
+  const r = await eventoCon(100, [sinReceta, conReceta], { productos: [{ producto_id: sinReceta.id, porcion_por_persona: 100 }, { producto_id: conReceta.id, porcion_por_persona: 100 }, { producto_id: bebida.id, porcion_por_persona: 2 }] })
+  igual(r.estado, 201); const c = await comprasDe(r)
+  igual(c.platos_con_receta, 1, 'platos con receta:'); igual(c.platos_sin_receta.length, 1, 'platos sin receta:'); igual(c.platos_sin_receta[0].producto_id, sinReceta.id)
+  igual(c.items.length, 1, 'solo el ingrediente del plato con receta:')
+  const vacio = await comprasDe(await eventoCon(100, []))
+  igual(vacio.items.length, 0); igual(vacio.platos_con_receta, 0); igual(vacio.platos_sin_receta.length, 0)
+})
+await t('Si se edita la receta, el detalle del evento ya guardado muestra la compra con la receta nueva (se calcula al consultar)', async () => {
+  const plato = await platoConReceta('Plato editable compras', [ing(NOMBRE_ING('Arvejas'), { unidad_compra: 'kilo', cantidad_porcion: 100 })])
+  const r = await eventoCon(100, [plato])
+  igual(compra(await comprasDe(r), NOMBRE_ING('Arvejas')).cantidad_a_comprar, 11)
+  await guardarReceta(plato.id, [ing(NOMBRE_ING('Arvejas'), { unidad_compra: 'kilo', cantidad_porcion: 200 })])
+  igual(compra(await comprasDe(r), NOMBRE_ING('Arvejas')).cantidad_a_comprar, 22)
+})
+await t('Cálculo previo (antes de guardar): POST /eventos/calcular-compras da lo mismo que el detalle, ignora ids repetidos y sin platos da lista vacía', async () => {
+  const plato = await platoConReceta('Plato previo', [ing(NOMBRE_ING('Zapallo'), { unidad_compra: 'arroba', cantidad_porcion: 150 })])
+  const previo = await api('/eventos/calcular-compras', { method: 'POST', body: { asistentes: 200, productos: [plato.id, plato.id] } })
+  igual(previo.estado, 200); igual(compra(previo.cuerpo, NOMBRE_ING('Zapallo')).cantidad_a_comprar, 3); igual(previo.cuerpo.items.length, 1)
+  igual(JSON.stringify(previo.cuerpo.items), JSON.stringify((await comprasDe(await eventoCon(200, [plato]))).items), 'igual al detalle:')
+  igual((await api('/eventos/calcular-compras', { method: 'POST', body: { asistentes: 200, productos: [] } })).cuerpo.items.length, 0)
+})
+await t('Cálculo previo: asistentes fuera de 40–600, decimales o texto; platos que no existen, bebidas o ids inválidos dan 400; sin sesión 401', async () => {
+  const plato = await platoConReceta('Plato previo 2', [ing(NOMBRE_ING('Berenjena'), { cantidad_porcion: 100 })])
+  const bebida = (await api('/catalogo?clasificacion=bebida_general')).cuerpo[0]
+  const malos = [{ asistentes: 39, productos: [plato.id] }, { asistentes: 601, productos: [plato.id] }, { asistentes: 100.5, productos: [plato.id] }, { asistentes: '100', productos: [plato.id] }, { asistentes: null, productos: [] }, {},
+    { asistentes: 100, productos: 'x' }, { asistentes: 100 }, { asistentes: 100, productos: [1.5] }, { asistentes: 100, productos: ['3'] }, { asistentes: 100, productos: [0] }, { asistentes: 100, productos: [-1] },
+    { asistentes: 100, productos: [99999999] }, { asistentes: 100, productos: [bebida.id] }, { asistentes: 100, productos: Array.from({ length: 101 }, (_, i) => i + 1) }]
+  for (const body of malos) igual((await api('/eventos/calcular-compras', { method: 'POST', body })).estado, 400, JSON.stringify(body).slice(0, 60) + ':')
+  igual((await api('/eventos/calcular-compras', { method: 'POST', body: { asistentes: 40, productos: [plato.id] } })).estado, 200, '40 (límite exacto):')
+  igual((await api('/eventos/calcular-compras', { method: 'POST', body: { asistentes: 600, productos: [plato.id] } })).estado, 200, '600 (límite exacto):')
+  igual(await fetch(`${API}/eventos/calcular-compras`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then((r) => r.status), 401)
+})
+
+// --- Pantalla
+await t('Pantalla (registro, paso 3): el resumen calcula los ingredientes a comprar de los platos elegidos antes de guardar', async () => {
+  const plato = await platoConReceta('Plato resumen compras', [ing(NOMBRE_ING('Pechuga resumen'), { unidad_compra: 'kilo', cantidad_porcion: 200 }), ing(NOMBRE_ING('Cilantro resumen'), { unidad_compra: 'libra', cantidad_porcion: 10 })])
+  await nuevoEvento('Resumen compras' + sufijo, 100); await aRequerimientos()
+  await page.waitForSelector('#alimento-producto option[value]', { state: 'attached' })
+  await page.selectOption('#alimento-producto', await optVal(page, '#alimento-producto', plato.nombre))
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click(); await page.waitForSelector(`text=${plato.nombre}`)
+  await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.getByRole('button', { name: 'Guardar evento' }).waitFor()
+  const lista = page.getByRole('list', { name: 'Lista de ingredientes a comprar' }); await lista.waitFor()
+  igual((await lista.locator(`[data-ingrediente="${NOMBRE_ING('Pechuga resumen')}"]`).innerText()).trim(), '22 kilos', 'pechuga:')
+  igual((await lista.locator(`[data-ingrediente="${NOMBRE_ING('Cilantro resumen')}"]`).innerText()).trim(), '3 libras', 'cilantro (1.100 g con margen → 2,2 libras):')
+  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('Para 100 asistentes, con 10 % de margen'), 'sin la explicación del margen')
+})
+await t('Pantalla (detalle del evento): muestra lo que hay que comprar, en su unidad, coincide con la API y avisa de los platos sin receta', async () => {
+  const sinReceta = await nuevoPlato('Plato detalle sin receta' + sufijo)
+  const plato = await platoConReceta('Plato detalle compras', [ing(NOMBRE_ING('Arroz detalle'), { unidad_compra: 'kilo', cantidad_porcion: 80 }), ing(NOMBRE_ING('Papa detalle'), { unidad_compra: 'arroba', cantidad_porcion: 150 })])
+  const r = await eventoCon(200, [plato, sinReceta])
+  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
+  const lista = page.getByRole('list', { name: 'Lista de ingredientes a comprar' }); await lista.waitFor()
+  const api_ = await comprasDe(r)
+  for (const nombre of [NOMBRE_ING('Arroz detalle'), NOMBRE_ING('Papa detalle')]) {
+    const i = compra(api_, nombre); const esperado = `${i.cantidad_a_comprar} ${i.cantidad_a_comprar === 1 ? i.unidad_compra : i.unidad_compra + 's'}`
+    igual((await lista.locator(`[data-ingrediente="${nombre}"]`).innerText()).trim(), esperado, nombre + ':')
+  }
+  igual((await lista.locator(`[data-ingrediente="${NOMBRE_ING('Arroz detalle')}"]`).innerText()).trim(), '18 kilos', 'arroz: 200 × 80 g × 1,10 = 17,6 kg → 18:')
+  igual((await lista.locator(`[data-ingrediente="${NOMBRE_ING('Papa detalle')}"]`).innerText()).trim(), '3 arrobas', 'papa:')
+  const txt = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
+  cierto(txt.includes('Este plato no tiene receta') && txt.includes('Plato detalle sin receta'), 'sin el aviso del plato sin receta')
+  cierto(txt.includes('33.000 g con margen'), 'sin los gramos con margen de la papa')
+})
+await t('Pantalla (detalle): un evento sin alimentos explica que no hay ingredientes que calcular', async () => {
+  const r = await eventoCon(100, [])
+  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
+  await page.waitForSelector('text=no tiene alimentos, así que no hay ingredientes que calcular')
+})
+
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {

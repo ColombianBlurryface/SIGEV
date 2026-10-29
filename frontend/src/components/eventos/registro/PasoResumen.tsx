@@ -4,8 +4,10 @@
  */
 import { Info } from 'lucide-react'
 import { AvisoAlquiler } from '@/components/eventos/AlquilerMobiliario'
+import { ComprasIngredientes } from '@/components/eventos/ComprasIngredientes'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { useComprasPrevias } from '@/hooks/useComprasPrevias'
 import { useUmbralAlquiler } from '@/hooks/useUmbralAlquiler'
 import { describirReparto, repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { calcularProducto } from '@/lib/calculos'
@@ -45,6 +47,11 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
   const asistentes = validarAsistentes(valores.asistentes)
   const cantidad = asistentes.cantidad ?? 0
   const totales = calcularTotales(requerimientos, cantidad)
+  // HU-47: ingredientes a comprar de los platos elegidos, antes de guardar
+  const comprasPrevias = useComprasPrevias(
+    asistentes.estado === 'valido' ? cantidad : null,
+    requerimientos.alimentos.map((a) => a.producto.id),
+  )
   const repartos = requerimientos.mobiliario.map((m) => repartirMobiliario(m.cantidad, m.disponible))
 
   const lineaProducto = (item: { producto: ProductoCatalogo; porcion: number }, nota?: string): LineaResumen => {
@@ -199,6 +206,16 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
                 )
               })}
             </div>
+          )}
+        </Card>
+
+        <Card className="flex flex-col gap-4 p-6">
+          {comprasPrevias.compras ? (
+            <ComprasIngredientes compras={comprasPrevias.compras} sinPlatos="Aún no agregaste alimentos: cuando los agregues, aquí verás cuánto comprar de cada ingrediente." />
+          ) : comprasPrevias.error ? (
+            <p className="text-[13.5px] text-destructive">{comprasPrevias.error}</p>
+          ) : (
+            <p className="text-[13.5px] text-subtle">Calculando los ingredientes a comprar…</p>
           )}
         </Card>
       </div>

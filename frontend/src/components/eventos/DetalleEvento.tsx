@@ -9,6 +9,7 @@ import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ComprasIngredientes } from '@/components/eventos/ComprasIngredientes'
 import { useEventoDetalle } from '@/hooks/useEventoDetalle'
 import { describirReparto, type RepartoMobiliario } from '@/lib/alquiler'
 import {
@@ -129,6 +130,7 @@ function agruparRequerimientos(detalle: EventoDetalle) {
     total,
     unidadesAlquilar,
     unidadesPedidas,
+    compras: detalle.compras_ingredientes,
     vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0,
   }
 }
@@ -283,6 +285,9 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
               )
             })}
       </div>
+
+      {/* HU-47: lo que hay que comprar de cada ingrediente, según los asistentes y las recetas de los platos */}
+      {requerimientos && <ComprasIngredientes compras={requerimientos.compras} />}
 
       {requerimientos && !requerimientos.vacio && (
         <div className="flex items-baseline justify-between border-t border-border pt-3.5">

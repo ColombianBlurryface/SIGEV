@@ -2,6 +2,8 @@
  * Tipos de los eventos: lo que se envía al registrarlos y lo que devuelve la API al consultarlos.
  * Los valores numéricos de PostgreSQL (NUMERIC) llegan como texto, por eso varios campos son string.
  */
+import type { UnidadReceta } from './recetas'
+
 export const TIPOS_EVENTO = ['Boda', 'Corporativo', 'Quinceañero', 'Gala', 'Cumpleaños', 'Otro'] as const
 
 export type TipoEvento = (typeof TIPOS_EVENTO)[number]
@@ -114,10 +116,36 @@ export interface LogisticaEvento {
   relacion_cocineros: string
 }
 
+// HU-47 (RF-55, RN-09, RN-20): ingredientes a comprar, calculados con las recetas de los platos del evento
+export interface ItemCompraIngrediente {
+  ingrediente_id: number
+  ingrediente: string
+  // Entero, redondeado hacia arriba, en la unidad de compra del ingrediente
+  cantidad_a_comprar: number
+  unidad_compra: UnidadReceta
+  // Lo mismo sin redondear (1,65 libras) y en gramos, para que el cálculo se pueda comprobar
+  cantidad_exacta: number
+  gramos_base: number
+  gramos_con_margen: number
+  // Platos del evento que usan el ingrediente (si son varios, ya viene sumado en un solo total)
+  platos: string[]
+}
+
+export interface ComprasIngredientes {
+  margen_porcentaje: number
+  asistentes: number
+  items: ItemCompraIngrediente[]
+  platos_con_receta: number
+  // Platos del evento sin receta: no aportan ingredientes y se avisa
+  platos_sin_receta: { producto_id: number; nombre: string }[]
+}
+
 export interface EventoDetalle extends EventoListado {
   estado_alquiler: EstadoAlquiler
   // HU-21: personal de servicio calculado por el backend al consultar el evento
   logistica: LogisticaEvento
+  // HU-47: ingredientes a comprar, calculados por el backend al consultar el evento
+  compras_ingredientes: ComprasIngredientes
   productos_calculados: ProductoCalculado[]
   servicios_adicionales: ServicioAdicional[]
 }

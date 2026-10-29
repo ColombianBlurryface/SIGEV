@@ -155,6 +155,41 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖 La API trae `logistica.cocineros_requeridos` y la relación; el número de la pantalla coincide con el de la API. El cliente no puede fijarlo (se ignora `cocineros_requeridos` en el cuerpo) y los asistentes fuera de 40–600 o decimales se rechazan (400).
 - [ ] 🤖 Los escenarios con menos de 40 asistentes y 0 solo se prueban a nivel de cálculo: `cd backend && npm test`.
 
+
+---
+
+## 12. Recetas de platos (HU-46)
+
+> Requiere haber cargado las recetas de ejemplo (`backend/src/db/recetas-de-prueba.sql`) y, en QA, el SQL de las dos tablas nuevas.
+
+- [ ] 🤖👀 **Catálogo → pestaña «Recetas de Platos»** lista los platos (alimentos) con su estado: «3 ingredientes», «1 ingrediente», «Sin receta» y la marca «Datos de prueba» en los de ejemplo.
+- [ ] 🤖 **Datos de prueba (escenario 3):** «Arroz verde con almendras» trae exactamente tres ingredientes: arroz 80 g (se compra por kilo), almendras 15 g (libra) y cilantro 10 g (libra). «Pechuga a la plancha»: pechuga de pollo 200 g (kilo). «Papa salada»: papa 150 g (arroba).
+- [ ] 🤖👀 **Registrar la receta (escenario 1):** en un plato sin receta, agregar ingrediente, cantidad por porción, unidad y cómo se compra; «Guardar receta» confirma («Receta de … guardada: 2 ingredientes») y al volver a abrir el plato está igual. La API responde 200 con cantidad, unidad de porción y unidad de compra.
+- [ ] 🤖👀 **Editar la receta:** cambiar una cantidad o quitar un ingrediente muestra «Cambios sin guardar»; guardar reemplaza la receta anterior; «Descartar cambios» vuelve a lo guardado. Una receta de ejemplo deja de decir «Datos de prueba» cuando se guarda la real.
+- [ ] 🤖👀 **Unidades (escenario 2):** solo gramos, kilos, libras y arrobas (en la pantalla son listas cerradas). Por la API, `LITROS`, `PAQUETES` u otra unidad dan 400 con «Las unidades permitidas son solo gramos, kilos, libras o arrobas.».
+- [ ] 🤖👀 **Cantidad mayor a 0:** 0, negativos, texto o vacío se rechazan («Debe ser un número mayor a 0»); más de 3 decimales y más de 1 kg por persona (también en kilos, libras o arrobas) también; escribir «120,5» con coma funciona.
+- [ ] 🤖👀 **Ingrediente repetido** en la misma receta (aunque cambien mayúsculas o tildes) y **sin nombre** se rechazan; no se puede dejar la receta sin ingredientes ni pasar de 30.
+- [ ] 🤖👀 **Unidad de compra compartida:** al escribir un ingrediente que otra receta ya compra (p. ej. «arroz»), se rellena con su unidad de compra («Kilos») y no se puede cambiar; por la API, una unidad distinta da 409.
+- [ ] 🤖 **Todo o nada:** un guardado con una línea inválida no cambia nada (la receta anterior queda intacta y no se crean ingredientes sueltos). 12 guardados simultáneos terminan con una receta completa, y el mismo ingrediente nuevo desde varios platos queda una sola vez.
+- [ ] 🤖 Sin sesión: 401. Plato inexistente: 404; id con texto: 400; una bebida: 400; un elemento del inventario: 404.
+
+
+---
+
+## 13. Ingredientes a comprar (HU-47)
+
+> Requiere las recetas de la HU-46 (las de ejemplo sirven: `backend/src/db/recetas-de-prueba.sql`). No necesita SQL propio.
+
+- [ ] 🤖👀 **Escenario 1 · kilos con margen:** un evento de 100 asistentes con «Pechuga a la plancha» (pechuga de pollo 200 g, se compra por kilo) muestra **22 kilos** de pechuga de pollo (20.000 g → 22.000 g con margen).
+- [ ] 🤖👀 **Escenario 2 · un solo total y libras:** 50 asistentes con dos platos que usan cilantro (10 g y 5 g, por libra) muestran **un solo renglón**: 750 g → 825 g (1,65 libras exactas) → **2 libras**, con los dos platos nombrados.
+- [ ] 🤖👀 **Escenario 3 · arrobas:** 200 asistentes con «Papa salada» (150 g, por arroba) → 33.000 g con margen → **3 arrobas**. Con 40 asistentes: 6.600 g → **1 arroba**.
+- [ ] 🤖 **Equivalencias:** 1 kg = 1.000 g, 1 libra = 500 g, 1 arroba = 12,5 kg; las porciones escritas en kilos, libras o arrobas se convierten a gramos antes de calcular. El redondeo es siempre hacia arriba y nunca cae en un número de más por decimales (20.000 g × 1,10 = 22 kilos exactos, no 23).
+- [ ] 🤖 **El margen del 10 % se aplica una sola vez** sobre el total sumado (3 platos de 3 g con 50 asistentes: 495 g → 1 libra, no 3).
+- [ ] 🤖👀 **Si cambia el número de asistentes, el cálculo se actualiza** (40 a 600: siempre alcanza y no sobra una unidad entera); y si se edita la receta de un plato, el evento ya guardado muestra la compra con la receta nueva.
+- [ ] 🤖👀 **Donde se ve:** en el detalle del evento («Ingredientes a comprar», con «N g con margen» y los platos que lo usan) y en el paso 3 del registro, **antes de guardar**.
+- [ ] 🤖👀 **Platos sin receta:** el evento avisa «Este plato no tiene receta: … No se calcularon sus ingredientes» y no inventa números. Un evento sin alimentos dice que no hay ingredientes que calcular. Las bebidas y el mobiliario no cuentan.
+- [ ] 🤖 **API:** `GET /api/eventos/:id` trae `compras_ingredientes`; `POST /api/eventos/calcular-compras` da lo mismo antes de guardar y rechaza (400) asistentes fuera de 40–600, decimales o texto, ids inválidos, bebidas o platos que no existen; sin sesión, 401. Un cliente no puede fijar el resultado.
+
 ---
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)
