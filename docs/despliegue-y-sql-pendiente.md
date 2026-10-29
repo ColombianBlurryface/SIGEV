@@ -45,6 +45,9 @@ Sin `--confirmar` los dos solo muestran el plan. El segundo necesita la cuenta `
 
 ## SQL pendiente
 
+> **Atajo (25-oct-2026):** el archivo [`sql-pendiente-qa-y-produccion.sql`](sql-pendiente-qa-y-produccion.sql) junta en un solo pegado lo obligatorio que falta hoy: la columna `horas` (RN-18), las tres tablas de cócteles (HU-44 y HU-45) y la restricción de duración (COR-01, con candado: no se aplica si hay eventos fuera de 3 a 8 h y avisa cuáles). Es repetible y solo agrega. **Va antes del código**, en QA y en producción (confirma el Reference ID). Las filas de abajo siguen siendo la referencia detallada y los pasos opcionales (reinicio, precios, datos de prueba).
+
+
 Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Supabase, en el orden de la tabla.
 
 ### QA
@@ -55,6 +58,7 @@ Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Su
 | 2 | Revisar y quitar eventos con duración fuera de 3 a 8 horas (sin esto el paso 3 falla) | `SELECT id, nombre_evento, duracion_horas FROM eventos WHERE duracion_horas < 3 OR duracion_horas > 8;` y luego, si son de prueba, `DELETE FROM eventos WHERE duracion_horas < 3 OR duracion_horas > 8;` | No | ⬜ |
 | 3 | Restricción de duración (COR-01) | las 4 sentencias `ALTER TABLE eventos …` que están al final de `eventos` en `backend/src/db/schema.sql` | No | ⬜ |
 | 4 ⚠️ | Columna de horas de los servicios (RN-18) | `ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);` | **Sí: antes de desplegar el código de RN-18** | ⬜ |
+| 4b ⚠️ | Tablas de cócteles (HU-44 y HU-45): `cocteles`, `coctel_ingredientes`, `evento_cocteles` | el bloque «HU-44 / HU-45» de `schema.sql` (ya incluido en el atajo de arriba) | **Sí: antes de desplegar**; sin ellas las pantallas de cócteles dan 500 | ⬜ |
 | 5 | Bebidas marcadas como alquiladas (COR-08). Innecesario si hiciste el paso 1 | `backend/src/db/cor-08-bebidas-no-alquilables.sql` | No | ⬜ |
 | 6 | *(Opcional)* Precios de referencia del catálogo | `backend/src/db/precios-catalogo.sql` | No | ⬜ |
 | 7 | *(Opcional)* Datos de prueba (inventario + 6 eventos «[Demo]») | `backend/src/db/datos-de-prueba.sql` | No | ⬜ |
@@ -67,6 +71,7 @@ Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Su
 | 1 | Revisar eventos con duración fuera de 3 a 8 horas; corregirlos o borrarlos si son de prueba | el `SELECT` del paso 2 de QA | No | ⬜ |
 | 2 | Restricción de duración (COR-01) | las 4 sentencias `ALTER TABLE eventos …` de `schema.sql` | No | ⬜ |
 | 3 ⚠️ | Columna de horas de los servicios (RN-18) | `ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);` | **Sí: antes de publicar** | ⬜ |
+| 3b ⚠️ | Tablas de cócteles (HU-44 y HU-45) | igual que en QA (incluido en el atajo) | **Sí: antes de publicar** | ⬜ |
 | 4 | Bebidas marcadas como alquiladas, si las hay | `backend/src/db/cor-08-bebidas-no-alquilables.sql` | No | ⬜ |
 | 5 | *(Si el Product Owner lo pide)* Datos de prueba para que ningún módulo se vea vacío | `backend/src/db/datos-de-prueba.sql` (y `datos-de-prueba-quitar.sql` para quitarlos) | No | ⬜ |
 | 6 ⚠️ | Recetas de platos (HU-46): tablas `ingredientes` y `plato_ingredientes` (la parte 2 del archivo, datos de prueba, solo si el PO lo pide) | [`docs/sql-hu-46-recetas-de-platos.sql`](sql-hu-46-recetas-de-platos.sql) | **Sí: antes de publicar** | ⬜ |
