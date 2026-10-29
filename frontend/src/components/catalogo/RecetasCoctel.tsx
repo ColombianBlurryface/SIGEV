@@ -4,8 +4,9 @@ import { catalogoService } from '@/services/catalogoService'
 import type { Coctel } from '@/types/cocteles'
 import type { ProductoCatalogo } from '@/types/catalogo'
 import { Plus, Trash2, Edit2, Wine } from 'lucide-react'
+import { errorMl, leerMl, ML_MAX_POR_LICOR, MAX_LICORES_POR_RECETA } from '@/lib/reglasCoctel'
 import { CalculadoraCocteles } from './CalculadoraCocteles'
-const MAX_LICORES_POR_COCTEL = 6
+const MAX_LICORES_POR_COCTEL = MAX_LICORES_POR_RECETA
 
 export const RecetasCoctel: React.FC = () => {
   const [cocteles, setCocteles] = useState<Coctel[]>([])
@@ -18,9 +19,13 @@ export const RecetasCoctel: React.FC = () => {
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [nombre, setNombre] = useState('')
   const [descripcion, setDescripcion] = useState('')
-  const [ingredientes, setIngredientes] = useState<{ licor_id: number; mililitros: number }[]>([
-    { licor_id: 0, mililitros: 50 },
+  // Los mililitros se guardan como texto mientras se escriben: así se puede borrar el campo y escribir de cero
+  // (con un número, al borrar quedaba un «0» pegado)
+  const [ingredientes, setIngredientes] = useState<{ licor_id: number; mililitros: string }[]>([
+    { licor_id: 0, mililitros: '50' },
   ])
+  const [intento, setIntento] = useState(false)
+  const [errorForm, setErrorForm] = useState<string | null>(null)
 
   // Patrón estándar de SIGEV: promesas con .then() y bandera activo para evitar set-state-in-effect
   useEffect(() => {
@@ -56,10 +61,10 @@ export const RecetasCoctel: React.FC = () => {
 
   const agregarIngrediente = () => {
     if (ingredientes.length >= MAX_LICORES_POR_COCTEL) {
-      alert(`Una receta de cóctel admite como máximo ${MAX_LICORES_POR_COCTEL} licores.`)
+      setErrorForm(`Una receta de cóctel admite como máximo ${MAX_LICORES_POR_COCTEL} licores.`)
       return
     }
-    setIngredientes((prev) => [...prev, { licor_id: 0, mililitros: 50 }])
+    setIngredientes((prev) => [...prev, { licor_id: 0, mililitros: '50' }])
   }
 
   const eliminarIngrediente = (index: number) => {
@@ -67,7 +72,8 @@ export const RecetasCoctel: React.FC = () => {
     setIngredientes((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const actualizarIngrediente = (index: number, campo: 'licor_id' | 'mililitros', valor: number) => {
+  const actualizarIngrediente = (index: number, campo: 'licor_id' | 'mililitros', valor: number | string) => {
+    setErrorForm(null)
     setIngredientes((prev) => {
       const nuevos = [...prev]
       nuevos[index] = { ...nuevos[index], [campo]: valor }
@@ -79,41 +85,48 @@ export const RecetasCoctel: React.FC = () => {
     setEditandoId(c.id)
     setNombre(c.nombre)
     setDescripcion(c.descripcion || '')
-    setIngredientes(c.ingredientes.map((i) => ({ licor_id: i.licor_id, mililitros: Number(i.mililitros) })))
+    setIngredientes(c.ingredientes.map((i) => ({ licor_id: i.licor_id, mililitros: String(Number(i.mililitros)) })))
+    setIntento(false)
+    setErrorForm(null)
   }
 
   const limpiarFormulario = () => {
     setEditandoId(null)
     setNombre('')
     setDescripcion('')
-    setIngredientes([{ licor_id: 0, mililitros: 50 }])
+    setIngredientes([{ licor_id: 0, mililitros: '50' }])
+    setIntento(false)
+    setErrorForm(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // 1. Validar nombre
-    if (!nombre.trim()) return alert('El nombre del cóctel es obligatorio.')
+    setIntento(true)
+    setErrorForm(null)
 
-    // 2. Validar que tenga al menos un licor y máximo 6
-    if (ingredientes.length === 0) return alert('Debes agregar al menos un licor a la receta.')
-    if (ingredientes.length > 6) return alert('Una receta de cóctel admite como máximo 6 licores.')
+    // Todo se avisa dentro del formulario (no con ventanas emergentes)
+    if (!nombre.trim()) return setErrorForm('El nombre del cóctel es obligatorio.')
+    if (nombre.trim().length > 150) return setErrorForm('El nombre admite máximo 150 caracteres.')
+    if (ingredientes.length === 0) return setErrorForm('Debes agregar al menos un licor a la receta.')
+    if (ingredientes.length > MAX_LICORES_POR_COCTEL) return setErrorForm(`Una receta de cóctel admite como máximo ${MAX_LICORES_POR_COCTEL} licores.`)
 
-    // 3. Validar licores duplicados en el mismo cóctel (para no romper la restricción UNIQUE de la BD)
+    // Un licor no se repite en la misma receta (la base de datos no lo permite)
     const idsLicores = ingredientes.map((i) => i.licor_id)
     if (new Set(idsLicores).size !== idsLicores.length) {
-      return alert('No puedes seleccionar el mismo licor más de una vez en la receta.')
+      return setErrorForm('No puedes seleccionar el mismo licor más de una vez en la receta.')
     }
-
-    // 4. Validar mililitros razonables (entre 1 y 250 ml por trago)
-    for (const ing of ingredientes) {
-      if (!ing.licor_id || ing.mililitros <= 0 || ing.mililitros > 250) {
-        return alert('Selecciona un licor y especifica mililitros mayores a 0 y máximo 250 ml.')
-      }
+    if (ingredientes.some((i) => !i.licor_id)) return setErrorForm('Selecciona un licor en cada fila de la receta.')
+    if (ingredientes.some((i) => errorMl(i.mililitros))) {
+      return setErrorForm(`Corrige los mililitros marcados: mayores a 0 y máximo ${ML_MAX_POR_LICOR} ml por licor.`)
     }
 
     try {
-      const payload = { nombre: nombre.trim(), descripcion: descripcion.trim(), ingredientes }
+      const payload = {
+        nombre: nombre.trim(),
+        descripcion: descripcion.trim(),
+        ingredientes: ingredientes.map((i) => ({ licor_id: i.licor_id, mililitros: leerMl(i.mililitros) as number })),
+      }
       if (editandoId) {
         await coctelesService.editar(editandoId, payload)
       } else {
@@ -122,8 +135,7 @@ export const RecetasCoctel: React.FC = () => {
       limpiarFormulario()
       recargar()
     } catch (err: unknown) {
-      const mensaje = err instanceof Error ? err.message : 'Error al guardar la receta.'
-      alert(mensaje)
+      setErrorForm(err instanceof Error ? err.message : 'Error al guardar la receta.')
     }
   }
   const handleEliminar = async (id: number, nombreCoctel: string) => {
@@ -170,6 +182,7 @@ export const RecetasCoctel: React.FC = () => {
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 placeholder="Ej. Mojito, Gin Tonic"
+                maxLength={150}
                 className="w-full border border-border rounded-lg p-2 text-sm bg-background text-foreground"
                 required
               />
@@ -181,6 +194,7 @@ export const RecetasCoctel: React.FC = () => {
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
                 placeholder="Ej. Servir con hielo frappé y hierbabuena"
+                maxLength={500}
                 className="w-full border border-border rounded-lg p-2 text-sm bg-background text-foreground"
               />
             </div>
@@ -189,11 +203,11 @@ export const RecetasCoctel: React.FC = () => {
           <div className="space-y-3 pt-2">
             <label className="block text-xs font-medium text-muted-foreground">Licores requeridos y dosificación</label>
             {ingredientes.map((ing, idx) => (
-              <div key={idx} className="flex items-center gap-3">
+              <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
                 <select
                   value={ing.licor_id}
                   onChange={(e) => actualizarIngrediente(idx, 'licor_id', Number(e.target.value))}
-                  className="flex-1 border border-border rounded-lg p-2 text-sm bg-background text-foreground"
+                  className="w-full min-w-0 sm:flex-1 border border-border rounded-lg p-2 text-sm bg-background text-foreground"
                   required
                 >
                   <option value={0}>-- Selecciona un licor de coctelería --</option>
@@ -204,25 +218,29 @@ export const RecetasCoctel: React.FC = () => {
                   ))}
                 </select>
 
-                <div className="w-32 flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min="1"
-                    max="250"
-                    value={ing.mililitros}
-                    onChange={(e) => actualizarIngrediente(idx, 'mililitros', Number(e.target.value))}
-                    placeholder="ml"
-                    className="w-full border border-border rounded-lg p-2 text-sm bg-background text-foreground"
-                    required
-                  />
-                  <span className="text-xs font-medium text-muted-foreground">ml</span>
+                <div className="flex w-full flex-col gap-1 sm:w-40">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      maxLength={7}
+                      value={ing.mililitros}
+                      onChange={(e) => actualizarIngrediente(idx, 'mililitros', e.target.value)}
+                      placeholder="ml"
+                      aria-label={`Mililitros del licor ${idx + 1}`}
+                      aria-invalid={Boolean(errorMl(ing.mililitros, intento))}
+                      className={`w-full border rounded-lg p-2 text-sm bg-background text-foreground ${errorMl(ing.mililitros, intento) ? 'border-red-500' : 'border-border'}`}
+                    />
+                    <span className="text-xs font-medium text-muted-foreground">ml</span>
+                  </div>
+                  {errorMl(ing.mililitros, intento) && <p className="text-[11.5px] leading-snug text-red-600 dark:text-red-400">{errorMl(ing.mililitros, intento)}</p>}
                 </div>
 
                 {ingredientes.length > 1 && (
                   <button
                     type="button"
                     onClick={() => eliminarIngrediente(idx)}
-                    className="text-red-500 hover:text-red-700 p-2 cursor-pointer"
+                    className="self-end text-red-500 hover:text-red-700 p-2 cursor-pointer sm:self-auto"
                     title="Quitar licor"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -245,6 +263,12 @@ export const RecetasCoctel: React.FC = () => {
             </span>
             )}
           </div>
+
+          {errorForm && (
+            <p role="alert" className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+              {errorForm}
+            </p>
+          )}
 
           <div className="flex gap-2 pt-3">
             <button

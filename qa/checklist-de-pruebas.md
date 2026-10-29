@@ -190,6 +190,19 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **Platos sin receta:** el evento avisa «Este plato no tiene receta: … No se calcularon sus ingredientes» y no inventa números. Un evento sin alimentos dice que no hay ingredientes que calcular. Las bebidas y el mobiliario no cuentan.
 - [ ] 🤖 **API:** `GET /api/eventos/:id` trae `compras_ingredientes`; `POST /api/eventos/calcular-compras` da lo mismo antes de guardar y rechaza (400) asistentes fuera de 40–600, decimales o texto, ids inválidos, bebidas o platos que no existen; sin sesión, 401. Un cliente no puede fijar el resultado.
 
+
+---
+
+## 14. Límites de medidas y campos numéricos
+
+- [ ] 🤖👀 **Botella de máximo 5.000 ml:** en Catálogo, bebida compartida, escribir 15000 en «Botella (ml)» muestra al instante «Máximo 5.000 ml por botella» y no deja guardar; la porción no puede ser mayor que la botella.
+- [ ] 🤖👀 **Alimentos de 1 a 1.000 g por persona:** en Catálogo (crear/editar) y en el paso 2 del registro, 15000 g muestra «Máximo 1.000 g por persona: un alimento no pasa de 1 kg» al escribirlo y no se agrega; 0 dice «al menos 1 g». Al corregir el valor, el aviso rojo desaparece.
+- [ ] 🤖👀 **Precio máximo de $100.000.000** en el catálogo y en el valor de las bebidas del evento.
+- [ ] 🤖👀 **Recetas de cóctel:** los mililitros de cada licor van de 0 a 250 con 2 decimales; 15000, 251, 0, texto y 12,345 se avisan junto al campo. Sin licor, con el mismo licor repetido o con más de 6 se avisa dentro del formulario (ya no con ventanas emergentes). Se puede escribir «45,5».
+- [ ] 🤖👀 **Calculadora de licor:** asistentes de 40 a 600 (entero) y cócteles por persona de 1 a 10 (entero) se avisan junto al campo y no calculan con datos malos.
+- [ ] 🤖👀 **El «0» ya no se queda pegado:** en la pestaña Recetas de Cóctel (mililitros, asistentes y cócteles por persona de la calculadora) se puede borrar el campo y escribir de cero; antes, escribir 7 daba «07». Lo mismo en Inventario y en Nuevo evento.
+- [ ] 🤖 **API de cócteles sin errores 500:** `ml` como texto, 0,001 o 12,345; `licor_id`/`coctel_id` de texto o gigantes; nombre de 151 caracteres; ids de la ruta con letras; asistentes `"100abc"` o `40.9`; cócteles por persona `2.7`: todo da 400 (editar con nombre repetido, 409).
+
 ---
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)

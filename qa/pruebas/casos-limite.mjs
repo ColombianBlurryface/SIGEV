@@ -44,9 +44,16 @@ const call = async (ruta, op = {}) => {
 // Días que ya tienen eventos de corridas anteriores (se cargan después de iniciar sesión): se evitan, porque con 3 el día se llena
 let DIAS_OCUPADOS = new Set()
 const fechaLibre = () => {
+  // Cada fecha entregada se marca como usada: así dos eventos de la misma corrida no chocan con el tope de 3 por día
+  const tomar = (f) => { DIAS_OCUPADOS.add(f); return f }
   for (let i = 0; i < 50; i++) {
     const f = new Date(Date.now() + (30 + Math.floor(Math.random() * 1500)) * 86400000).toISOString().slice(0, 10)
-    if (!DIAS_OCUPADOS.has(f)) return f
+    if (!DIAS_OCUPADOS.has(f)) return tomar(f)
+  }
+  // Con una base de pruebas muy llena, se recorre el rango hasta encontrar el primer día sin eventos
+  for (let d = 30; d < 1800; d++) {
+    const f = new Date(Date.now() + d * 86400000).toISOString().slice(0, 10)
+    if (!DIAS_OCUPADOS.has(f)) return tomar(f)
   }
   return new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 }
@@ -298,6 +305,74 @@ await caso('Compras: un cliente no puede mandar sus propios ingredientes al crea
   const r = await call('/eventos', { method: 'POST', body: ev({ asistentes: 100, compras_ingredientes: { items: [{ ingrediente: 'Falso', cantidad_a_comprar: 999 }] } }) })
   const d = await call(`/eventos/${r.c.evento.id}`)
   return { s: d.c.compras_ingredientes.items.length }
+})
+
+console.log('\n== Cócteles (HU-44 / HU-45): mililitros, ids y textos estrictos · antes daban 500 o aceptaban «50abc»')
+const licorBar = (await call('/catalogo?clasificacion=bar_cocteleria')).c[0]
+const alimentoCat = (await call('/catalogo?clasificacion=alimento')).c[0]
+const crearCoctel = (o = {}, ing = {}) => call('/cocteles', { method: 'POST', body: { nombre: n('Cóctel ' + Math.random().toString(36).slice(2, 7)), ingredientes: [{ licor_id: licorBar.id, mililitros: 50, ...ing }], ...o } })
+for (const [ml, esperado] of [[15000, 400], [251, 400], [250.01, 400], ['50abc', 400], ['50', 400], [0, 400], [-5, 400], [0.001, 400], [12.345, 400], [null, 400], [NaN, 400], [0.01, 201], [45.5, 201], [250, 201]]) {
+  await caso(`Cóctel con ${JSON.stringify(ml)} ml`, [esperado], async () => m(await crearCoctel({}, { mililitros: ml })))
+}
+await caso('Cóctel con licor_id de texto, gigante o decimal', [400], async () => {
+  const r = await Promise.all(['abc', 1e21, 1.5, '1', null, 0].map(async (id) => (await crearCoctel({}, { licor_id: id })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Cóctel con un alimento como licor', [400], async () => m(await crearCoctel({}, { licor_id: alimentoCat.id })))
+await caso('Cóctel con nombre de 151 caracteres', [400], async () => m(await crearCoctel({ nombre: 'x'.repeat(151) })))
+await caso('Cóctel con descripción que no es texto', [400], async () => m(await crearCoctel({ descripcion: { a: 1 } })))
+await caso('Cóctel con ingredientes null o con un null dentro', [400], async () => {
+  const r = await Promise.all([null, [null], [5], 'x'].map(async (ing) => (await call('/cocteles', { method: 'POST', body: { nombre: n('N'), ingredientes: ing } })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Cóctel con 7 licores', [400], async () => m(await call('/cocteles', { method: 'POST', body: { nombre: n('Siete'), ingredientes: Array.from({ length: 7 }, (_, i) => ({ licor_id: licorBar.id + i, mililitros: 10 })) } })))
+await caso('Cóctel con el mismo licor dos veces', [400], async () => m(await call('/cocteles', { method: 'POST', body: { nombre: n('Doble'), ingredientes: [{ licor_id: licorBar.id, mililitros: 10 }, { licor_id: licorBar.id, mililitros: 20 }] } })))
+for (const id of ['abc', '1e21', '99999999999', '-1']) {
+  await caso(`Cóctel: GET con id «${id}»`, [400, 404], async () => m(await call('/cocteles/' + id)))
+}
+await caso('Cóctel: PUT y DELETE con id de texto', [400], async () => {
+  const r = await Promise.all([call('/cocteles/abc', { method: 'PUT', body: { nombre: 'x', ingredientes: [{ licor_id: licorBar.id, mililitros: 50 }] } }), call('/cocteles/abc', { method: 'DELETE' })])
+  return { s: r.every((x) => x.s === 400) ? 400 : r.map((x) => x.s).join('/') }
+})
+await caso('Cóctel: editar con 15000 ml o con un alimento como licor no cambia nada', [400], async () => {
+  const c = (await crearCoctel({}, {})).c
+  const r = await Promise.all([call('/cocteles/' + c.id, { method: 'PUT', body: { nombre: n('Ed'), ingredientes: [{ licor_id: licorBar.id, mililitros: 15000 }] } }), call('/cocteles/' + c.id, { method: 'PUT', body: { nombre: n('Ed'), ingredientes: [{ licor_id: alimentoCat.id, mililitros: 50 }] } })])
+  const sigue = (await call('/cocteles/' + c.id)).c
+  const intacto = sigue.ingredientes.length === 1 && Number(sigue.ingredientes[0].mililitros) === 50
+  return { s: r.every((x) => x.s === 400) && intacto ? 400 : r.map((x) => x.s).join('/') + (intacto ? '' : ' receta cambiada'), nota: 'receta intacta: ' + intacto }
+})
+await caso('Cóctel: editar con el nombre de otro cóctel da 409 (no 500)', [409], async () => {
+  const a = (await crearCoctel({ nombre: n('NombreA') })).c
+  const b = (await crearCoctel({ nombre: n('NombreB') })).c
+  return m(await call('/cocteles/' + b.id, { method: 'PUT', body: { nombre: a.nombre, ingredientes: [{ licor_id: licorBar.id, mililitros: 50 }] } }))
+})
+const coctelCalc = (await crearCoctel({ nombre: n('Para calcular') })).c
+const calc = async (body) => m(await call('/cocteles/calcular', { method: 'POST', body }))
+for (const [as, esperado] of [[39, 400], [601, 400], [40.9, 400], ['100', 400], ['100abc', 400], [null, 400], [1e3, 400], [40, 200], [600, 200]]) {
+  await caso(`Calcular licor con ${JSON.stringify(as)} asistentes`, [esperado], async () => calc({ asistentes: as, cocteles: [{ coctel_id: coctelCalc.id, cocteles_por_persona: 2 }] }))
+}
+for (const [pp, esperado] of [[0, 400], [11, 400], [2.7, 400], ['2', 400], ['2abc', 400], [null, 400], [1, 200], [10, 200]]) {
+  await caso(`Calcular licor con ${JSON.stringify(pp)} cócteles por persona`, [esperado], async () => calc({ asistentes: 100, cocteles: [{ coctel_id: coctelCalc.id, cocteles_por_persona: pp }] }))
+}
+await caso('Calcular licor con coctel_id de texto, gigante, inexistente, nulo o repetido', [400], async () => {
+  const lista = [[{ coctel_id: 'abc', cocteles_por_persona: 2 }], [{ coctel_id: 1e21, cocteles_por_persona: 2 }], [{ coctel_id: 99999999, cocteles_por_persona: 2 }], [null],
+    [{ coctel_id: coctelCalc.id, cocteles_por_persona: 2 }, { coctel_id: coctelCalc.id, cocteles_por_persona: 3 }]]
+  const r = await Promise.all(lista.map(async (cocteles) => (await call('/cocteles/calcular', { method: 'POST', body: { asistentes: 100, cocteles } })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Calcular licor sin cócteles da lista vacía (200)', [200], async () => calc({ asistentes: 100, cocteles: [] }))
+
+console.log('\n== Límites de ml, gramos y precio en catálogo y eventos (15.000 ml / 15.000 g)')
+async function catalogoPost(o) { return m(await call('/catalogo', { method: 'POST', body: { nombre: n('Límite ' + Math.random().toString(36).slice(2, 7)), ...o } })) }
+for (const [vol, esperado] of [[15000, 400], [5001, 400], [5000, 201]]) await caso(`Catálogo: botella de ${vol} ml`, [esperado], async () => catalogoPost({ clasificacion: 'bebida_general', tipo_calculo: 'botella_compartida', volumen_botella_ml: vol, tamano_porcion_ml: 100 }))
+await caso('Catálogo: porción de 15000 ml', [400], async () => catalogoPost({ clasificacion: 'bebida_general', tipo_calculo: 'botella_compartida', volumen_botella_ml: 750, tamano_porcion_ml: 15000 }))
+for (const [g, esperado] of [[15000, 400], [1001, 400], [1000, 201]]) await caso(`Catálogo: alimento de ${g} g por persona`, [esperado], async () => catalogoPost({ clasificacion: 'alimento', tipo_calculo: 'porcion_persona', porcion_por_persona: g }))
+await caso('Catálogo: precio de 1e15', [400], async () => catalogoPost({ clasificacion: 'alimento', tipo_calculo: 'porcion_persona', porcion_por_persona: 100, precio_unitario: 1e15 }))
+const eventoConItem = async (item) => m(await call('/eventos', { method: 'POST', body: ev({ productos: [item] }) }))
+for (const [g, esperado] of [[15000, 400], [1001, 400], [0, 400], [0.5, 400], [1000, 201]]) await caso(`Evento: alimento de ${g} g por persona`, [esperado], async () => eventoConItem({ producto_id: alimentoCat.id, porcion_por_persona: g }))
+await caso('Evento: valor unitario de 1e15 o de 100.000.001', [400], async () => {
+  const r = await Promise.all([1e15, 100000001].map(async (precio) => (await call('/eventos', { method: 'POST', body: ev({ productos: [{ producto_id: alimentoCat.id, porcion_por_persona: 100, precio_unitario: precio }] }) })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
 })
 
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)

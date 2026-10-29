@@ -366,13 +366,15 @@ Respuesta `201`: `{ "mensaje": "...", "evento": { "id": 4, "estado": "planificac
 | Duración | Número de 3 a 8 horas (RN-14); un texto como «4 horas» no vale |
 | Asistentes | Entero de 40 a 600 (RN-01) |
 | Observaciones | Texto de máximo 2.000 caracteres |
-| Productos | Lista de máximo 100; `producto_id` entero que exista y esté activo; sin repetir un producto; alimentos de 1 a 1.000 g por persona; bebidas individuales de 1 a 10 unidades por persona (RN-15); el valor unitario, mayor o igual a 0 |
+| Productos | Lista de máximo 100; `producto_id` entero que exista y esté activo; sin repetir un producto; alimentos de 1 a 1.000 g por persona; bebidas individuales de 1 a 10 unidades por persona (RN-15); el valor unitario, de 0 a 100.000.000 |
 | Mobiliario | Entero de 1 a 2.000 por línea (RN-17); «Otro» exige descripción |
 | Servicios (DJ, música en vivo, sonido, iluminación, entretenimiento, otro) | **RN-18:** `cantidad` (unidades) entera de 1 a 5 y `horas` en horas completas o medias horas, **de 1 a 5** y **sin superar la duración del evento**; **COR-06:** tope de unidades por tipo en todo el evento, sumando las líneas (`dj` 3, `musica_en_vivo` 3, `entretenimiento` 3, `sonido` 2, `iluminacion` 2, `otro` 5); tipo de la lista; descripción obligatoria (máximo 300 caracteres); notas de máximo 300 |
 
 El registro de un evento toma un candado por fecha dentro de la transacción: con varias peticiones simultáneas para el mismo día entran 3 como máximo, no más. Las horas de cada servicio se guardan en la columna `horas` de `requerimientos_adicionales` (opcional, por eso los servicios guardados antes de esta regla no la tienen). Si se crea la base de cero con `schema.sql` ya viene incluida; en una base existente hay que agregarla (ver `docs/despliegue-y-sql-pendiente.md`).
 
-También devuelven `400` (antes `500`): un `id` que no es un número entero en `GET /api/eventos/:id` y `GET /api/catalogo/:id`, y un `?clasificacion=` que no existe en `GET /api/catalogo`. En el catálogo, los gramos por persona de un alimento van de 1 a 1.000 y la botella de una bebida compartida no pasa de 5.000 ml.
+También devuelven `400` (antes `500`): un `id` que no es un número entero en `GET /api/eventos/:id` y `GET /api/catalogo/:id`, y un `?clasificacion=` que no existe en `GET /api/catalogo`. En el catálogo, los gramos por persona de un alimento van de 1 a 1.000 y la botella de una bebida compartida no pasa de 5.000 ml (la porción tampoco puede superarla).
+
+**Cócteles (`/api/cocteles`).** Las reglas están en [`src/config/reglasCoctel.js`](src/config/reglasCoctel.js) y se revisan de forma **estricta** antes de tocar la base: `nombre` de 1 a 150 caracteres; `descripcion` texto de máximo 500; de 1 a 6 licores, cada uno con `licor_id` entero positivo de una bebida de coctelería activa (sin repetir; también al editar) y `mililitros` **número** mayor a 0, máximo **250** y 2 decimales (un texto como `"50abc"`, `15000` o `0.001` dan `400`). En `POST /cocteles/calcular`, `asistentes` es un entero de 40 a 600 y cada `cocteles_por_persona` un entero de 1 a 10 (RN-15); `coctel_id` debe existir y no repetirse. Los ids de la ruta (`/cocteles/:id`) deben ser enteros positivos (`400` si no). Antes varias de estas entradas daban `500` o se aceptaban truncadas (`"100abc"` → 100, `2.7` → 2). Editar con el nombre de otro cóctel da `409`.
 
 #### `GET /api/eventos`
 

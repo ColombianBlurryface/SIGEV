@@ -4,8 +4,9 @@
  */
 const pool = require('../config/db');
 
-const MAX_LICORES_POR_RECETA = 6;
-const ML_MAX_POR_LICOR = 250;
+const { validarCoctel, validarCalculo, idDeRuta } = require('../config/reglasCoctel');
+
+const idInvalido = (res) => res.status(400).json({ error: 'Datos inválidos', detalle: 'El id del cóctel debe ser un número entero positivo.' });
 
 // Redondea hacia arriba evitando errores de precisión decimal flotante de JS (RN-11)
 const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
@@ -49,7 +50,8 @@ const listarCocteles = async (req, res) => {
 // GET /api/cocteles/:id - Obtener un cóctel puntual por ID
 const obtenerCoctelPorId = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = idDeRuta(req.params.id);
+    if (id === null) return idInvalido(res);
     const { rows: cocteles } = await pool.query(
       `SELECT id, nombre, descripcion, activo FROM cocteles WHERE id = $1`,
       [id]
@@ -86,32 +88,9 @@ const obtenerCoctelPorId = async (req, res) => {
 
 // POST /api/cocteles - Crear cóctel con su receta
 const crearCoctel = async (req, res) => {
-  const { nombre, descripcion, ingredientes } = req.body;
-
-  if (!nombre || typeof nombre !== 'string' || !nombre.trim()) {
-    return res.status(400).json({ error: 'Datos inválidos', detalle: 'El nombre del cóctel es obligatorio.' });
-  }
-
-  if (!Array.isArray(ingredientes) || ingredientes.length === 0) {
-    return res.status(400).json({ error: 'Datos inválidos', detalle: 'Debe incluir al menos un licor en la receta.' });
-  }
-
-  if (ingredientes.length > MAX_LICORES_POR_RECETA) {
-    return res.status(400).json({
-      error: 'Datos inválidos',
-      detalle: `Una receta no puede tener más de ${MAX_LICORES_POR_RECETA} licores.`,
-    });
-  }
-
-  for (const ing of ingredientes) {
-    const ml = parseFloat(ing.mililitros);
-    if (!ing.licor_id || isNaN(ml) || ml <= 0 || ml > ML_MAX_POR_LICOR) {
-      return res.status(400).json({
-        error: 'Datos inválidos',
-        detalle: `Los mililitros deben ser un número mayor a 0 y máximo ${ML_MAX_POR_LICOR} ml por licor.`,
-      });
-    }
-  }
+  const datos = validarCoctel(req.body);
+  if (datos.error) return res.status(400).json({ error: 'Datos inválidos', detalle: datos.error });
+  const { nombre, descripcion, ingredientes } = datos;
 
   const client = await pool.connect();
   try {
@@ -137,7 +116,7 @@ const crearCoctel = async (req, res) => {
 
     const { rows: nuevoCoctel } = await client.query(
       `INSERT INTO cocteles (nombre, descripcion) VALUES ($1, $2) RETURNING id, nombre, descripcion`,
-      [nombre.trim(), descripcion ? descripcion.trim() : null]
+      [nombre, descripcion]
     );
 
     const coctelId = nuevoCoctel[0].id;
@@ -145,15 +124,15 @@ const crearCoctel = async (req, res) => {
     for (const ing of ingredientes) {
       await client.query(
         `INSERT INTO coctel_ingredientes (coctel_id, licor_id, mililitros) VALUES ($1, $2, $3)`,
-        [coctelId, ing.licor_id, parseFloat(ing.mililitros)]
+        [coctelId, ing.licor_id, ing.mililitros]
       );
     }
 
     await client.query('COMMIT');
     res.status(201).json({
       id: coctelId,
-      nombre: nombre.trim(),
-      descripcion: descripcion || null,
+      nombre,
+      descripcion,
       ingredientes,
     });
   } catch (error) {
@@ -169,29 +148,11 @@ const crearCoctel = async (req, res) => {
 
 // PUT /api/cocteles/:id - Editar receta de cóctel
 const editarCoctel = async (req, res) => {
-  const { id } = req.params;
-  const { nombre, descripcion, ingredientes } = req.body;
-
-  if (!nombre || !Array.isArray(ingredientes) || ingredientes.length === 0) {
-    return res.status(400).json({ error: 'Datos inválidos', detalle: 'Nombre e ingredientes requeridos.' });
-  }
-
-  if (ingredientes.length > MAX_LICORES_POR_RECETA) {
-    return res.status(400).json({
-      error: 'Datos inválidos',
-      detalle: `Una receta no puede tener más de ${MAX_LICORES_POR_RECETA} licores.`,
-    });
-  }
-
-  for (const ing of ingredientes) {
-    const ml = parseFloat(ing.mililitros);
-    if (!ing.licor_id || isNaN(ml) || ml <= 0 || ml > ML_MAX_POR_LICOR) {
-      return res.status(400).json({
-        error: 'Datos inválidos',
-        detalle: `Los mililitros deben ser un número mayor a 0 y máximo ${ML_MAX_POR_LICOR} ml por licor.`,
-      });
-    }
-  }
+  const id = idDeRuta(req.params.id);
+  if (id === null) return idInvalido(res);
+  const datos = validarCoctel(req.body);
+  if (datos.error) return res.status(400).json({ error: 'Datos inválidos', detalle: datos.error });
+  const { nombre, descripcion, ingredientes } = datos;
 
   const client = await pool.connect();
   try {
@@ -199,7 +160,7 @@ const editarCoctel = async (req, res) => {
 
     const { rowCount } = await client.query(
       `UPDATE cocteles SET nombre = $1, descripcion = $2, actualizado_en = NOW() WHERE id = $3`,
-      [nombre.trim(), descripcion ? descripcion.trim() : null, id]
+      [nombre, descripcion, id]
     );
 
     if (rowCount === 0) {
@@ -207,12 +168,24 @@ const editarCoctel = async (req, res) => {
       return res.status(404).json({ error: 'Cóctel no encontrado' });
     }
 
+    // Igual que al crear: todos los licores deben ser bebidas de coctelería activas del catálogo
+    const licorIds = ingredientes.map((i) => i.licor_id);
+    const { rows: licoresValidos } = await client.query(
+      `SELECT id FROM catalogo_productos
+       WHERE id = ANY($1::int[]) AND clasificacion = 'bar_cocteleria' AND categoria_inventario IS NULL AND activo = true`,
+      [licorIds]
+    );
+    if (licoresValidos.length !== licorIds.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Datos inválidos', detalle: 'Todos los licores deben ser bebidas de coctelería activas del catálogo.' });
+    }
+
     await client.query(`DELETE FROM coctel_ingredientes WHERE coctel_id = $1`, [id]);
 
     for (const ing of ingredientes) {
       await client.query(
         `INSERT INTO coctel_ingredientes (coctel_id, licor_id, mililitros) VALUES ($1, $2, $3)`,
-        [id, ing.licor_id, parseFloat(ing.mililitros)]
+        [id, ing.licor_id, ing.mililitros]
       );
     }
 
@@ -220,6 +193,9 @@ const editarCoctel = async (req, res) => {
     res.json({ mensaje: 'Receta de cóctel actualizada exitosamente.' });
   } catch (error) {
     await client.query('ROLLBACK');
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Conflicto', detalle: 'Ya existe un cóctel registrado con ese nombre.' });
+    }
     res.status(500).json({ error: 'Error al actualizar el cóctel', detalle: error.message });
   } finally {
     client.release();
@@ -228,7 +204,8 @@ const editarCoctel = async (req, res) => {
 
 // DELETE /api/cocteles/:id - Eliminar cóctel
 const eliminarCoctel = async (req, res) => {
-  const { id } = req.params;
+  const id = idDeRuta(req.params.id);
+  if (id === null) return idInvalido(res);
 
   try {
     const { rowCount } = await pool.query(`DELETE FROM cocteles WHERE id = $1 RETURNING id`, [id]);
@@ -295,27 +272,22 @@ function procesarCalculoBotellas(asistentes, coctelesConReceta) {
  * HU-45: Calcula botellas sin necesidad de guardar en BD.
  */
 const calcularCocteleriaEvento = async (req, res) => {
-  const { asistentes, cocteles } = req.body;
-  const numAsistentes = parseInt(asistentes, 10);
+  const datos = validarCalculo(req.body);
+  if (datos.error) return res.status(400).json({ error: 'Datos inválidos', detalle: datos.error });
+  const { asistentes: numAsistentes, cocteles } = datos;
 
-  if (!numAsistentes || numAsistentes < 40 || numAsistentes > 600) {
-    return res.status(400).json({ error: 'La cantidad de asistentes debe estar entre 40 y 600.' });
-  }
-
-  if (!Array.isArray(cocteles) || cocteles.length === 0) {
+  if (cocteles.length === 0) {
     return res.json({ licores_calculados: [], total_botellas: 0, costo_total_licores: 0 });
-  }
-
-  // Validar RN-15: enteros de 1 a 10
-  for (const c of cocteles) {
-    const cant = parseInt(c.cocteles_por_persona, 10);
-    if (isNaN(cant) || cant < 1 || cant > 10) {
-      return res.status(400).json({ error: 'Los cócteles por persona deben ser un número entero entre 1 y 10.' });
-    }
   }
 
   try {
     const ids = cocteles.map((c) => c.coctel_id);
+
+    const { rows: existentes } = await pool.query('SELECT id FROM cocteles WHERE id = ANY($1::int[])', [ids]);
+    if (existentes.length !== ids.length) {
+      const hay = new Set(existentes.map((e) => e.id));
+      return res.status(400).json({ error: 'Datos inválidos', detalle: `Estos cócteles no existen: ${ids.filter((id) => !hay.has(id)).join(', ')}.` });
+    }
 
     // Consulta de recetas limpias
     const { rows: ingredientes } = await pool.query(

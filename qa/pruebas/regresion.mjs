@@ -92,9 +92,16 @@ const optVal = async (p, sel, texto) => p.locator(`${sel} option`).filter({ hasT
 // Días que ya tienen eventos de corridas anteriores (se cargan después de iniciar sesión): se evitan, porque con 3 el día se llena
 let DIAS_OCUPADOS = new Set()
 const fechaLibre = () => {
+  // Cada fecha entregada se marca como usada: así dos eventos de la misma corrida no chocan con el tope de 3 por día
+  const tomar = (f) => { DIAS_OCUPADOS.add(f); return f }
   for (let i = 0; i < 50; i++) {
     const f = new Date(Date.now() + (30 + Math.floor(Math.random() * 1500)) * 86400000).toISOString().slice(0, 10)
-    if (!DIAS_OCUPADOS.has(f)) return f
+    if (!DIAS_OCUPADOS.has(f)) return tomar(f)
+  }
+  // Con una base de pruebas muy llena, se recorre el rango hasta encontrar el primer día sin eventos
+  for (let d = 30; d < 1800; d++) {
+    const f = new Date(Date.now() + d * 86400000).toISOString().slice(0, 10)
+    if (!DIAS_OCUPADOS.has(f)) return tomar(f)
   }
   return new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 }
@@ -1493,6 +1500,106 @@ await t('Pantalla (detalle): un evento sin alimentos explica que no hay ingredie
   const r = await eventoCon(100, [])
   await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
   await page.waitForSelector('text=no tiene alimentos, así que no hay ingredientes que calcular')
+})
+
+
+// ============ Límites de ml y gramos, y el «0» que no se podía borrar ============
+grupo = 'Límites de ml y gramos · campos sin cero pegado'
+// Borra el campo y escribe un 7: si queda «07», el cero estaba pegado
+const borrarYEscribir = async (selector) => {
+  const c = page.locator(selector); await c.click(); await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.press('Backspace')
+  const vacio = await c.inputValue(); await page.keyboard.type('7')
+  return { vacio, escrito: await c.inputValue() }
+}
+const aTabCocteles = async () => { await page.goto(`${URL}/catalogo`); await page.getByRole('button', { name: 'Recetas de Cóctel' }).click(); await page.getByRole('heading', { name: /Crear Receta de Cóctel/ }).waitFor() }
+
+await t('Cócteles: el campo de mililitros se puede borrar y reescribir (no queda un «0» pegado)', async () => {
+  await aTabCocteles()
+  const r = await borrarYEscribir('input[aria-label="Mililitros del licor 1"]')
+  igual(r.vacio, '', 'tras borrar:'); igual(r.escrito, '7', 'tras escribir 7:')
+})
+await t('Cócteles: los asistentes y los cócteles por persona de la calculadora se pueden borrar y reescribir', async () => {
+  await page.getByRole('button', { name: /Agregar otro licor/ }).waitFor()
+  const hay = await page.getByRole('heading', { name: /Calcular licor por cóctel/ }).count()
+  if (!hay) { // la calculadora aparece cuando hay cócteles: se crea uno por la API
+    const licor = (await api('/catalogo?clasificacion=bar_cocteleria')).cuerpo[0]
+    igual((await api('/cocteles', { method: 'POST', body: { nombre: 'Cóctel ceros' + sufijo, ingredientes: [{ licor_id: licor.id, mililitros: 50 }] } })).estado, 201)
+    await aTabCocteles()
+  }
+  const as = await borrarYEscribir('input[aria-label^="Número de asistentes"]'); igual(as.vacio, '', 'asistentes tras borrar:'); igual(as.escrito, '7', 'asistentes tras escribir 7:')
+  const pp = await borrarYEscribir('input[aria-label^="Cócteles por persona"]'); igual(pp.vacio, '', 'por persona tras borrar:'); igual(pp.escrito, '7', 'por persona tras escribir 7:')
+})
+await t('Cócteles: 15.000 ml se avisan apenas se escriben («Máximo 250 ml por licor»), también 0, texto y 3 decimales; no se guarda', async () => {
+  await aTabCocteles()
+  const ml = 'input[aria-label="Mililitros del licor 1"]'
+  for (const [valor, mensaje] of [['15000', 'Máximo 250 ml por licor'], ['251', 'Máximo 250 ml por licor'], ['0', 'mayor a 0'], ['abc', 'mayor a 0'], ['12,345', 'Máximo 2 decimales']]) {
+    await page.fill(ml, valor); await page.waitForSelector(`text=${mensaje}`)
+  }
+  await page.fill(ml, '250'); igual(await page.getByText('Máximo 250 ml por licor').count(), 0, '250 sí es válido:')
+  await page.fill('input[placeholder="Ej. Mojito, Gin Tonic"]', 'Cóctel rechazado' + sufijo)
+  await page.selectOption('select >> nth=0', { index: 1 }).catch(() => {})
+  await page.fill(ml, '15000')
+  await page.getByRole('button', { name: 'Crear Cóctel' }).click()
+  await page.waitForSelector('text=Corrige los mililitros marcados')
+  cierto(!(await api('/cocteles')).cuerpo.some((c) => c.nombre === 'Cóctel rechazado' + sufijo), 'se guardó el cóctel con 15.000 ml')
+})
+await t('Cócteles: crear una receta con 45,5 ml por la pantalla la guarda con ese valor; sin licor o con licor repetido avisa dentro del formulario', async () => {
+  await aTabCocteles()
+  const licor = (await api('/catalogo?clasificacion=bar_cocteleria')).cuerpo[0]
+  await page.fill('input[placeholder="Ej. Mojito, Gin Tonic"]', 'Cóctel pantalla' + sufijo)
+  await page.getByRole('button', { name: 'Crear Cóctel' }).click(); await page.waitForSelector('text=Selecciona un licor en cada fila')
+  await page.selectOption('form select >> nth=0', String(licor.id)); await page.fill('input[aria-label="Mililitros del licor 1"]', '45,5')
+  await page.getByRole('button', { name: /Agregar otro licor/ }).click(); await page.selectOption('form select >> nth=1', String(licor.id))
+  await page.getByRole('button', { name: 'Crear Cóctel' }).click(); await page.waitForSelector('text=mismo licor más de una vez')
+  await page.locator('button[title="Quitar licor"]').last().click() // quita la fila repetida (la segunda)
+  await page.getByRole('button', { name: 'Crear Cóctel' }).click()
+  await page.waitForSelector(`text=Cóctel pantalla${sufijo}`)
+  const c = (await api('/cocteles')).cuerpo.find((x) => x.nombre === 'Cóctel pantalla' + sufijo)
+  igual(Number(c.ingredientes[0].mililitros), 45.5, 'mililitros guardados:')
+})
+await t('Calculadora de licor: asistentes fuera de 40–600 y cócteles por persona fuera de 1–10 se avisan dentro del formulario y no calculan', async () => {
+  await aTabCocteles()
+  await page.fill('input[aria-label^="Número de asistentes"]', '5'); await page.waitForSelector('text=Debe estar entre 40 y 600 asistentes')
+  await page.fill('input[aria-label^="Número de asistentes"]', '601'); await page.waitForSelector('text=Debe estar entre 40 y 600 asistentes')
+  await page.fill('input[aria-label^="Número de asistentes"]', '40,5'); await page.waitForSelector('text=Debe ser un número entero')
+  await page.fill('input[aria-label^="Cócteles por persona"]', '11'); await page.waitForSelector('text=Debe ser un entero de 1 a 10')
+  await page.fill('input[aria-label^="Cócteles por persona"]', '0'); await page.waitForSelector('text=Debe ser un entero de 1 a 10')
+  await page.getByRole('button', { name: 'Calcular Botellas Necesarias' }).click(); await page.waitForSelector('text=Corrige los campos marcados antes de calcular')
+  await page.fill('input[aria-label^="Número de asistentes"]', '100'); await page.fill('input[aria-label^="Cócteles por persona"]', '2')
+  await page.getByRole('button', { name: 'Calcular Botellas Necesarias' }).click(); await page.waitForSelector('text=Botellas consolidadas a comprar')
+})
+await t('Catálogo: 15.000 ml en la botella, 15.000 g por persona y un precio exagerado se avisan apenas se escriben, y no se guardan', async () => {
+  await page.goto(`${URL}/catalogo`); await page.getByLabel('Nombre del producto').waitFor()
+  await page.fill('#catalogo-nombre', 'Botella enorme' + sufijo).catch(async () => page.getByLabel('Nombre del producto').fill('Botella enorme' + sufijo))
+  await page.selectOption('#catalogo-grupo', 'bebida_general'); await page.selectOption('#catalogo-tipo', 'botella_compartida')
+  await page.fill('#catalogo-volumen', '15000'); await page.waitForSelector('text=Máximo 5.000 ml por botella')
+  await page.fill('#catalogo-volumen', '5000'); igual(await page.getByText('Máximo 5.000 ml por botella').count(), 0, '5000 sí es válido:')
+  await page.fill('#catalogo-volumen', '750'); await page.fill('#catalogo-tamano', '800'); await page.waitForSelector('text=La porción no puede ser mayor que la botella')
+  await page.fill('#catalogo-volumen', '15000'); await page.fill('#catalogo-tamano', '100'); await page.getByRole('button', { name: 'Crear producto' }).click()
+  await page.waitForSelector('text=Máximo 5.000 ml por botella')
+  cierto(!(await api('/catalogo')).cuerpo.some((p) => p.nombre === 'Botella enorme' + sufijo), 'se guardó la botella de 15.000 ml')
+  await page.selectOption('#catalogo-grupo', 'alimento'); await page.fill('#catalogo-porcion', '15000'); await page.waitForSelector('text=Máximo 1.000 g por persona')
+  await page.fill('#catalogo-porcion', '1000'); igual(await page.getByText('Máximo 1.000 g por persona').count(), 0, '1000 sí es válido:')
+  await page.fill('#catalogo-precio', '999999999999'); await page.waitForSelector('text=El precio no puede pasar de $100.000.000')
+})
+await t('Nuevo evento (paso 2): 15.000 g de un alimento y un valor de bebida exagerado se avisan apenas se escriben y no se agregan', async () => {
+  await nuevoEvento('Límites paso 2' + sufijo, 100); await aRequerimientos()
+  await page.waitForSelector('#alimento-producto option[value]', { state: 'attached' })
+  await page.selectOption('#alimento-producto', await optVal(page, '#alimento-producto', 'Medallones de Lomo de Res'))
+  await page.fill('#alimento-porcion', '15000'); await page.waitForSelector('text=Máximo 1.000 g por persona')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click(); await page.waitForSelector('text=Máximo 1.000 g por persona')
+  igual(await page.getByRole('button', { name: /Quitar Medallones/ }).count(), 0, 'se agregó con 15.000 g:')
+  await page.fill('#alimento-porcion', '0'); await page.waitForSelector('text=al menos 1 g')
+  await page.fill('#alimento-porcion', '200'); igual(await page.getByText('Máximo 1.000 g por persona').count(), 0, '200 sí es válido:')
+  await pestana('Bebidas')
+  await page.selectOption('#bebida-producto', await optVal(page, '#bebida-producto', 'Poker')).catch(() => {})
+  await page.fill('#bebida-precio', '999999999999'); await page.waitForSelector('text=El valor no puede pasar de $100.000.000')
+})
+await t('Campos numéricos del registro, el inventario y el catálogo: se pueden borrar y reescribir (sin cero pegado)', async () => {
+  for (const [ruta, campos] of [['/inventario', ['#inventario-cantidad']], ['/eventos/nuevo', ['#duracion', '#asistentes']]]) {
+    await page.goto(`${URL}${ruta}`)
+    for (const c of campos) { await page.waitForSelector(c); const r = await borrarYEscribir(c); igual(r.vacio, '', `${ruta} ${c} tras borrar:`); igual(r.escrito, '7', `${ruta} ${c} tras escribir 7:`) }
+  }
 })
 
 
