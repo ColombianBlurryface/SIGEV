@@ -22,6 +22,7 @@ import { useCatalogo } from '@/hooks/useCatalogo'
 import { calcularProducto } from '@/lib/calculos'
 import { ORDEN_TIPOS_BEBIDA, TIPOS_BEBIDA, type TipoBebida } from '@/lib/categorias'
 import { formatearMoneda, formatearNumero } from '@/lib/formato'
+import { PRECIO_MAX } from '@/lib/limites'
 import { esUnidadesPorPersonaValida, MENSAJE_UNIDADES_POR_PERSONA } from '@/lib/reglasBebidas'
 import { cn } from '@/lib/utils'
 import type { ProductoCatalogo } from '@/types/catalogo'
@@ -67,7 +68,13 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
   const bebidasDelTipo = bebidas.filter((b) => b.producto.clasificacion === tipo)
   const productoCatalogo = productos.find((p) => p.id === Number(productoId)) ?? null
   const precioNumero = precio.trim() === '' ? 0 : Number(precio)
-  const precioValido = Number.isFinite(precioNumero) && precioNumero >= 0
+  const precioValido = Number.isFinite(precioNumero) && precioNumero >= 0 && precioNumero <= PRECIO_MAX
+  const errorPrecio =
+    precio.trim() === '' || precioValido
+      ? undefined
+      : precioNumero > PRECIO_MAX
+        ? `El valor no puede pasar de $${formatearNumero(PRECIO_MAX)}.`
+        : 'El valor unitario debe ser 0 o más.'
   // Con el valor escrito en el evento, todos los cálculos (vista previa, subtotal y resumen) usan ese precio
   const producto = productoCatalogo ? { ...productoCatalogo, precio_unitario: String(precioValido ? precioNumero : 0) } : null
   // RF-22, RN-15: las unidades por persona de una bebida individual son un entero de 1 a 10
@@ -114,7 +121,7 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
     evento.preventDefault()
     if (!producto) return setErrorForm('Selecciona una bebida del catálogo.')
     if (modo === 'individual' && !unidadesValidas) return setErrorForm(MENSAJE_UNIDADES_POR_PERSONA)
-    if (!precioValido) return setErrorForm('El valor unitario debe ser 0 o más.')
+    if (!precioValido) return setErrorForm(errorPrecio ?? 'El valor unitario debe ser 0 o más.')
 
     onAgregar({ producto, porcion: porcionEnvio })
     setProductoId('')
@@ -266,6 +273,7 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
                   <FormField
                     id="bebida-precio"
                     label={modo === 'compartida' ? 'Valor por botella' : 'Valor unitario'}
+                    error={errorPrecio}
                   >
                     <div className="relative">
                       <span aria-hidden="true" className="pointer-events-none absolute top-3.5 left-3.5 text-sm text-muted-foreground">
@@ -275,10 +283,15 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
                         id="bebida-precio"
                         type="number"
                         min={0}
+                        max={PRECIO_MAX}
                         step="any"
                         inputMode="decimal"
+                        aria-invalid={Boolean(errorPrecio)}
                         value={precio}
-                        onChange={(e) => setPrecio(e.target.value)}
+                        onChange={(e) => {
+                          setPrecio(e.target.value)
+                          setErrorForm(null)
+                        }}
                         placeholder="Opcional"
                         disabled={!productoCatalogo}
                         className="pl-8"

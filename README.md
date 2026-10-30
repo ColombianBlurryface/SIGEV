@@ -184,7 +184,7 @@ SIGEV/
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
 │   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-├── qa/                      Pruebas automáticas (164 de regresión y 133 casos límite)
+├── qa/                      Pruebas automáticas (172 de regresión y 194 casos límite)
 ├── docs/
 │   ├── imagenes/            Capturas usadas en la documentación
 │   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
@@ -252,7 +252,7 @@ Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del m
 
 ## Pruebas y entorno de QA
 
-El proyecto trae pruebas automáticas en [`qa/`](qa) (164 pruebas de los checklists y 133 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+El proyecto trae pruebas automáticas en [`qa/`](qa) (172 pruebas de los checklists y 194 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
 
 - [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
 - [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.
@@ -291,6 +291,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 - El mobiliario de un evento se compara con el stock actual del inventario: lo que alcanza es **propio** y el resto se **alquila**. Lo que no está en el inventario, o está marcado como **alquilado**, se alquila completo (HU-12).
 - El umbral de 200 asistentes no está escrito en el código: se define con la variable `MAX_OWNED_CAPACITY_THRESHOLD` del backend (P-05). Si el cliente compra más inventario y el límite sube, solo se cambia el `.env` y se reinicia el servidor.
 - Las **bebidas generales** (cerveza, vino, champaña, gaseosa) y las del **bar de coctelería** (licores fuertes) se manejan por separado y un producto pertenece a un solo grupo (RN-08 / HU-13).
+- **Límites de las medidas**, avisados en pantalla apenas se escriben y exigidos también por el servidor: un alimento va de 1 a **1.000 g** por persona; una botella, hasta **5.000 ml** (y la porción no puede ser mayor que la botella); un licor de una receta de cóctel, hasta **250 ml** con 2 decimales; los asistentes de la calculadora de licor, de 40 a 600; los cócteles por persona, un entero de 1 a 10 (RN-15); y un precio no pasa de $100.000.000. Los campos numéricos se pueden borrar y reescribir sin que se quede un «0» pegado.
 - Todas las cantidades de alimentos y bebidas llevan un **margen de seguridad del 10%** (RN-09).
 - Cómo se calcula cada producto:
   - **Por porción** (alimentos): asistentes × gramos por persona; si supera 1000 g se expresa en kg.
