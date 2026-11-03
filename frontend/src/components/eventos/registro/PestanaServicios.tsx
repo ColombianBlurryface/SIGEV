@@ -40,8 +40,6 @@ interface PestanaServiciosProps {
 }
 
 export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar }: PestanaServiciosProps) {
-  // Por defecto el servicio dura todo el evento (hasta 5 horas); se puede bajar
-  const horasPorDefecto = Number.isFinite(duracionHoras) ? String(maximoHoras(duracionHoras)) : ''
   const [tipo, setTipo] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [unidades, setUnidades] = useState('1')
@@ -55,7 +53,6 @@ export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar
       ? MENSAJE_UNIDADES_SERVICIO
       : errorUnidadesPorTipo(tipo, unidades, servicios, etiquetaServicio(tipo))
   const topeTipo = tipo ? MAXIMO_UNIDADES_POR_TIPO[tipo] : undefined
-  const horasMostradas = horas === '' ? horasPorDefecto : horas
   const errorDeHoras = horas.trim() !== '' ? errorHoras(horas, duracionHoras) : undefined
 
   function agregar(evento: FormEvent<HTMLFormElement>) {
@@ -65,7 +62,7 @@ export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar
     if (!esUnidadesServicioValida(unidades)) return setErrorForm(MENSAJE_UNIDADES_SERVICIO)
     const mensajeUnidades = errorUnidadesPorTipo(tipo, unidades, servicios, etiquetaServicio(tipo))
     if (mensajeUnidades) return setErrorForm(mensajeUnidades)
-    const mensajeHoras = errorHoras(horasMostradas, duracionHoras)
+    const mensajeHoras = errorHoras(horas, duracionHoras)
     if (mensajeHoras) return setErrorForm(mensajeHoras)
 
     onAgregar({
@@ -73,7 +70,7 @@ export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar
       tipo,
       descripcion: descripcion.trim(),
       cantidad: Number(unidades),
-      horas: leerHoras(horasMostradas) as number,
+      horas: leerHoras(horas) as number,
       notas: notas.trim(),
     })
     setTipo('')
@@ -159,7 +156,8 @@ export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar
                 type="text"
                 inputMode="decimal"
                 maxLength={5}
-                value={horasMostradas}
+                value={horas}
+                placeholder={Number.isFinite(duracionHoras) ? `Máx. ${formatearNumero(maximoHoras(duracionHoras))}` : ''}
                 onChange={(e) => {
                   setHoras(e.target.value)
                   setErrorForm(null)
