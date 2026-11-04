@@ -144,3 +144,32 @@ JOIN catalogo_productos p ON p.categoria_inventario IS NULL AND p.clasificacion 
 JOIN ingredientes i ON lower(i.nombre) = lower(v.ingrediente)
 WHERE NOT EXISTS (SELECT 1 FROM plato_ingredientes x WHERE x.plato_id = p.id)
 ON CONFLICT DO NOTHING;
+INSERT INTO catalogo_productos (
+    nombre, 
+    clasificacion, 
+    tipo_calculo, 
+    porcion_por_persona, 
+    unidad_medida, 
+    volumen_botella_ml, 
+    tamano_porcion_ml, 
+    precio_unitario, 
+    activo
+) 
+SELECT 
+    c.nombre, 
+    'bar_cocteleria', 
+    'unidad_persona', 
+    1, 
+    'cócteles', 
+    0, 
+    0, 
+    18000, 
+    true 
+FROM cocteles c 
+WHERE c.activo = true 
+  AND NOT EXISTS (
+      SELECT 1 
+      FROM catalogo_productos cp 
+      WHERE cp.nombre = c.nombre 
+        AND cp.clasificacion = 'bar_cocteleria'
+  );
