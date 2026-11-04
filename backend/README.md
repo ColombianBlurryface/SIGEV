@@ -181,6 +181,7 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | PATCH | `/catalogo/:id/estado` | Activar o desactivar un producto |
 | POST | `/personal` | Registrar un mesero: `{ nombre_completo, contacto, rol? }` (HU-26) |
 | GET | `/personal` | Listar el personal activo, ordenado por nombre; filtro opcional `?rol=mesero` (HU-26) |
+| DELETE | `/personal/:id` | Eliminar un mesero (borrado lógico, `204`; HU-27) |
 | GET | `/catalogo/recetas` | Resumen: cuántos ingredientes tiene la receta de cada plato (HU-46) |
 | GET | `/catalogo/ingredientes` | El maestro de ingredientes con su unidad de compra (HU-46) |
 | GET | `/catalogo/:id/receta` | La receta de un plato (HU-46) |
@@ -331,6 +332,10 @@ Personal de servicio, hoy solo **meseros**. Una sola tabla `personal` con un `ro
 | Otros campos | `id`, `activo`, `creado_en` enviados por el cliente se ignoran |
 
 Las reglas están en [`src/config/reglasRegistroPersonal.js`](src/config/reglasRegistroPersonal.js) y se prueban con `npm test`. La tabla es nueva (solo agrega): ver `docs/sql-hu-26-personal.sql`.
+
+**`DELETE /api/personal/:id` (HU-27 · RF-34).** Elimina un mesero con **borrado lógico**: pone `activo = false` (no se borra la fila, para no perder el historial de los eventos donde participe en la HU-28) y deja de aparecer en `GET /api/personal`. Respuestas: `204` sin cuerpo; `404` si el mesero no existe o ya fue eliminado (`«El mesero con ID 123 no existe o ya fue eliminado.»`); `400` si el id no es un entero positivo (`abc`, `0`, `-1`, `1.5`, gigantes); `401` sin sesión. Es una sola sentencia (`UPDATE … WHERE id = $1 AND activo = true`): 10 eliminaciones simultáneas del mismo mesero dan un `204` y nueve `404`, nunca un `500`. Un mesero eliminado se puede volver a registrar con los mismos datos (el índice único solo cuenta a los activos).
+
+**No hay `PUT` ni `PATCH`.** Los datos de un mesero no se modifican (decisión de negocio): cualquier otro método sobre `/api/personal/:id` (`PUT`, `PATCH`, `POST`, `GET`) responde `405 Method Not Allowed` con la cabecera `Allow: DELETE`. Si hubo un error al registrarlo, se elimina y se registra de nuevo. No necesita SQL propio: reutiliza la tabla `personal` de la HU-26.
 
 #### `POST /api/eventos/calcular-compras` (HU-47 · RF-55)
 

@@ -70,3 +70,9 @@ test('un cuerpo que no es un objeto se rechaza y los campos de más (id, activo)
   const r = validarPersonal(mesero({ id: 99, activo: false, creado_en: '2000-01-01' }));
   assert.deepEqual(Object.keys(r).sort(), ['contacto', 'nombre_completo', 'rol']);
 });
+
+test('HU-27: el id de la ruta es un entero positivo en texto (abc, 0, negativos, decimales y gigantes dan null)', () => {
+  const { idDeRuta } = require('../src/config/reglasRegistroPersonal');
+  assert.equal(idDeRuta('123'), 123); assert.equal(idDeRuta('2147483647'), 2147483647);
+  for (const malo of ['abc', '0', '-1', '1.5', '1e21', '2147483648', '99999999999', '', ' 3', '3 ', 'stf-001', undefined, null]) assert.equal(idDeRuta(malo), null, String(malo));
+});

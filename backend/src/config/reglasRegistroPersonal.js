@@ -15,6 +15,11 @@ const NOMBRE_MAX = 150;
 const CONTACTO_MAX = 150;
 const DIGITOS_TELEFONO_MIN = 7;
 
+const ID_MAX = 2147483647;
+
+/** Id que llega por la ruta (texto): devuelve el número, o null si no es un entero positivo válido. */
+const idDeRuta = (texto) => (/^\d+$/.test(String(texto)) && Number(texto) >= 1 && Number(texto) <= ID_MAX ? Number(texto) : null);
+
 const esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const limpiar = (texto) => texto.replace(/\s+/g, ' ').trim();
 
@@ -63,5 +68,5 @@ const validarPersonal = (body) => {
 
 module.exports = {
   ROLES, ROL_POR_DEFECTO, NOMBRE_MIN, NOMBRE_MAX, CONTACTO_MAX, DIGITOS_TELEFONO_MIN,
-  normalizarRol, validarPersonal
+  normalizarRol, validarPersonal, idDeRuta
 };

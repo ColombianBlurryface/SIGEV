@@ -3,11 +3,14 @@
  *
  *   POST /api/personal           registra un mesero { nombre_completo, contacto, rol? }
  *   GET  /api/personal?rol=      lista el personal ACTIVO, ordenado por nombre
+ *   DELETE /api/personal/:id     elimina un mesero (HU-27 · RF-34): borrado lógico, el registro pasa a inactivo
+ *
+ * Los datos de un mesero NO se modifican (no hay PUT ni PATCH): si hubo un error, se elimina y se vuelve a registrar.
  *
  * Las reglas de los datos están en config/reglasRegistroPersonal.js.
  */
 const pool = require('../config/db');
-const { ROLES, normalizarRol, validarPersonal } = require('../config/reglasRegistroPersonal');
+const { ROLES, normalizarRol, validarPersonal, idDeRuta } = require('../config/reglasRegistroPersonal');
 
 const CAMPOS = 'id, nombre_completo, contacto, rol, activo, creado_en';
 
@@ -53,4 +56,34 @@ const listarPersonal = async (req, res) => {
   }
 };
 
-module.exports = { crearPersonal, listarPersonal };
+// DELETE /api/personal/:id (HU-27 · RF-34)
+// Borrado LÓGICO: el mesero pasa a inactivo y deja de listarse, pero no se pierde el historial de los eventos donde
+// participe (HU-28). Se puede volver a registrar con los mismos datos.
+const eliminarPersonal = async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  if (id === null) return datosInvalidos(res, 'El id del mesero debe ser un número entero positivo.');
+  try {
+    // Una sola sentencia: solo toca un mesero ACTIVO, así dos eliminaciones simultáneas no pasan las dos
+    const { rowCount } = await pool.query(
+      `UPDATE personal SET activo = false WHERE id = $1 AND rol = 'mesero' AND activo = true`,
+      [id]
+    );
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'No encontrado', detalle: `El mesero con ID ${id} no existe o ya fue eliminado.` });
+    }
+    res.status(204).end();
+  } catch (error) {
+    console.error('Error al eliminar un mesero (HU-27):', error);
+    res.status(500).json({ error: 'Error al eliminar el mesero' });
+  }
+};
+
+// Cualquier otro método sobre /api/personal/:id (PUT, PATCH, POST, GET): los datos de un mesero no se modifican
+const metodoNoPermitido = (req, res) => {
+  res.set('Allow', 'DELETE').status(405).json({
+    error: 'Método no permitido',
+    detalle: 'Los datos de un mesero no se modifican: elimínalo y regístralo de nuevo.'
+  });
+};
+
+module.exports = { crearPersonal, listarPersonal, eliminarPersonal, metodoNoPermitido };
