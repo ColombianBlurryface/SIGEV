@@ -204,6 +204,21 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **El «0» ya no se queda pegado:** en la pestaña Recetas de Cóctel (mililitros, asistentes y cócteles por persona de la calculadora) se puede borrar el campo y escribir de cero; antes, escribir 7 daba «07». Lo mismo en Inventario y en Nuevo evento.
 - [ ] 🤖 **API de cócteles sin errores 500:** `ml` como texto, 0,001 o 12,345; `licor_id`/`coctel_id` de texto o gigantes; nombre de 151 caracteres; ids de la ruta con letras; asistentes `"100abc"` o `40.9`; cócteles por persona `2.7`: todo da 400 (editar con nombre repetido, 409).
 
+
+---
+
+## 15. Personal: registrar meseros (HU-26)
+
+> Requiere la tabla `personal` (SQL en `docs/sql-hu-26-personal.sql` para QA y producción).
+
+- [ ] 🤖👀 **Menú → «Personal»** abre la pantalla con el formulario «Registrar mesero» (nombre completo y datos de contacto) y el listado de meseros.
+- [ ] 🤖👀 **Escenario 1:** «Carlos Rodríguez» con contacto «3001234567» queda registrado («quedó registrado como mesero»), aparece en el listado con su contacto y el formulario se limpia. La API responde 201 con el id, rol `mesero` y activo.
+- [ ] 🤖 **Escenario 2:** el listado (`GET /api/personal`) devuelve un arreglo con nombre y contacto de los meseros registrados, solo los activos y ordenados por nombre.
+- [ ] 🤖👀 **Escenario 3:** sin contacto no se registra: en pantalla «El contacto es obligatorio» junto al campo; por la API, 400 diciendo que el contacto es obligatorio.
+- [ ] 🤖👀 **Nombre:** obligatorio y solo letras («Carlos 123», «Carlos_R» o emoji se rechazan con aviso); se aceptan tildes, ñ, guiones, apóstrofos y puntos. **Contacto:** debe traer un teléfono (7 dígitos o más) o un correo válido, o ambos; «hola» o «12345» se rechazan.
+- [ ] 🤖👀 **Repetidos:** el mismo mesero activo (mismo nombre y contacto, sin importar mayúsculas) se rechaza con «Ya hay un mesero activo con ese nombre y ese contacto»; el mismo nombre con otro contacto sí se puede.
+- [ ] 🤖👀 El **buscador** filtra por nombre o contacto y avisa cuando ninguno coincide. Sin sesión, la API responde 401.
+
 ---
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)

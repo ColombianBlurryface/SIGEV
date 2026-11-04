@@ -375,6 +375,42 @@ await caso('Evento: valor unitario de 1e15 o de 100.000.001', [400], async () =>
   return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
 })
 
+console.log('\n== HU-26: registrar meseros (RF-33) · entradas raras')
+const LETRAS_C = corrida.replace(/[0-9]/g, (d) => 'abcdefghij'[d])
+const telC = () => '3' + String(Math.floor(Math.random() * 1e9)).padStart(9, '0')
+const mesero = async (body) => m(await call('/personal', { method: 'POST', body: { nombre_completo: `Límite Mesero ${LETRAS_C}`, contacto: telC(), ...body } }))
+await caso('Mesero válido', [201], async () => mesero({}))
+await caso('Mesero: cuerpo que no es un objeto (lista, texto, número, null)', [400], async () => {
+  const r = await Promise.all([[], 'hola', 5, null].map(async (b) => (await call('/personal', { method: 'POST', body: b })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Mesero: nombre de 150 caracteres (límite exacto)', [201], async () => mesero({ nombre_completo: 'a'.repeat(150) }))
+await caso('Mesero: nombre de 151 caracteres', [400], async () => mesero({ nombre_completo: 'a'.repeat(151) }))
+await caso('Mesero: nombre con HTML, emoji, números o solo símbolos', [400], async () => {
+  const r = await Promise.all(['<img src=x onerror=alert(1)>', 'Carlos 🍕', 'Carlos 123', '!!!', '1234567', '.', '-'].map(async (nombre_completo) => (await call('/personal', { method: 'POST', body: { nombre_completo, contacto: telC() } })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Mesero: nombre y contacto de tipo número, lista, objeto o booleano', [400], async () => {
+  const raros = [5, [], {}, true]
+  const r = await Promise.all(raros.flatMap((v) => [call('/personal', { method: 'POST', body: { nombre_completo: v, contacto: telC() } }), call('/personal', { method: 'POST', body: { nombre_completo: `Raro ${LETRAS_C}`, contacto: v } })].map(async (p) => (await p).s)))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Mesero: inyección SQL en el nombre o el contacto no rompe nada', [400], async () => {
+  const r = await Promise.all([call('/personal', { method: 'POST', body: { nombre_completo: "Robert'); DROP TABLE personal;--", contacto: telC() } }), call('/personal', { method: 'POST', body: { nombre_completo: `Sql ${LETRAS_C}`, contacto: "3001234567'; DROP TABLE personal;--" } })])
+  const sigue = (await call('/personal')).s === 200
+  return { s: r.every((x) => x.s === 400) && sigue ? 400 : r.map((x) => x.s).join('/') + (sigue ? '' : ' tabla rota') }
+})
+await caso('Mesero: contacto con 6 dígitos (no alcanza) y con 7 (límite exacto)', [400], async () => {
+  const a = await call('/personal', { method: 'POST', body: { nombre_completo: `Siete ${LETRAS_C}`, contacto: '123456' } })
+  const b = await call('/personal', { method: 'POST', body: { nombre_completo: `Siete ${LETRAS_C}`, contacto: String(Math.floor(1000000 + Math.random() * 8999999)) } })
+  return { s: a.s === 400 && b.s === 201 ? 400 : `${a.s}/${b.s}`, nota: `6 dígitos ${a.s}, 7 dígitos ${b.s}` }
+})
+await caso('Mesero: el filtro ?rol= acepta mesero y WAITER, rechaza lo demás', [200], async () => {
+  const r = await Promise.all(['mesero', 'WAITER'].map(async (x) => (await call('/personal?rol=' + x)).s))
+  const malos = await Promise.all(['cocinero', 'x', '1'].map(async (x) => (await call('/personal?rol=' + x)).s))
+  return { s: r.every((x) => x === 200) && malos.every((x) => x === 400) ? 200 : `${r}/${malos}`, nota: `${r} / ${malos}` }
+})
+
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)
 const conocidos = filas.filter((x) => x.conocido)
 const bien = filas.filter((x) => x.ok).length
