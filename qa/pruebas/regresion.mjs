@@ -1819,6 +1819,151 @@ await t('Pantalla: eliminar y volver a registrar con los mismos datos funciona (
 })
 
 
+// ============ HU-28 · Asignar meseros a un evento (RF-35) ============
+grupo = 'HU-28 Asignar meseros a un evento (RF-35)'
+const asignar = (eventoId, ids, metodo = 'PUT', clave_ = 'personal_ids') => api(`/eventos/${eventoId}/meseros`, { method: metodo, body: { [clave_]: ids } })
+const meserosDe = async (eventoId) => (await api(`/eventos/${eventoId}/meseros`)).cuerpo
+const crearMeseros = async (n, prefijo) => { const lista = []; for (let i = 0; i < n; i++) lista.push((await nuevoMesero(`${prefijo} ${['Alfa', 'Beta', 'Gama', 'Delta', 'Epsilon', 'Zeta', 'Eta'][i]} ${LETRAS}`)).cuerpo); return lista }
+const idsDe = (r) => r.meseros_asignados.map((m) => m.id).sort((x, y) => x - y)
+const ordenados = (lista) => lista.map((m) => m.id).sort((x, y) => x - y)
+
+await t('Escenario 1: asignar 3 meseros activos a un evento da 200, guarda la relación y el contador pasa a 3', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(3, 'Asignado')
+  const r = await asignar(ev.id, ms.map((m) => m.id)); igual(r.estado, 200, 'estado:')
+  igual(r.cuerpo.total_asignados, 3, 'total_asignados:'); igual(r.cuerpo.evento_id, ev.id)
+  igual(JSON.stringify(idsDe(r.cuerpo)), JSON.stringify(ordenados(ms)), 'meseros devueltos:')
+  const m0 = r.cuerpo.meseros_asignados.find((m) => m.id === ms[0].id); igual(m0.nombre_completo, ms[0].nombre_completo); igual(m0.contacto, ms[0].contacto)
+  const g = await meserosDe(ev.id); igual(g.total_asignados, 3, 'GET total:'); igual(JSON.stringify(idsDe(g)), JSON.stringify(ordenados(ms)), 'GET meseros:')
+  const d = (await api(`/eventos/${ev.id}`)).cuerpo; igual(d.asignacion_meseros.total_asignados, 3, 'detalle del evento:')
+})
+await t('Escenario 2: asignar un mesero eliminado (inactivo) o inexistente da 400 «no son válidos o están inactivos» y no cambia nada', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a, b] = await crearMeseros(2, 'Valido')
+  igual((await asignar(ev.id, [a.id])).estado, 200)
+  igual((await eliminarMesero(b.id)).status, 204)
+  for (const ids of [[b.id], [a.id, b.id], [999999999], [a.id, 999999999]]) {
+    const r = await asignar(ev.id, ids); igual(r.estado, 400, JSON.stringify(ids) + ':'); cierto(/no son válidos o están inactivos/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+  }
+  igual(JSON.stringify(idsDe(await meserosDe(ev.id))), JSON.stringify([a.id]), 'la asignación cambió tras un intento rechazado:')
+})
+await t('Escenario 3: un evento de 100 asistentes requiere 5 meseros; con 4 asignados reporta un déficit de 1 (y completo con 5, excedente con 6)', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(7, 'Estandar')
+  let g = await meserosDe(ev.id); igual(g.meseros_requeridos, 5, 'requeridos:'); igual(g.deficit, 5, 'déficit sin asignar:'); igual(g.estado, 'deficit')
+  let r = (await asignar(ev.id, ms.slice(0, 4).map((m) => m.id))).cuerpo; igual(r.total_asignados, 4); igual(r.deficit, 1, 'déficit:'); igual(r.estado, 'deficit'); igual(r.diferencia, -1)
+  igual((await meserosDe(ev.id)).deficit, 1, 'déficit al consultar:'); igual((await api(`/eventos/${ev.id}`)).cuerpo.asignacion_meseros.deficit, 1, 'déficit en el detalle:')
+  r = (await asignar(ev.id, ms.slice(0, 5).map((m) => m.id))).cuerpo; igual(r.estado, 'completo'); igual(r.deficit, 0); igual(r.excedente, 0)
+  r = (await asignar(ev.id, ms.slice(0, 6).map((m) => m.id))).cuerpo; igual(r.estado, 'excedente'); igual(r.excedente, 1)
+  const ev40 = (await eventoMeseros(40)).cuerpo.evento; igual((await meserosDe(ev40.id)).meseros_requeridos, 2, '40 asistentes requieren 2:')
+})
+await t('Sincronización completa: la lista nueva reemplaza a la anterior, una lista vacía quita a todos y repetir la misma no cambia nada', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a, b, c, d] = await crearMeseros(4, 'Sincro')
+  await asignar(ev.id, [a.id, b.id, c.id])
+  let r = (await asignar(ev.id, [b.id, d.id])).cuerpo; igual(JSON.stringify(idsDe(r)), JSON.stringify([b.id, d.id].sort((x, y) => x - y)), 'reemplazo:')
+  r = (await asignar(ev.id, [b.id, d.id])).cuerpo; igual(r.total_asignados, 2, 'misma lista otra vez:')
+  r = (await asignar(ev.id, [])).cuerpo; igual(r.total_asignados, 0, 'lista vacía:'); igual((await meserosDe(ev.id)).meseros_asignados.length, 0, 'GET tras vaciar:')
+})
+await t('POST hace lo mismo que PUT, y el nombre de la historia (staff_ids) también se entiende', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a, b] = await crearMeseros(2, 'Alias')
+  igual((await asignar(ev.id, [a.id], 'POST')).cuerpo.total_asignados, 1, 'POST:')
+  igual((await asignar(ev.id, [a.id, b.id], 'PUT', 'staff_ids')).cuerpo.total_asignados, 2, 'staff_ids:')
+})
+await t('Listas inválidas dan 400: repetidos, ids de texto, 0, negativos, decimales, nulos, más de 100, no lista, cuerpo vacío', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a] = await crearMeseros(1, 'Invalido')
+  for (const ids of [[a.id, a.id], ['1'], [0], [-1], [1.5], [null], [1e21], Array.from({ length: 101 }, (_, i) => i + 1), 'abc', 5, null]) igual((await asignar(ev.id, ids)).estado, 400, JSON.stringify(ids).slice(0, 40) + ':')
+  igual((await api(`/eventos/${ev.id}/meseros`, { method: 'PUT', body: {} })).estado, 400, 'cuerpo vacío:'); igual((await api(`/eventos/${ev.id}/meseros`, { method: 'PUT', body: [1] })).estado, 400, 'cuerpo lista:')
+  igual((await meserosDe(ev.id)).total_asignados, 0, 'se asignó algo con datos inválidos:')
+})
+await t('Evento que no existe da 404; id del evento inválido da 400; sin sesión da 401', async () => {
+  igual((await asignar(999999999, [])).estado, 404); igual((await api('/eventos/999999999/meseros')).estado, 404)
+  for (const id of ['abc', '0', '-1', '1.5', '99999999999']) { igual((await api(`/eventos/${id}/meseros`)).estado, 400, `GET ${id}:`); igual((await asignar(id, [])).estado, 400, `PUT ${id}:`) }
+  const sin = (op = {}) => fetch(`${API}/eventos/1/meseros`, { headers: { 'Content-Type': 'application/json' }, ...op }).then((r) => r.status)
+  igual(await sin(), 401); igual(await sin({ method: 'PUT', body: JSON.stringify({ personal_ids: [] }) }), 401)
+})
+await t('Si se elimina un mesero ya asignado, deja de contar (el déficit sube) y no aparece, pero otros eventos no se alteran', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const otro = (await eventoMeseros(100)).cuerpo.evento; const [a, b] = await crearMeseros(2, 'Baja')
+  await asignar(ev.id, [a.id, b.id]); await asignar(otro.id, [b.id])
+  igual((await meserosDe(ev.id)).total_asignados, 2)
+  igual((await eliminarMesero(b.id)).status, 204)
+  const g = await meserosDe(ev.id); igual(g.total_asignados, 1, 'tras eliminar:'); igual(g.deficit, 4, 'déficit:'); cierto(!idsDe(g).includes(b.id), 'sigue apareciendo el eliminado')
+  igual((await meserosDe(otro.id)).total_asignados, 0, 'el otro evento tampoco lo cuenta:')
+  const r = await asignar(ev.id, [a.id]); igual(r.estado, 200, 'volver a sincronizar:'); igual(r.cuerpo.total_asignados, 1)
+})
+await t('Un mesero asignado a dos eventos el mismo día: se avisa (advertencias) pero se permite; en otro día no hay aviso', async () => {
+  const dia = fechaLibre(), otroDia = fechaLibre(); const [a] = await crearMeseros(1, 'Doble')
+  const e1 = (await eventoMeseros(100, { fecha_evento: dia, nombre_evento: `Mismo día A ${LETRAS}` })).cuerpo.evento
+  const e2 = (await eventoMeseros(100, { fecha_evento: dia, nombre_evento: `Mismo día B ${LETRAS}` })).cuerpo.evento
+  const e3 = (await eventoMeseros(100, { fecha_evento: otroDia })).cuerpo.evento
+  igual((await asignar(e1.id, [a.id])).cuerpo.advertencias.length, 0, 'primer evento:')
+  const r = await asignar(e2.id, [a.id]); igual(r.estado, 200, 'se permite:'); igual(r.cuerpo.advertencias.length, 1, 'advertencias:')
+  igual(r.cuerpo.advertencias[0].personal_id, a.id); igual(r.cuerpo.advertencias[0].otros_eventos[0].id, e1.id)
+  igual((await asignar(e3.id, [a.id])).cuerpo.advertencias.length, 0, 'otro día:')
+})
+await t('Asignaciones simultáneas sobre el mismo evento: 10 listas distintas a la vez terminan con UNA lista completa (sin mezclas ni 500)', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(7, 'Carrera')
+  const listas = Array.from({ length: 10 }, (_, i) => ms.filter((_, k) => (k + i) % 3 !== 0).map((m) => m.id))
+  const rs = await Promise.all(listas.map((l) => asignar(ev.id, l)))
+  igual(rs.filter((r) => r.estado >= 500).length, 0, 'errores 500:'); igual(rs.filter((r) => r.estado === 200).length, 10, 'respuestas 200:')
+  const final = idsDe(await meserosDe(ev.id)); cierto(listas.some((l) => JSON.stringify([...l].sort((x, y) => x - y)) === JSON.stringify(final)), 'la lista final no es ninguna de las enviadas: ' + final)
+})
+await t('Eliminar un mesero mientras se asigna: nunca queda un inactivo asignado ni un 500', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(4, 'Cruce')
+  const rs = await Promise.all([asignar(ev.id, ms.map((m) => m.id)), eliminarMesero(ms[0].id), eliminarMesero(ms[1].id)])
+  cierto(rs.every((r) => (r.estado ?? r.status) < 500), 'hubo un 500: ' + rs.map((r) => r.estado ?? r.status))
+  const activos = new Set((await listaMeseros()).map((m) => m.id)); cierto(idsDe(await meserosDe(ev.id)).every((id) => activos.has(id)), 'quedó asignado un mesero inactivo')
+})
+
+// --- Pantalla: detalle del evento
+const abrirDetalleEvento = async (id) => { await page.goto(`${URL}/eventos?evento=${id}`); await page.getByRole('region', { name: 'Meseros asignados' }).waitFor() }
+const seccionAsignados = () => page.getByRole('region', { name: 'Meseros asignados' })
+await t('Pantalla: el detalle muestra «0 de 5 · Faltan 5» y el botón «Asignar meseros»', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; await abrirDetalleEvento(ev.id)
+  igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '0 de 5'); await seccionAsignados().getByText('Faltan 5').waitFor()
+  await seccionAsignados().getByText('Todavía no hay meseros asignados a este evento').waitFor(); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).waitFor()
+})
+await t('Pantalla: marcar 3 meseros y guardar los asigna («3 de 5 · Faltan 2») y quedan en el listado del evento', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(3, 'Pantalla')
+  await abrirDetalleEvento(ev.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click()
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor()
+  await page.fill('#buscar-asignacion', LETRAS)   // todos los de esta corrida
+  for (const m of ms) await lista.locator('label', { hasText: m.nombre_completo }).locator('input[type=checkbox]').check()
+  await page.waitForSelector('text=/3 seleccionados · el evento requiere 5/')
+  await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click()
+  await page.waitForSelector('text=Asignación guardada: 3 de 5 meseros')
+  igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '3 de 5'); await seccionAsignados().getByText('Faltan 2').waitFor()
+  const asignados = await seccionAsignados().getByRole('list', { name: 'Meseros asignados al evento' }).innerText()
+  for (const m of ms) cierto(asignados.includes(m.nombre_completo), `falta ${m.nombre_completo} en el listado`)
+  igual((await meserosDe(ev.id)).total_asignados, 3, 'guardado en el servidor:')
+})
+await t('Pantalla: «Cambiar asignación» precarga los asignados; desmarcar uno lo quita, y cancelar no cambia nada', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(3, 'Cambio')
+  await asignar(ev.id, ms.map((m) => m.id)); await abrirDetalleEvento(ev.id)
+  await seccionAsignados().getByRole('button', { name: 'Cambiar asignación' }).click()
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await page.fill('#buscar-asignacion', LETRAS)
+  for (const m of ms) igual(await lista.locator('label', { hasText: m.nombre_completo }).locator('input[type=checkbox]').isChecked(), true, `${m.nombre_completo} precargado:`)
+  await lista.locator('label', { hasText: ms[0].nombre_completo }).locator('input[type=checkbox]').uncheck()
+  await seccionAsignados().getByRole('button', { name: 'Cancelar' }).click(); igual((await meserosDe(ev.id)).total_asignados, 3, 'cancelar cambió la asignación:')
+  await seccionAsignados().getByRole('button', { name: 'Cambiar asignación' }).click(); await page.fill('#buscar-asignacion', LETRAS)
+  await lista.locator('label', { hasText: ms[0].nombre_completo }).locator('input[type=checkbox]').uncheck(); await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click()
+  await page.waitForSelector('text=Asignación guardada: 2 de 5 meseros'); igual((await meserosDe(ev.id)).total_asignados, 2, 'tras desmarcar:')
+})
+await t('Pantalla: en un evento de 40 asistentes (2 requeridos), asignar 2 muestra «Completo»', async () => {
+  const ev = (await eventoMeseros(40)).cuerpo.evento; const ms = await crearMeseros(2, 'Completo'); await asignar(ev.id, ms.map((m) => m.id)); await abrirDetalleEvento(ev.id)
+  await seccionAsignados().getByText('Completo', { exact: true }).waitFor(); igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '2 de 2')
+})
+await t('Pantalla: si un mesero ya está en otro evento ese día, avisa «Ojo con la disponibilidad» al guardar', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Aviso')
+  const e1 = (await eventoMeseros(100, { fecha_evento: dia, nombre_evento: `Aviso Uno ${LETRAS}` })).cuerpo.evento; const e2 = (await eventoMeseros(100, { fecha_evento: dia })).cuerpo.evento
+  await asignar(e1.id, [a.id]); await abrirDetalleEvento(e2.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click()
+  await page.fill('#buscar-asignacion', a.nombre_completo); await page.getByRole('list', { name: 'Meseros disponibles para asignar' }).locator('label', { hasText: a.nombre_completo }).locator('input[type=checkbox]').check()
+  await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click(); await page.waitForSelector('text=Ojo con la disponibilidad'); await page.waitForSelector(`text=Aviso Uno ${LETRAS}`)
+})
+await t('Pantalla: un mesero eliminado ya no aparece en el selector de asignación', async () => {
+  const [a] = await crearMeseros(1, 'Eliminado'); igual((await eliminarMesero(a.id)).status, 204)
+  const ev = (await eventoMeseros(100)).cuerpo.evento; await abrirDetalleEvento(ev.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click()
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor(); await page.fill('#buscar-asignacion', a.nombre_completo)
+  await page.waitForSelector('text=Ningún mesero coincide con la búsqueda'); igual(await lista.locator('label', { hasText: a.nombre_completo }).count(), 0)
+})
+
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {

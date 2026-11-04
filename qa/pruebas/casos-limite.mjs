@@ -439,6 +439,44 @@ await caso('Eliminar a un mesero no toca a los demás (el listado conserva a los
   return { s: lista.some((x) => x.id === b.id) && !lista.some((x) => x.id === a.id) }
 })
 
+console.log('\n== HU-28: asignar meseros a un evento (RF-35) · entradas raras')
+const evAsig = async () => (await call('/eventos', { method: 'POST', body: ev({ asistentes: 100 }) })).c.evento
+const meseroAsig = async () => (await call('/personal', { method: 'POST', body: { nombre_completo: `Asignable Límite ${LETRAS_C}`, contacto: telC() } })).c
+const put = (id, body, metodo = 'PUT') => call(`/eventos/${id}/meseros`, { method: metodo, body })
+await caso('Asignar 2 meseros válidos y consultar', [2], async () => {
+  const e = await evAsig(); const a = await meseroAsig(); const b = await meseroAsig()
+  const r = await put(e.id, { personal_ids: [a.id, b.id] }); return { s: r.c?.total_asignados, nota: `estado ${r.s}` }
+})
+await caso('Asignar con un id de texto con inyección SQL, notación científica o un objeto', [400], async () => {
+  const e = await evAsig()
+  const r = await Promise.all([["1; DROP TABLE evento_personal;--"], [1e21], [{ id: 1 }], [[1]], ['']].map(async (ids) => (await put(e.id, { personal_ids: ids })).s))
+  const sigue = (await call(`/eventos/${e.id}/meseros`)).s === 200
+  return { s: r.every((x) => x === 400) && sigue ? 400 : r.join('/') + (sigue ? '' : ' tabla rota'), nota: r.join('/') }
+})
+await caso('Asignar 100 ids que no existen da 400 (no 500)', [400], async () => {
+  const e = await evAsig(); return m(await put(e.id, { personal_ids: Array.from({ length: 100 }, (_, i) => 900000000 + i) }))
+})
+await caso('Asignar 101 ids da 400', [400], async () => { const e = await evAsig(); return m(await put(e.id, { personal_ids: Array.from({ length: 101 }, (_, i) => i + 1) })) })
+await caso('Id del evento: el más grande permitido que no existe (404) y uno fuera de rango (400)', [404], async () => {
+  const a = (await put(2147483647, { personal_ids: [] })).s; const b = (await put(2147483648, { personal_ids: [] })).s
+  return { s: a === 404 && b === 400 ? 404 : `${a}/${b}`, nota: `${a}/${b}` }
+})
+await caso('Campos de más en el cuerpo (evento_id, total_asignados) se ignoran', [1], async () => {
+  const e = await evAsig(); const a = await meseroAsig()
+  const r = await put(e.id, { personal_ids: [a.id], evento_id: 999999, total_asignados: 50, meseros_requeridos: 0 })
+  return { s: r.c?.total_asignados, nota: `estado ${r.s}, evento ${r.c?.evento_id === e.id}` }
+})
+await caso('Cuerpo que no es un objeto o con personal_ids de otro tipo', [400], async () => {
+  const e = await evAsig()
+  const r = await Promise.all([[], 'hola', 5, null, { personal_ids: 'x' }, { personal_ids: {} }, { personal_ids: null }].map(async (b) => (await call(`/eventos/${e.id}/meseros`, { method: 'PUT', body: b })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Asignar, vaciar y volver a asignar deja la lista final correcta', [1], async () => {
+  const e = await evAsig(); const a = await meseroAsig()
+  await put(e.id, { personal_ids: [a.id] }); await put(e.id, { personal_ids: [] }); const r = await put(e.id, { personal_ids: [a.id] })
+  return { s: r.c?.total_asignados }
+})
+
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)
 const conocidos = filas.filter((x) => x.conocido)
 const bien = filas.filter((x) => x.ok).length

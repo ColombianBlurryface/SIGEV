@@ -285,3 +285,19 @@ CREATE TABLE IF NOT EXISTS personal (
 -- No puede haber dos personas ACTIVAS iguales (mismo rol, nombre y contacto); un eliminado se puede volver a crear
 CREATE UNIQUE INDEX IF NOT EXISTS uq_personal_activo ON personal (rol, lower(nombre_completo), lower(contacto)) WHERE activo;
 CREATE INDEX IF NOT EXISTS idx_personal_rol_activo ON personal (rol) WHERE activo;
+
+
+-- =============================================================================
+-- HU-28 (RF-35): Meseros asignados a un evento. Relación muchos a muchos entre eventos y personal. Un mesero no se
+-- puede asignar dos veces al mismo evento. Si un mesero se elimina después (borrado lógico, HU-27) la asignación queda
+-- como historial pero ya no cuenta ni se muestra. Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS evento_personal (
+    id SERIAL PRIMARY KEY,
+    evento_id INTEGER NOT NULL REFERENCES eventos(id) ON DELETE CASCADE,
+    personal_id INTEGER NOT NULL REFERENCES personal(id) ON DELETE RESTRICT,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_evento_personal UNIQUE (evento_id, personal_id)
+);
+CREATE INDEX IF NOT EXISTS idx_evento_personal_evento ON evento_personal (evento_id);
+CREATE INDEX IF NOT EXISTS idx_evento_personal_personal ON evento_personal (personal_id);

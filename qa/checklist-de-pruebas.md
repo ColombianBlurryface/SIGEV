@@ -227,6 +227,18 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **Escenario 3 · no se modifica:** no hay ningún botón o enlace para editar a un mesero. Por la API, `PUT` y `PATCH` sobre `/api/personal/:id` dan **405** (cabecera `Allow: DELETE`) y no cambian nada.
 - [ ] 🤖 **Borrado lógico:** el eliminado deja de listarse pero se puede volver a registrar con los mismos datos (así se corrige un error). Un id inválido (`abc`, `0`, `-1`, `1.5`, gigante) da 400; sin sesión, 401. 10 eliminaciones simultáneas del mismo mesero: un 204 y nueve 404, ninguna 500.
 
+
+### HU-28 · Asignar meseros a un evento (RF-35)
+
+> Requiere la tabla `evento_personal` (SQL en `docs/sql-hu-28-asignacion-meseros.sql` para QA y producción).
+
+- [ ] 🤖👀 **Escenario 1:** en el detalle de un evento, «Meseros asignados» con «Asignar meseros» abre la lista de meseros registrados con casillas; marcar 3 y «Guardar asignación» muestra «Asignación guardada: 3 de 5 meseros», los nombres en el listado del evento y el contador en 3.
+- [ ] 🤖👀 **Escenario 2:** un mesero eliminado no aparece en el selector; por la API, asignarlo (o un id que no existe) da **400** «Uno o más meseros no son válidos o están inactivos» y no cambia nada.
+- [ ] 🤖👀 **Escenario 3 (HU-25):** un evento de 100 asistentes requiere 5 meseros; con 4 asignados dice «4 de 5 · Faltan 1» (la API: `deficit: 1`); con 5, «Completo»; con 6, «Sobran 1».
+- [ ] 🤖👀 **Sincronización completa:** «Cambiar asignación» precarga los asignados; desmarcar uno y guardar lo quita; «Cancelar» no cambia nada; dejar todo desmarcado los quita a todos.
+- [ ] 🤖👀 **Disponibilidad:** si un mesero ya está en otro evento el mismo día, al guardar avisa «Ojo con la disponibilidad…» (no lo bloquea); en otro día no avisa.
+- [ ] 🤖 **Validaciones:** ids repetidos, de texto, 0, negativos, decimales o más de 100 dan 400; evento inexistente 404; id de evento inválido 400; sin sesión 401. Si se elimina un mesero ya asignado, deja de contar (el déficit sube). 10 asignaciones simultáneas sobre el mismo evento terminan con una lista completa, sin errores 500.
+
 ---
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)

@@ -24,6 +24,7 @@ const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
 // mobiliario. No es un número fijo: sale de MAX_OWNED_CAPACITY_THRESHOLD (ver config/parametros.js).
 const { UMBRAL_ALQUILER } = require('../config/parametros');
 const { comprasDeEvento } = require('./comprasController');
+const { armarAsignacion } = require('./asignacionMeserosController');
 
 /**
  * POST /api/eventos
@@ -403,6 +404,8 @@ const obtenerDetalleEvento = async (req, res) => {
       },
       // Ingredientes a comprar (HU-47 · RF-55, RN-09, RN-20): salen de las recetas de los platos y los asistentes
       compras_ingredientes: await comprasDeEvento(pool, id, asistentes),
+      // Meseros asignados al evento y cuántos faltan o sobran frente a los requeridos (HU-28 · RF-35)
+      asignacion_meseros: await armarAsignacion(pool, id, asistentes),
       productos_calculados: resProductos.rows,
       servicios_adicionales: resServicios.rows
     });

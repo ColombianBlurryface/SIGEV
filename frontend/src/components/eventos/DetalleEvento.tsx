@@ -5,10 +5,12 @@
  * y las de coctelería se muestran en secciones separadas, cada una con su costo (HU-13).
  */
 import { ChefHat, RotateCw, Users } from 'lucide-react'
+import { useState } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AsignacionMeseros, type MensajeAsignacion } from '@/components/eventos/AsignacionMeseros'
 import { ComprasIngredientes } from '@/components/eventos/ComprasIngredientes'
 import { useEventoDetalle } from '@/hooks/useEventoDetalle'
 import { describirReparto, type RepartoMobiliario } from '@/lib/alquiler'
@@ -131,6 +133,7 @@ function agruparRequerimientos(detalle: EventoDetalle) {
     unidadesAlquilar,
     unidadesPedidas,
     compras: detalle.compras_ingredientes,
+    asignacion: detalle.asignacion_meseros,
     vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0,
   }
 }
@@ -138,6 +141,8 @@ function agruparRequerimientos(detalle: EventoDetalle) {
 export function DetalleEvento({ evento }: { evento: EventoListado }) {
   const { detalle, cargando, error, recargar } = useEventoDetalle(evento.id)
   const requerimientos = detalle ? agruparRequerimientos(detalle) : null
+  // Mensaje de la asignación de meseros: se guarda aquí (y con el id del evento) porque el detalle se recarga al guardar
+  const [mensajeAsignacion, setMensajeAsignacion] = useState<{ eventoId: number; mensaje: MensajeAsignacion } | null>(null)
 
   const datos = [
     { etiqueta: 'Fecha', valor: formatearFecha(evento.fecha_evento) },
@@ -193,6 +198,18 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
           {formatearNumero(calcularCocineros(evento.asistentes))}
         </span>
       </div>
+
+      {/* HU-28: los meseros asignados frente a los requeridos, y el selector para asignarlos */}
+      {requerimientos && (
+        <AsignacionMeseros
+          eventoId={evento.id}
+          estadoEvento={evento.estado}
+          asignacion={requerimientos.asignacion}
+          mensaje={mensajeAsignacion?.eventoId === evento.id ? mensajeAsignacion.mensaje : null}
+          onMensaje={(mensaje) => setMensajeAsignacion(mensaje ? { eventoId: evento.id, mensaje } : null)}
+          onCambio={recargar}
+        />
+      )}
 
       <div className="flex flex-col gap-1">
         <span className="text-xs font-bold text-muted-foreground">Observaciones</span>

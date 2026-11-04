@@ -64,6 +64,7 @@ Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Su
 | 7 | *(Opcional)* Datos de prueba (inventario + 6 eventos «[Demo]») | `backend/src/db/datos-de-prueba.sql` | No | ⬜ |
 | 8 ⚠️ | Recetas de platos (HU-46): tablas `ingredientes` y `plato_ingredientes` + tres recetas de ejemplo | [`docs/sql-hu-46-recetas-de-platos.sql`](sql-hu-46-recetas-de-platos.sql) (la parte 2, datos de prueba, es opcional) | **Sí: antes de desplegar el código de la HU-46** (sin las tablas, la pestaña «Recetas de Platos» da 500) | ⬜ |
 | 9 ⚠️ | Personal de servicio (HU-26): tabla `personal` | [`docs/sql-hu-26-personal.sql`](sql-hu-26-personal.sql) | **Sí: antes de desplegar el código de la HU-26** (sin la tabla, la pantalla «Personal» da 500) | ⬜ |
+| 10 ⚠️ | Meseros asignados a un evento (HU-28): tabla `evento_personal` (**después** del SQL de la HU-26) | [`docs/sql-hu-28-asignacion-meseros.sql`](sql-hu-28-asignacion-meseros.sql) | **Sí: antes de desplegar el código de la HU-28** (sin la tabla, el detalle de cualquier evento da 500) | ⬜ |
 
 ### Producción
 
@@ -77,6 +78,7 @@ Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Su
 | 5 | *(Si el Product Owner lo pide)* Datos de prueba para que ningún módulo se vea vacío | `backend/src/db/datos-de-prueba.sql` (y `datos-de-prueba-quitar.sql` para quitarlos) | No | ⬜ |
 | 6 ⚠️ | Recetas de platos (HU-46): tablas `ingredientes` y `plato_ingredientes` (la parte 2 del archivo, datos de prueba, solo si el PO lo pide) | [`docs/sql-hu-46-recetas-de-platos.sql`](sql-hu-46-recetas-de-platos.sql) | **Sí: antes de publicar** | ⬜ |
 | 7 ⚠️ | Personal de servicio (HU-26): tabla `personal` | [`docs/sql-hu-26-personal.sql`](sql-hu-26-personal.sql) | **Sí: antes de publicar** | ⬜ |
+| 8 ⚠️ | Meseros asignados a un evento (HU-28): tabla `evento_personal` (**después** del SQL de la HU-26) | [`docs/sql-hu-28-asignacion-meseros.sql`](sql-hu-28-asignacion-meseros.sql) | **Sí: antes de publicar** | ⬜ |
 
 **Nunca se corre en producción:** `qa/reiniciar-datos-qa.sql` (tiene un candado que lo impide: solo funciona donde existe el usuario `qa`) ni `qa/limpiar-datos-qa.sql`.
 

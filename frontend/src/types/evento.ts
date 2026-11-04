@@ -140,12 +140,35 @@ export interface ComprasIngredientes {
   platos_sin_receta: { producto_id: number; nombre: string }[]
 }
 
+// HU-28 (RF-35): meseros asignados al evento y cuántos faltan o sobran frente a los requeridos (HU-21)
+export interface MeseroAsignado {
+  id: number
+  nombre_completo: string
+  contacto: string
+}
+
+export type EstadoAsignacion = 'completo' | 'deficit' | 'excedente'
+
+export interface AsignacionMeseros {
+  evento_id: number
+  total_asignados: number
+  meseros_requeridos: number
+  diferencia: number
+  deficit: number
+  excedente: number
+  estado: EstadoAsignacion
+  meseros_asignados: MeseroAsignado[]
+  // Solo al guardar: meseros que ya están en otro evento el mismo día (se avisa, no se bloquea)
+  advertencias?: { personal_id: number; nombre_completo: string; otros_eventos: { id: number; nombre_evento: string }[] }[]
+}
+
 export interface EventoDetalle extends EventoListado {
   estado_alquiler: EstadoAlquiler
   // HU-21: personal de servicio calculado por el backend al consultar el evento
   logistica: LogisticaEvento
   // HU-47: ingredientes a comprar, calculados por el backend al consultar el evento
   compras_ingredientes: ComprasIngredientes
+  asignacion_meseros: AsignacionMeseros
   productos_calculados: ProductoCalculado[]
   servicios_adicionales: ServicioAdicional[]
 }
