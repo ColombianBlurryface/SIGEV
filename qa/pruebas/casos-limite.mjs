@@ -439,6 +439,68 @@ await caso('Eliminar a un mesero no toca a los demás (el listado conserva a los
   return { s: lista.some((x) => x.id === b.id) && !lista.some((x) => x.id === a.id) }
 })
 
+console.log('\n== HU-28: asignar meseros a un evento (RF-35) · entradas raras')
+const evAsig = async () => (await call('/eventos', { method: 'POST', body: ev({ asistentes: 100 }) })).c.evento
+const meseroAsig = async () => (await call('/personal', { method: 'POST', body: { nombre_completo: `Asignable Límite ${LETRAS_C}`, contacto: telC() } })).c
+const put = (id, body, metodo = 'PUT') => call(`/eventos/${id}/meseros`, { method: metodo, body })
+await caso('Asignar 2 meseros válidos y consultar', [2], async () => {
+  const e = await evAsig(); const a = await meseroAsig(); const b = await meseroAsig()
+  const r = await put(e.id, { personal_ids: [a.id, b.id] }); return { s: r.c?.total_asignados, nota: `estado ${r.s}` }
+})
+await caso('Asignar con un id de texto con inyección SQL, notación científica o un objeto', [400], async () => {
+  const e = await evAsig()
+  const r = await Promise.all([["1; DROP TABLE evento_personal;--"], [1e21], [{ id: 1 }], [[1]], ['']].map(async (ids) => (await put(e.id, { personal_ids: ids })).s))
+  const sigue = (await call(`/eventos/${e.id}/meseros`)).s === 200
+  return { s: r.every((x) => x === 400) && sigue ? 400 : r.join('/') + (sigue ? '' : ' tabla rota'), nota: r.join('/') }
+})
+await caso('Asignar 100 ids que no existen da 400 (no 500)', [400], async () => {
+  const e = await evAsig(); return m(await put(e.id, { personal_ids: Array.from({ length: 100 }, (_, i) => 900000000 + i) }))
+})
+await caso('Asignar 101 ids da 400', [400], async () => { const e = await evAsig(); return m(await put(e.id, { personal_ids: Array.from({ length: 101 }, (_, i) => i + 1) })) })
+await caso('Id del evento: el más grande permitido que no existe (404) y uno fuera de rango (400)', [404], async () => {
+  const a = (await put(2147483647, { personal_ids: [] })).s; const b = (await put(2147483648, { personal_ids: [] })).s
+  return { s: a === 404 && b === 400 ? 404 : `${a}/${b}`, nota: `${a}/${b}` }
+})
+await caso('Campos de más en el cuerpo (evento_id, total_asignados) se ignoran', [1], async () => {
+  const e = await evAsig(); const a = await meseroAsig()
+  const r = await put(e.id, { personal_ids: [a.id], evento_id: 999999, total_asignados: 50, meseros_requeridos: 0 })
+  return { s: r.c?.total_asignados, nota: `estado ${r.s}, evento ${r.c?.evento_id === e.id}` }
+})
+await caso('Cuerpo que no es un objeto o con personal_ids de otro tipo', [400], async () => {
+  const e = await evAsig()
+  const r = await Promise.all([[], 'hola', 5, null, { personal_ids: 'x' }, { personal_ids: {} }, { personal_ids: null }].map(async (b) => (await call(`/eventos/${e.id}/meseros`, { method: 'PUT', body: b })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Asignar, vaciar y volver a asignar deja la lista final correcta', [1], async () => {
+  const e = await evAsig(); const a = await meseroAsig()
+  await put(e.id, { personal_ids: [a.id] }); await put(e.id, { personal_ids: [] }); const r = await put(e.id, { personal_ids: [a.id] })
+  return { s: r.c?.total_asignados }
+})
+
+console.log('\n== HU-28: hora de inicio, tope de meseros y cruces de horario')
+const evH = async (hora, extra = {}) => (await call('/eventos', { method: 'POST', body: ev({ ...(hora !== undefined ? { hora_inicio: hora } : {}), ...extra }) }))
+for (const [hora, esperado] of [['00:00', 201], ['23:59', 201], ['09:05', 201], ['24:00', 400], ['25:61', 400], ['18:60', 400], ['6:00', 400], ['18', 400], ['18:00:00', 400], ['', 400], [1800, 400], [null, 201], [true, 400], [[], 400], [{}, 400]]) {
+  await caso(`Evento con hora_inicio ${JSON.stringify(hora)}`, [esperado], async () => m(await evH(hora)))
+}
+await caso('Tope: 6 meseros en un evento de 100 asistentes (5 requeridos) da 400; 5 sí', [400], async () => {
+  const e = (await evH('10:00')).c.evento; const ms = []; for (let i = 0; i < 6; i++) ms.push((await call('/personal', { method: 'POST', body: { nombre_completo: `Tope Límite ${LETRAS_C}`, contacto: telC() } })).c)
+  const seis = await put(e.id, { personal_ids: ms.map((x) => x.id) }); const cinco = await put(e.id, { personal_ids: ms.slice(0, 5).map((x) => x.id) })
+  return { s: seis.s === 400 && cinco.s === 200 ? 400 : `${seis.s}/${cinco.s}`, nota: `6 → ${seis.s}, 5 → ${cinco.s}` }
+})
+await caso('Cruce: asignar al mismo mesero a un evento del mismo día que se cruza da 409; si termina justo cuando empieza el otro, 200', [409], async () => {
+  const dia = (await evH('18:00')).c.evento.fecha_evento.slice(0, 10)
+  const e1 = (await evH('18:00', { fecha_evento: dia, duracion_horas: 4 })).c, e2 = (await evH('20:00', { fecha_evento: dia, duracion_horas: 3 })).c, e3 = (await evH('22:00', { fecha_evento: dia, duracion_horas: 3 })).c
+  if (!e1.evento || !e2.evento) return { s: 'SIN EVENTOS', nota: `${e1.error} / ${e2.error}` }
+  const mes = (await call('/personal', { method: 'POST', body: { nombre_completo: `Cruce Límite ${LETRAS_C}`, contacto: telC() } })).c
+  const a = await put(e1.evento.id, { personal_ids: [mes.id] }); const b = await put(e2.evento.id, { personal_ids: [mes.id] })
+  const c = e3.evento ? await put(e3.evento.id, { personal_ids: [mes.id] }) : { s: 'sin tercer evento (tope de 3 por día)' }
+  return { s: a.s === 200 && b.s === 409 && (c.s === 200 || typeof c.s === 'string') ? 409 : `${a.s}/${b.s}/${c.s}`, nota: `18–22: ${a.s}, 20–23: ${b.s}, 22–01: ${c.s}` }
+})
+await caso('Candidatos: GET /eventos/:id/meseros/disponibles con id inválido, inexistente y válido', [200], async () => {
+  const e = (await evH('10:00')).c.evento; const a = (await call('/eventos/abc/meseros/disponibles')).s; const b = (await call('/eventos/2147483647/meseros/disponibles')).s; const c = await call(`/eventos/${e.id}/meseros/disponibles`)
+  return { s: a === 400 && b === 404 && c.s === 200 && Array.isArray(c.c.meseros) ? 200 : `${a}/${b}/${c.s}`, nota: `${a}/${b}/${c.s}` }
+})
+
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)
 const conocidos = filas.filter((x) => x.conocido)
 const bien = filas.filter((x) => x.ok).length

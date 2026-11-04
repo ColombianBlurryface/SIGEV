@@ -71,6 +71,16 @@ export function PasoDatos({ valores, errores, mostrarVacio, avisoDuracion, onCam
           />
         </FormField>
 
+        <FormField id="horaInicio" label="Hora de inicio" error={errores.horaInicio} hint="Sirve para saber si dos eventos se cruzan al asignar meseros.">
+          <Input
+            id="horaInicio"
+            type="time"
+            value={valores.horaInicio}
+            onChange={(e) => onCambio('horaInicio', e.target.value)}
+            {...propsError('horaInicio')}
+          />
+        </FormField>
+
         <FormField id="duracion" label="Duración" error={errores.duracion}>
           <div className="relative">
             <Input
