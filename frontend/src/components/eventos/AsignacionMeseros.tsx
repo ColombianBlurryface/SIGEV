@@ -4,23 +4,21 @@
  * los que se desmarcan se quitan y los marcados se agregan.
  */
 import { LoaderCircle, Search, UserCheck, UserRound } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { usePersonal } from '@/hooks/usePersonal'
 import { formatearNumero, normalizar } from '@/lib/formato'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/services/api'
 import { eventosService } from '@/services/eventosService'
-import type { AsignacionMeseros as Asignacion, EstadoEvento } from '@/types/evento'
+import type { AsignacionMeseros as Asignacion, EstadoEvento, MeseroCandidato } from '@/types/evento'
 
 // Lo que se le dice a la persona después de guardar. Vive en el componente padre porque al guardar el detalle se
 // vuelve a cargar y este componente se vuelve a montar: si el mensaje viviera aquí, se perdería.
 export interface MensajeAsignacion {
   exito: string
-  advertencias: Asignacion['advertencias']
 }
 
 interface AsignacionMeserosProps {
@@ -64,12 +62,6 @@ export function AsignacionMeseros({ eventoId, estadoEvento, asignacion, mensaje,
       </div>
 
       {mensaje && <Alert variant="success">{mensaje.exito}</Alert>}
-      {mensaje?.advertencias && mensaje.advertencias.length > 0 && (
-        <Alert variant="warning">
-          <strong>Ojo con la disponibilidad.</strong>{' '}
-          {mensaje.advertencias.map((a) => `${a.nombre_completo} también está en ${a.otros_eventos.map((e) => `«${e.nombre_evento}»`).join(', ')} ese mismo día`).join('; ')}.
-        </Alert>
-      )}
 
       {asignacion.meseros_asignados.length === 0 ? (
         <p className="rounded-[10px] bg-background px-3 py-3 text-[13.5px] text-subtle">Todavía no hay meseros asignados a este evento.</p>
@@ -101,7 +93,6 @@ export function AsignacionMeseros({ eventoId, estadoEvento, asignacion, mensaje,
             setEditando(false)
             onMensaje({
               exito: `Asignación guardada: ${formatearNumero(resultado.total_asignados)} de ${formatearNumero(resultado.meseros_requeridos)} meseros.`,
-              advertencias: resultado.advertencias ?? [],
             })
             onCambio()
           }}
@@ -133,15 +124,46 @@ interface EditorProps {
   onGuardado: (resultado: Asignacion) => void
 }
 
-// Lista de los meseros registrados y activos, con casillas. Se monta solo al abrir la edición.
+// Lista de los meseros registrados y activos, con casillas. Los que ya están en otro evento que se cruza con este van
+// bloqueados («Ocupado en…»), y al llegar al número de meseros que el evento requiere no se pueden marcar más. Se monta
+// solo al abrir la edición.
 function EditorAsignacion({ eventoId, requeridos, inicial, onCancelar, onGuardado }: EditorProps) {
-  const { personal, cargando, error } = usePersonal()
+  const [candidatos, setCandidatos] = useState<MeseroCandidato[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [marcados, setMarcados] = useState<Set<number>>(() => new Set(inicial))
   const [busqueda, setBusqueda] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [errorServidor, setErrorServidor] = useState<string | null>(null)
+
+  useEffect(() => {
+    let activo = true
+    eventosService
+      .meserosDisponibles(eventoId)
+      .then((r) => {
+        if (activo) setCandidatos(r.meseros)
+      })
+      .catch((err: unknown) => {
+        if (activo) setError(err instanceof ApiError ? err.message : 'No fue posible cargar los meseros.')
+      })
+    return () => {
+      activo = false
+    }
+  }, [eventoId])
+
+  if (error) return <Alert variant="error">{error}</Alert>
+  if (candidatos === null) return <p className="text-[13px] text-subtle">Cargando los meseros registrados…</p>
+  if (candidatos.length === 0) {
+    return (
+      <p className="rounded-[10px] bg-background px-3 py-3 text-[13.5px] text-subtle">
+        No hay meseros registrados. <Link to="/personal" className="font-semibold text-primary underline">Regístralos en Personal</Link> para poder asignarlos.
+      </p>
+    )
+  }
+
   const termino = normalizar(busqueda.trim())
-  const visibles = personal.filter((p) => termino === '' || normalizar(`${p.nombre_completo} ${p.contacto}`).includes(termino))
+  const visibles = candidatos.filter((p) => termino === '' || normalizar(`${p.nombre_completo} ${p.contacto}`).includes(termino))
+  const seleccionados = candidatos.filter((p) => marcados.has(p.id)).length
+  const topeAlcanzado = seleccionados >= requeridos
 
   function alternar(id: number) {
     setErrorServidor(null)
@@ -157,8 +179,7 @@ function EditorAsignacion({ eventoId, requeridos, inicial, onCancelar, onGuardad
     setGuardando(true)
     setErrorServidor(null)
     try {
-      // Solo se envían los que siguen activos: un mesero eliminado mientras tanto se descarta
-      const ids = personal.filter((p) => marcados.has(p.id)).map((p) => p.id)
+      const ids = (candidatos ?? []).filter((p) => marcados.has(p.id)).map((p) => p.id)
       onGuardado(await eventosService.asignarMeseros(eventoId, ids))
     } catch (err) {
       setErrorServidor(err instanceof ApiError ? err.message : 'No fue posible guardar la asignación.')
@@ -167,17 +188,6 @@ function EditorAsignacion({ eventoId, requeridos, inicial, onCancelar, onGuardad
     }
   }
 
-  if (cargando) return <p className="text-[13px] text-subtle">Cargando los meseros registrados…</p>
-  if (error) return <Alert variant="error">{error}</Alert>
-  if (personal.length === 0) {
-    return (
-      <p className="rounded-[10px] bg-background px-3 py-3 text-[13.5px] text-subtle">
-        No hay meseros registrados. <Link to="/personal" className="font-semibold text-primary underline">Regístralos en Personal</Link> para poder asignarlos.
-      </p>
-    )
-  }
-
-  const seleccionados = personal.filter((p) => marcados.has(p.id)).length
   return (
     <div className="flex flex-col gap-3 rounded-[12px] border border-border bg-background p-3">
       <div className="relative">
@@ -188,23 +198,41 @@ function EditorAsignacion({ eventoId, requeridos, inicial, onCancelar, onGuardad
         <Input id="buscar-asignacion" type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar mesero" className="h-10 pl-9 text-[13.5px]" />
       </div>
 
-      <ul aria-label="Meseros disponibles para asignar" className="flex max-h-64 flex-col gap-1 overflow-y-auto pr-1">
+      <ul aria-label="Meseros disponibles para asignar" className="flex max-h-80 flex-col gap-1 overflow-y-auto pr-1">
         {visibles.length === 0 && <li className="px-1 py-2 text-[13px] text-subtle">Ningún mesero coincide con la búsqueda.</li>}
-        {visibles.map((p) => (
-          <li key={p.id}>
-            <label className="flex cursor-pointer items-center gap-3 rounded-[8px] px-2 py-2 hover:bg-muted">
-              <input type="checkbox" checked={marcados.has(p.id)} onChange={() => alternar(p.id)} disabled={guardando} className="size-4 accent-[var(--color-primary)]" />
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-[13.5px] font-semibold">{p.nombre_completo}</span>
-                <span className="truncate text-xs text-muted-foreground">{p.contacto}</span>
-              </span>
-            </label>
-          </li>
-        ))}
+        {visibles.map((p) => {
+          const marcado = marcados.has(p.id)
+          const ocupado = !marcado && p.ocupado_en.length > 0
+          const sinCupo = !marcado && topeAlcanzado
+          const bloqueado = ocupado || sinCupo
+          return (
+            <li key={p.id}>
+              <label className={cn('flex items-center gap-3 rounded-[8px] px-2 py-2', bloqueado ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-muted')}>
+                <input
+                  type="checkbox"
+                  checked={marcado}
+                  onChange={() => alternar(p.id)}
+                  disabled={guardando || bloqueado}
+                  className="size-4 accent-[var(--color-primary)]"
+                />
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-[13.5px] font-semibold">{p.nombre_completo}</span>
+                  <span className="truncate text-xs text-muted-foreground">{p.contacto}</span>
+                  {ocupado && (
+                    <span className="text-xs font-semibold text-warning-foreground">
+                      Ocupado en {p.ocupado_en.map((o) => `«${o.nombre_evento}» (${o.horario})`).join(', ')}
+                    </span>
+                  )}
+                </span>
+              </label>
+            </li>
+          )
+        })}
       </ul>
 
       <p aria-live="polite" className="text-xs text-muted-foreground">
         {formatearNumero(seleccionados)} {seleccionados === 1 ? 'seleccionado' : 'seleccionados'} · el evento requiere {formatearNumero(requeridos)}
+        {topeAlcanzado && ' (ya no puedes marcar más)'}
       </p>
 
       {errorServidor && <Alert variant="error">{errorServidor}</Alert>}

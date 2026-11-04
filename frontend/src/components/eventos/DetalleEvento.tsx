@@ -4,6 +4,7 @@
  * propio y cuánto hay que alquilar según el inventario actual (HU-12). Las bebidas generales
  * y las de coctelería se muestran en secciones separadas, cada una con su costo (HU-13).
  */
+import { describirHorario } from '@/lib/horario'
 import { ChefHat, RotateCw, Users } from 'lucide-react'
 import { useState } from 'react'
 import { Alert } from '@/components/ui/alert'
@@ -147,6 +148,7 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
   const datos = [
     { etiqueta: 'Fecha', valor: formatearFecha(evento.fecha_evento) },
     { etiqueta: 'Duración', valor: `${formatearNumero(evento.duracion_horas)} h` },
+    { etiqueta: 'Horario', valor: describirHorario(evento.hora_inicio, Number(evento.duracion_horas)) ?? 'Sin hora de inicio' },
     { etiqueta: 'Asistentes', valor: formatearNumero(evento.asistentes) },
     { etiqueta: 'Modalidad', valor: evento.es_modalidad_buffet ? 'Buffet' : 'Servida a la mesa' },
   ]

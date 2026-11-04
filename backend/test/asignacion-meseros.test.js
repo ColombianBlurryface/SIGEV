@@ -50,3 +50,16 @@ test('el id del evento en la ruta es un entero positivo en texto', () => {
   assert.equal(idDeRuta('201'), 201);
   for (const malo of ['abc', '0', '-1', '1.5', '1e21', '99999999999', '', 'evt-201', undefined]) assert.equal(idDeRuta(malo), null, String(malo));
 });
+
+test('cruces de horario: se cruzan si cada uno empieza antes de que el otro termine; si uno termina justo cuando empieza el otro, no', () => {
+  const { seCruzan } = require('../src/config/reglasAsignacionPersonal');
+  // A: 18:00–22:00 (minutos 1080–1320)
+  assert.equal(seCruzan(1080, 1320, 1200, 1440), true, 'B empieza a las 20:00, antes de que A termine');
+  assert.equal(seCruzan(1080, 1320, 1080, 1320), true, 'mismo horario');
+  assert.equal(seCruzan(1080, 1320, 1140, 1260), true, 'B dentro de A');
+  assert.equal(seCruzan(1080, 1320, 960, 1081), true, 'B termina un minuto después de que A empieza');
+  assert.equal(seCruzan(1080, 1320, 1320, 1560), false, 'B empieza justo cuando A termina (22:00): se puede');
+  assert.equal(seCruzan(1080, 1320, 840, 1080), false, 'B termina justo cuando A empieza (18:00): se puede');
+  assert.equal(seCruzan(1080, 1320, 1321, 1500), false, 'B empieza después');
+  assert.equal(seCruzan(1080, 1320, 0, 600), false, 'B en la mañana');
+});

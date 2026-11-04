@@ -288,6 +288,12 @@ CREATE INDEX IF NOT EXISTS idx_personal_rol_activo ON personal (rol) WHERE activ
 
 
 -- =============================================================================
+-- Hora de inicio del evento (HU-28): para saber si dos eventos se cruzan en el tiempo hace falta la hora. Columna
+-- OPCIONAL: los eventos anteriores no la tienen y se tratan como ocupados todo el día. Solo agrega una columna.
+-- =============================================================================
+ALTER TABLE eventos ADD COLUMN IF NOT EXISTS hora_inicio TIME;
+
+-- =============================================================================
 -- HU-28 (RF-35): Meseros asignados a un evento. Relación muchos a muchos entre eventos y personal. Un mesero no se
 -- puede asignar dos veces al mismo evento. Si un mesero se elimina después (borrado lógico, HU-27) la asignación queda
 -- como historial pero ya no cuenta ni se muestra. Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.

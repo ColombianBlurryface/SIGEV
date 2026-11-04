@@ -47,7 +47,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-47 | **Calcular los ingredientes a comprar** de un evento: con los asistentes y las recetas de los platos, la cantidad de cada ingrediente **en la unidad en que se compra** (kilo, libra o arroba), con el **10 % de margen** y **redondeada hacia arriba**. Si varios platos usan el mismo ingrediente se muestra **un solo total**. Ejemplos: 100 asistentes × 200 g de pechuga → 22 kilos; 50 asistentes con cilantro de dos platos (10 g y 5 g) → 825 g → 2 libras; 200 asistentes × 150 g de papa → 33.000 g → 3 arrobas. Se ve en el detalle del evento y en el resumen del registro (antes de guardar), y avisa de los platos que aún no tienen receta. | Detalle del evento · Nuevo evento (paso 3) |
 | HU-26 | **Registrar meseros:** nombre completo y datos de contacto (un teléfono, un correo o ambos). El nombre solo lleva letras y el contacto debe traer de verdad un teléfono (mínimo 7 dígitos) o un correo; no se repite un mesero activo con el mismo nombre y contacto. Los meseros registrados aparecen en un listado con buscador. Es la base de los eventos con personal asignado (HU-28). | Personal |
 | HU-27 | **Eliminar meseros:** cada mesero del listado tiene un botón «Eliminar» que pide confirmación en la misma fila. El mesero deja de aparecer en el listado (borrado lógico: el registro queda inactivo y no se pierde el historial de los eventos donde participe) y se puede volver a registrar con los mismos datos. **No existe opción para modificar** a un mesero: si hubo un error al registrarlo, se elimina y se registra de nuevo. | Personal |
-| HU-28 | **Asignar meseros a un evento:** en el detalle del evento, «Meseros asignados» muestra cuántos hay frente a los requeridos (1 por cada 20 asistentes) con un aviso de cuántos **faltan** o sobran («4 de 5 · Faltan 1»), quiénes son, y un selector con casillas para elegir entre los meseros registrados. Guardar **sincroniza la lista completa**: los desmarcados se quitan y los marcados se agregan. No se puede asignar un mesero eliminado; si un mesero ya está en otro evento el mismo día, se avisa. Alimenta el comparativo de la HU-25. | Eventos · detalle del evento |
+| HU-28 | **Asignar meseros a un evento:** en el detalle del evento, «Meseros asignados» muestra cuántos hay frente a los requeridos (1 por cada 20 asistentes) con un aviso de cuántos **faltan** («4 de 5 · Faltan 1»), quiénes son, y un selector con casillas para elegir entre los meseros registrados. Guardar **sincroniza la lista completa**. **No se puede asignar más de los requeridos**, ni un mesero eliminado, ni uno que ya esté en **otro evento que se cruza en el tiempo** (si un evento termina justo cuando empieza el otro, sí se puede); los ocupados salen bloqueados con «Ocupado en …». Para esto el evento ahora lleva **hora de inicio**. Alimenta el comparativo de la HU-25. | Eventos · detalle del evento |
 
 Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
 
@@ -129,7 +129,7 @@ En **Personal** se registran los meseros con su nombre completo y sus datos de c
 
 ![Pantalla de Personal con la confirmación para eliminar un mesero](docs/imagenes/personal-meseros.png)
 
-**Asignar meseros a un evento (HU-28).** En el detalle de un evento, «Meseros asignados» compara los asignados con los que el evento requiere (HU-21) y dice si el personal está **completo**, si **faltan** o si **sobran**; «Asignar meseros» (o «Cambiar asignación») abre una lista con casillas de los meseros registrados y activos, con buscador. Guardar reemplaza la lista del evento por la que quedó marcada. Un mesero eliminado deja de contar y de aparecer; si alguno ya está asignado a otro evento el mismo día, se avisa sin bloquear.
+**Asignar meseros a un evento (HU-28).** En el detalle de un evento, «Meseros asignados» compara los asignados con los que el evento requiere (HU-21) y dice si el personal está **completo** o si **faltan**; «Asignar meseros» (o «Cambiar asignación») abre una lista con casillas de los meseros registrados y activos, con buscador. Guardar reemplaza la lista del evento por la que quedó marcada. Reglas: **no se pueden marcar más meseros que los requeridos** (al llegar al número, los demás se bloquean); un mesero eliminado no aparece; y un mesero **ocupado en otro evento que se cruza** (misma fecha y horas que se pisan) sale bloqueado con «Ocupado en «Boda» (18:00 – 22:00)». Si un evento termina justo cuando empieza el otro, **sí se puede**. Para saberlo, el registro del evento pide ahora la **hora de inicio** (el horario se ve como «18:00 – 22:00»); los eventos anteriores, sin hora, cuentan como ocupados todo el día.
 
 ![Meseros asignados a un evento: 4 de 5, faltan 1, con el selector abierto](docs/imagenes/asignar-meseros.png)
 
@@ -199,7 +199,7 @@ SIGEV/
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
 │   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-├── qa/                      Pruebas automáticas (215 de regresión y 218 casos límite)
+├── qa/                      Pruebas automáticas (225 de regresión y 236 casos límite)
 ├── docs/
 │   ├── imagenes/            Capturas usadas en la documentación
 │   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
@@ -267,7 +267,7 @@ Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del m
 
 ## Pruebas y entorno de QA
 
-El proyecto trae pruebas automáticas en [`qa/`](qa) (215 pruebas de los checklists y 218 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+El proyecto trae pruebas automáticas en [`qa/`](qa) (225 pruebas de los checklists y 236 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
 
 - [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
 - [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.

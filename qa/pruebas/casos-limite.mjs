@@ -477,6 +477,30 @@ await caso('Asignar, vaciar y volver a asignar deja la lista final correcta', [1
   return { s: r.c?.total_asignados }
 })
 
+console.log('\n== HU-28: hora de inicio, tope de meseros y cruces de horario')
+const evH = async (hora, extra = {}) => (await call('/eventos', { method: 'POST', body: ev({ ...(hora !== undefined ? { hora_inicio: hora } : {}), ...extra }) }))
+for (const [hora, esperado] of [['00:00', 201], ['23:59', 201], ['09:05', 201], ['24:00', 400], ['25:61', 400], ['18:60', 400], ['6:00', 400], ['18', 400], ['18:00:00', 400], ['', 400], [1800, 400], [null, 201], [true, 400], [[], 400], [{}, 400]]) {
+  await caso(`Evento con hora_inicio ${JSON.stringify(hora)}`, [esperado], async () => m(await evH(hora)))
+}
+await caso('Tope: 6 meseros en un evento de 100 asistentes (5 requeridos) da 400; 5 sí', [400], async () => {
+  const e = (await evH('10:00')).c.evento; const ms = []; for (let i = 0; i < 6; i++) ms.push((await call('/personal', { method: 'POST', body: { nombre_completo: `Tope Límite ${LETRAS_C}`, contacto: telC() } })).c)
+  const seis = await put(e.id, { personal_ids: ms.map((x) => x.id) }); const cinco = await put(e.id, { personal_ids: ms.slice(0, 5).map((x) => x.id) })
+  return { s: seis.s === 400 && cinco.s === 200 ? 400 : `${seis.s}/${cinco.s}`, nota: `6 → ${seis.s}, 5 → ${cinco.s}` }
+})
+await caso('Cruce: asignar al mismo mesero a un evento del mismo día que se cruza da 409; si termina justo cuando empieza el otro, 200', [409], async () => {
+  const dia = (await evH('18:00')).c.evento.fecha_evento.slice(0, 10)
+  const e1 = (await evH('18:00', { fecha_evento: dia, duracion_horas: 4 })).c, e2 = (await evH('20:00', { fecha_evento: dia, duracion_horas: 3 })).c, e3 = (await evH('22:00', { fecha_evento: dia, duracion_horas: 3 })).c
+  if (!e1.evento || !e2.evento) return { s: 'SIN EVENTOS', nota: `${e1.error} / ${e2.error}` }
+  const mes = (await call('/personal', { method: 'POST', body: { nombre_completo: `Cruce Límite ${LETRAS_C}`, contacto: telC() } })).c
+  const a = await put(e1.evento.id, { personal_ids: [mes.id] }); const b = await put(e2.evento.id, { personal_ids: [mes.id] })
+  const c = e3.evento ? await put(e3.evento.id, { personal_ids: [mes.id] }) : { s: 'sin tercer evento (tope de 3 por día)' }
+  return { s: a.s === 200 && b.s === 409 && (c.s === 200 || typeof c.s === 'string') ? 409 : `${a.s}/${b.s}/${c.s}`, nota: `18–22: ${a.s}, 20–23: ${b.s}, 22–01: ${c.s}` }
+})
+await caso('Candidatos: GET /eventos/:id/meseros/disponibles con id inválido, inexistente y válido', [200], async () => {
+  const e = (await evH('10:00')).c.evento; const a = (await call('/eventos/abc/meseros/disponibles')).s; const b = (await call('/eventos/2147483647/meseros/disponibles')).s; const c = await call(`/eventos/${e.id}/meseros/disponibles`)
+  return { s: a === 400 && b === 404 && c.s === 200 && Array.isArray(c.c.meseros) ? 200 : `${a}/${b}/${c.s}`, nota: `${a}/${b}/${c.s}` }
+})
+
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)
 const conocidos = filas.filter((x) => x.conocido)
 const bien = filas.filter((x) => x.ok).length

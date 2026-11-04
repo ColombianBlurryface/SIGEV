@@ -20,6 +20,9 @@ const {
 // Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
 const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
 
+// La hora de inicio llega de la base como «18:00:00»; se entrega como «18:00» (o null si el evento no la tiene)
+const horaCorta = (hora) => (hora ? String(hora).slice(0, 5) : null);
+
 // RN-03 (P-05): con más asistentes que este umbral se avisa que probablemente haya que alquilar
 // mobiliario. No es un número fijo: sale de MAX_OWNED_CAPACITY_THRESHOLD (ver config/parametros.js).
 const { UMBRAL_ALQUILER } = require('../config/parametros');
@@ -43,6 +46,7 @@ const crearEvento = async (req, res) => {
       tipo_evento,
       duracion_horas,
       asistentes,
+      hora_inicio,
       observaciones_generales,
       productos = [],           // IDs de alimentos o bebidas predeterminadas
       servicios_adicionales = [] // DJ, música, sonido, requerimientos de mobiliario
@@ -69,8 +73,8 @@ const crearEvento = async (req, res) => {
     }
     // 1. Insertar el evento base (RF-01, RF-02)
     const queryEvento = `
-      INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales, hora_inicio)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *;
     `;
     const resEvento = await client.query(queryEvento, [
@@ -79,7 +83,8 @@ const crearEvento = async (req, res) => {
       tipo_evento,
       duracion_horas,
       asistentes,
-      (typeof observaciones_generales === 'string' && observaciones_generales.trim()) || null
+      (typeof observaciones_generales === 'string' && observaciones_generales.trim()) || null,
+      hora_inicio || null
     ]);
     const nuevoEvento = resEvento.rows[0];
 
@@ -255,7 +260,7 @@ const crearEvento = async (req, res) => {
 
     res.status(201).json({
       mensaje: 'Evento registrado con insumos calculados y servicios adicionales exitosamente',
-      evento: nuevoEvento
+      evento: { ...nuevoEvento, hora_inicio: horaCorta(nuevoEvento.hora_inicio) }
     });
   } catch (error) {
     // Deshace todo lo que se alcanzó a guardar en esta transacción
@@ -285,6 +290,7 @@ const listarEventos = async (req, res) => {
         asistentes,
         estado,
         observaciones_generales,
+        to_char(hora_inicio, 'HH24:MI') AS hora_inicio,
         creado_en,
         CASE 
           WHEN asistentes > 300 THEN true 
@@ -379,6 +385,7 @@ const obtenerDetalleEvento = async (req, res) => {
 
     res.json({
       ...resEvento.rows[0],
+      hora_inicio: horaCorta(resEvento.rows[0].hora_inicio),
       es_modalidad_buffet: asistentes > 300,
       aviso_alquiler: umbralSuperado,
       estado_alquiler: {

@@ -22,7 +22,7 @@ const sumarAnios = (iso, anios) => `${Number(iso.slice(0, 4)) + anios}${iso.slic
 const validarCreacionEvento = (req, res, next) => {
   if (!esObjeto(req.body)) return rechazar(res, 'El cuerpo de la petición debe ser un objeto JSON.');
   const {
-    nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales,
+    nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales, hora_inicio,
     productos, servicios_adicionales
   } = req.body;
 
@@ -66,6 +66,11 @@ const validarCreacionEvento = (req, res, next) => {
   const duracion = Number(duracion_horas);
   if (!Number.isFinite(duracion) || duracion < 3 || duracion > 8) {
     return rechazar(res, 'La duración en horas debe estar entre 3 y 8 horas.', 'Duración inválida');
+  }
+
+  // Hora de inicio (HU-28): opcional en la API, «HH:MM» de 00:00 a 23:59. Con ella se sabe si dos eventos se cruzan.
+  if (hayValor(hora_inicio) && (typeof hora_inicio !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora_inicio))) {
+    return rechazar(res, 'La hora de inicio debe tener el formato HH:MM (de 00:00 a 23:59).', 'Hora de inicio inválida');
   }
 
   if (hayValor(observaciones_generales) &&

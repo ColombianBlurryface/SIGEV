@@ -16,6 +16,8 @@ export interface Evento {
   fecha_evento: string
   tipo_evento: string
   duracion_horas: string
+  // Hora de inicio «HH:MM»; los eventos anteriores a la HU-28 no la tienen (ocupan todo el día)
+  hora_inicio: string | null
   asistentes: number
   estado: EstadoEvento
   observaciones_generales: string | null
@@ -44,6 +46,7 @@ export interface NuevoEvento {
   fecha_evento: string
   tipo_evento: string
   duracion_horas: number
+  hora_inicio?: string
   asistentes: number
   observaciones_generales?: string
   productos?: ProductoEventoPayload[]
@@ -158,8 +161,18 @@ export interface AsignacionMeseros {
   excedente: number
   estado: EstadoAsignacion
   meseros_asignados: MeseroAsignado[]
-  // Solo al guardar: meseros que ya están en otro evento el mismo día (se avisa, no se bloquea)
-  advertencias?: { personal_id: number; nombre_completo: string; otros_eventos: { id: number; nombre_evento: string }[] }[]
+}
+
+// Un mesero registrado frente a UN evento: si ya está asignado y si está ocupado en otro evento que se cruza (HU-28)
+export interface MeseroCandidato extends MeseroAsignado {
+  asignado: boolean
+  ocupado_en: { evento_id: number; nombre_evento: string; fecha: string; horario: string }[]
+}
+
+export interface MeserosDisponibles {
+  evento_id: number
+  meseros_requeridos: number
+  meseros: MeseroCandidato[]
 }
 
 export interface EventoDetalle extends EventoListado {

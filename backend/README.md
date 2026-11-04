@@ -182,7 +182,8 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | POST | `/personal` | Registrar un mesero: `{ nombre_completo, contacto, rol? }` (HU-26) |
 | GET | `/personal` | Listar el personal activo, ordenado por nombre; filtro opcional `?rol=mesero` (HU-26) |
 | DELETE | `/personal/:id` | Eliminar un mesero (borrado lógico, `204`; HU-27) |
-| GET | `/eventos/:id/meseros` | Meseros asignados a un evento y cuántos faltan o sobran (HU-28) |
+| GET | `/eventos/:id/meseros` | Meseros asignados a un evento y cuántos faltan frente a los requeridos (HU-28) |
+| GET | `/eventos/:id/meseros/disponibles` | Meseros registrados marcando los asignados y los ocupados en otro evento que se cruza (HU-28) |
 | PUT / POST | `/eventos/:id/meseros` | Asignar meseros a un evento: sincroniza la lista completa `{ personal_ids: [..] }` (HU-28) |
 | GET | `/catalogo/recetas` | Resumen: cuántos ingredientes tiene la receta de cada plato (HU-46) |
 | GET | `/catalogo/ingredientes` | El maestro de ingredientes con su unidad de compra (HU-46) |
@@ -343,22 +344,25 @@ Las reglas están en [`src/config/reglasRegistroPersonal.js`](src/config/reglasR
 {
   "evento_id": 201, "total_asignados": 4, "meseros_requeridos": 5,
   "diferencia": -1, "deficit": 1, "excedente": 0, "estado": "deficit",
-  "meseros_asignados": [ { "id": 3, "nombre_completo": "Carlos Rodríguez", "contacto": "3001234567" } ],
-  "advertencias": [ { "personal_id": 3, "nombre_completo": "Carlos Rodríguez", "otros_eventos": [ { "id": 188, "nombre_evento": "Gala" } ] } ]
+  "meseros_asignados": [ { "id": 3, "nombre_completo": "Carlos Rodríguez", "contacto": "3001234567" } ]
 }
 ```
 
-`meseros_requeridos` es el de la HU-21 (1 por cada 20 asistentes); `deficit` y `excedente` son lo que falta o sobra y `estado` es `completo`, `deficit` o `excedente`: es el valor que usará la HU-25 para las desviaciones (escenario 3: un evento de 100 asistentes requiere 5; con 4 asignados, déficit de 1). `advertencias` solo viene al guardar y lista a los meseros que ya están en **otro evento el mismo día** (se avisa, no se bloquea).
+`meseros_requeridos` es el de la HU-21 (1 por cada 20 asistentes); `deficit` es lo que falta y `estado` es `completo` o `deficit`: es el valor que usará la HU-25 para las desviaciones (escenario 3: un evento de 100 asistentes requiere 5; con 4 asignados, déficit de 1). `GET /api/eventos/:id/meseros/disponibles` lista todos los meseros activos marcando los `asignado` a este evento y, en `ocupado_en`, el evento y el horario donde están ocupados (los usa el selector de la pantalla).
 
 | Regla | Detalle |
 | --- | --- |
 | Evento | Debe existir (`404`); su id debe ser un entero positivo (`400`); un evento `realizado` o `cancelado` no admite asignaciones (`409`) |
-| `personal_ids` | Lista (puede ir vacía) de máximo 100 ids enteros positivos, **sin repetidos**; también se entiende `staff_ids` |
+| `personal_ids` | Lista (puede ir vacía) de ids enteros positivos, **sin repetidos**; también se entiende `staff_ids` |
+| **Tope** | No se pueden asignar **más meseros que los requeridos** (1 por cada 20 asistentes): `400` «Este evento requiere 5 meseros (1 por cada 20 asistentes): no puedes asignar más (enviaste 6)» |
 | Meseros | Todos deben existir, estar **activos** y ser meseros; si no, `400` «Uno o más meseros no son válidos o están inactivos (ids: …)» y **no se cambia nada** (todo o nada) |
-| Concurrencia | Las sincronizaciones sobre el mismo evento se turnan (bloqueo del evento); eliminar un mesero mientras se asigna nunca deja un inactivo asignado |
+| **Cruces** | Un mesero **no puede estar en dos eventos que se cruzan en el tiempo**: `409` «… ya está asignado a «Boda» el 2027-03-20 (18:00 – 22:00), que se cruza con este evento», con la lista `conflictos`. Dos eventos se cruzan si cada uno empieza antes de que el otro termine; **si uno termina justo cuando empieza el otro, no se cruzan y sí se puede**. Un evento **sin hora de inicio** (anteriores a esta regla) ocupa todo el día; uno cancelado no cuenta; los eventos que cruzan la medianoche (22:00 + 4 h) se tratan bien |
+| Concurrencia | El evento y los meseros de la lista se bloquean durante la sincronización (en orden de id): dos asignaciones a la vez del mismo mesero a eventos que se cruzan dejan entrar solo una (la otra recibe `409`); eliminar un mesero mientras se asigna nunca deja un inactivo asignado |
 | Mesero eliminado después (HU-27) | Su asignación queda como historial, pero deja de contar y de aparecer: el déficit se recalcula solo |
 
-Necesita una tabla nueva (solo agrega): `docs/sql-hu-28-asignacion-meseros.sql`. Las reglas están en [`src/config/reglasAsignacionPersonal.js`](src/config/reglasAsignacionPersonal.js) y se prueban con `npm test`.
+**Hora de inicio del evento.** `POST /api/eventos` acepta `hora_inicio` (`"18:00"`, formato `HH:MM` de `00:00` a `23:59`; cualquier otra cosa da `400`). Es **opcional en la API** (los eventos anteriores no la tienen) pero el registro en pantalla la exige. Se devuelve en la lista y el detalle como `"hora_inicio": "18:00"` (o `null`). Sin ella no se puede saber si dos eventos se cruzan.
+
+Necesita una columna y una tabla nuevas (solo agregan): `docs/sql-hu-28-asignacion-meseros.sql`. Las reglas están en [`src/config/reglasAsignacionPersonal.js`](src/config/reglasAsignacionPersonal.js) y se prueban con `npm test`.
 
 **No hay `PUT` ni `PATCH`** (sobre `/api/personal/:id`). Los datos de un mesero no se modifican (decisión de negocio): cualquier otro método sobre `/api/personal/:id` (`PUT`, `PATCH`, `POST`, `GET`) responde `405 Method Not Allowed` con la cabecera `Allow: DELETE`. Si hubo un error al registrarlo, se elimina y se registra de nuevo. No necesita SQL propio: reutiliza la tabla `personal` de la HU-26.
 
@@ -415,6 +419,7 @@ Respuesta `201`: `{ "mensaje": "...", "evento": { "id": 4, "estado": "planificac
 | Nombre | Texto con contenido, máximo 150 caracteres |
 | Tipo de evento | Uno de: Boda, Corporativo, Quinceañero, Gala, Cumpleaños, Otro |
 | Fecha | Día real `AAAA-MM-DD`, desde hoy (hora de Colombia) hasta 5 años adelante, y máximo 3 eventos activos por día (RN-13) |
+| Hora de inicio | Opcional: `HH:MM` de `00:00` a `23:59` (HU-28); el registro en pantalla la exige |
 | Duración | Número de 3 a 8 horas (RN-14); un texto como «4 horas» no vale |
 | Asistentes | Entero de 40 a 600 (RN-01) |
 | Observaciones | Texto de máximo 2.000 caracteres |

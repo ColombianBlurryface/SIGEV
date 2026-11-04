@@ -110,6 +110,7 @@ const nuevoEvento = async (nombre, asistentes, tipo = 'Boda') => {
   await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', nombre)
   await page.selectOption('select', tipo)
   await page.fill('input[type=date]', fechaLibre())
+  await page.fill('#horaInicio', '18:00')
   await page.fill('input[placeholder="Ej. 6"]', '5')
   await page.getByLabel('Número de asistentes').fill(String(asistentes))
 }
@@ -1845,13 +1846,14 @@ await t('Escenario 2: asignar un mesero eliminado (inactivo) o inexistente da 40
   }
   igual(JSON.stringify(idsDe(await meserosDe(ev.id))), JSON.stringify([a.id]), 'la asignación cambió tras un intento rechazado:')
 })
-await t('Escenario 3: un evento de 100 asistentes requiere 5 meseros; con 4 asignados reporta un déficit de 1 (y completo con 5, excedente con 6)', async () => {
+await t('Escenario 3: un evento de 100 asistentes requiere 5 meseros; con 4 asignados reporta un déficit de 1 (completo con 5; con 6 se rechaza)', async () => {
   const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(7, 'Estandar')
   let g = await meserosDe(ev.id); igual(g.meseros_requeridos, 5, 'requeridos:'); igual(g.deficit, 5, 'déficit sin asignar:'); igual(g.estado, 'deficit')
   let r = (await asignar(ev.id, ms.slice(0, 4).map((m) => m.id))).cuerpo; igual(r.total_asignados, 4); igual(r.deficit, 1, 'déficit:'); igual(r.estado, 'deficit'); igual(r.diferencia, -1)
   igual((await meserosDe(ev.id)).deficit, 1, 'déficit al consultar:'); igual((await api(`/eventos/${ev.id}`)).cuerpo.asignacion_meseros.deficit, 1, 'déficit en el detalle:')
   r = (await asignar(ev.id, ms.slice(0, 5).map((m) => m.id))).cuerpo; igual(r.estado, 'completo'); igual(r.deficit, 0); igual(r.excedente, 0)
-  r = (await asignar(ev.id, ms.slice(0, 6).map((m) => m.id))).cuerpo; igual(r.estado, 'excedente'); igual(r.excedente, 1)
+  const tope = await asignar(ev.id, ms.slice(0, 6).map((m) => m.id)); igual(tope.estado, 400, 'más de los requeridos:'); cierto(/requiere 5 meseros/.test(tope.cuerpo.detalle), tope.cuerpo.detalle)
+  igual((await meserosDe(ev.id)).total_asignados, 5, 'el rechazo cambió la asignación:')
   const ev40 = (await eventoMeseros(40)).cuerpo.evento; igual((await meserosDe(ev40.id)).meseros_requeridos, 2, '40 asistentes requieren 2:')
 })
 await t('Sincronización completa: la lista nueva reemplaza a la anterior, una lista vacía quita a todos y repetir la misma no cambia nada', async () => {
@@ -1887,15 +1889,71 @@ await t('Si se elimina un mesero ya asignado, deja de contar (el déficit sube) 
   igual((await meserosDe(otro.id)).total_asignados, 0, 'el otro evento tampoco lo cuenta:')
   const r = await asignar(ev.id, [a.id]); igual(r.estado, 200, 'volver a sincronizar:'); igual(r.cuerpo.total_asignados, 1)
 })
-await t('Un mesero asignado a dos eventos el mismo día: se avisa (advertencias) pero se permite; en otro día no hay aviso', async () => {
-  const dia = fechaLibre(), otroDia = fechaLibre(); const [a] = await crearMeseros(1, 'Doble')
-  const e1 = (await eventoMeseros(100, { fecha_evento: dia, nombre_evento: `Mismo día A ${LETRAS}` })).cuerpo.evento
-  const e2 = (await eventoMeseros(100, { fecha_evento: dia, nombre_evento: `Mismo día B ${LETRAS}` })).cuerpo.evento
-  const e3 = (await eventoMeseros(100, { fecha_evento: otroDia })).cuerpo.evento
-  igual((await asignar(e1.id, [a.id])).cuerpo.advertencias.length, 0, 'primer evento:')
-  const r = await asignar(e2.id, [a.id]); igual(r.estado, 200, 'se permite:'); igual(r.cuerpo.advertencias.length, 1, 'advertencias:')
-  igual(r.cuerpo.advertencias[0].personal_id, a.id); igual(r.cuerpo.advertencias[0].otros_eventos[0].id, e1.id)
-  igual((await asignar(e3.id, [a.id])).cuerpo.advertencias.length, 0, 'otro día:')
+const eventoA = (nombre, dia, hora, extra = {}) => eventoMeseros(100, { fecha_evento: dia, hora_inicio: hora, duracion_horas: 4, nombre_evento: `${nombre} ${LETRAS}`, ...extra }).then((r) => r.cuerpo.evento)
+await t('Tope: no se pueden asignar más meseros que los requeridos (1 por cada 20 asistentes): 40 asistentes → máximo 2', async () => {
+  const ev = (await eventoMeseros(40)).cuerpo.evento; const ms = await crearMeseros(3, 'Tope')
+  const r = await asignar(ev.id, ms.map((m) => m.id)); igual(r.estado, 400, '3 en un evento de 2:'); cierto(/requiere 2 meseros \(1 por cada 20 asistentes\): no puedes asignar más \(enviaste 3\)/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+  igual((await asignar(ev.id, ms.slice(0, 2).map((m) => m.id))).cuerpo.estado, 'completo', '2 de 2:'); igual((await meserosDe(ev.id)).total_asignados, 2)
+  const grande = (await eventoMeseros(600)).cuerpo.evento; const muchos = await crearMeseros(7, 'Grande')
+  igual((await asignar(grande.id, muchos.map((m) => m.id))).estado, 200, '7 de 30 sí:')
+})
+await t('Cruces: un mesero no puede estar en dos eventos que se cruzan (409 con el evento y el horario), pero si uno termina cuando empieza el otro, sí', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Cruce')
+  const tarde = await eventoA('Tarde', dia, '18:00'), noche = await eventoA('Noche', dia, '22:00'), cruce = await eventoA('Cruce', dia, '20:00')   // tarde 18–22, noche 22–02, cruce 20–24
+  igual((await asignar(tarde.id, [a.id])).estado, 200, 'primer evento:')
+  igual((await asignar(noche.id, [a.id])).estado, 200, 'termina uno (22:00) y empieza el otro (22:00):')
+  const r = await asignar(cruce.id, [a.id]); igual(r.estado, 409, 'cruce:')
+  cierto(new RegExp(`ya está asignado a «Tarde ${LETRAS}».*18:00 – 22:00.*se cruza`).test(r.cuerpo.detalle), r.cuerpo.detalle); cierto(/sí se puede asignar/.test(r.cuerpo.detalle), 'sin la aclaración')
+  igual(r.cuerpo.conflictos.length >= 1 && r.cuerpo.conflictos[0].personal_id === a.id, true, 'conflictos:')
+  igual((await meserosDe(cruce.id)).total_asignados, 0, 'se asignó pese al cruce:')
+})
+await t('Cruces: el mismo horario exacto y un evento dentro de otro se bloquean (máximo 3 eventos por día, por eso van repartidos)', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Horas')
+  const base = await eventoA('Base', dia, '18:00'); igual((await asignar(base.id, [a.id])).estado, 200)   // 18:00–22:00
+  const mismo = await eventoA('Mismo', dia, '18:00'), dentro = await eventoA('Dentro', dia, '19:00', { duracion_horas: 3 })
+  for (const [ev, motivo] of [[mismo, 'mismo horario'], [dentro, 'dentro del otro']]) igual((await asignar(ev.id, [a.id])).estado, 409, motivo + ':')
+})
+await t('Cruces: empezar un minuto antes de que termine el otro se bloquea; en la mañana del mismo día y en otro día, no', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Minuto')
+  const base = await eventoA('Base', dia, '18:00'); igual((await asignar(base.id, [a.id])).estado, 200)   // 18:00–22:00
+  const casi = await eventoA('Casi', dia, '21:59'), manana = await eventoA('Manana', dia, '09:00', { duracion_horas: 5 })   // 09:00–14:00
+  igual((await asignar(casi.id, [a.id])).estado, 409, 'empieza un minuto antes de que termine (21:59):'); igual((await asignar(manana.id, [a.id])).estado, 200, 'en la mañana (09:00–14:00):')
+  const otroDia = await eventoA('OtroDia', fechaLibre(), '18:00'); igual((await asignar(otroDia.id, [a.id])).estado, 200, 'otro día:')
+})
+await t('Cruces: un evento que cruza la medianoche (22:00 + 4 h) choca con uno al día siguiente que empieza antes de las 02:00, no con uno a las 02:00', async () => {
+  const dia = new Date(Date.parse(fechaLibre()) ); const sig = new Date(dia.getTime() + 86400000).toISOString().slice(0, 10); const d0 = dia.toISOString().slice(0, 10)
+  const [a] = await crearMeseros(1, 'Medianoche')
+  const noche = await eventoA('Noche', d0, '22:00'); igual((await asignar(noche.id, [a.id])).estado, 200)
+  const temprano = await eventoA('Temprano', sig, '01:00'), justo = await eventoA('Justo', sig, '02:00')
+  igual((await asignar(temprano.id, [a.id])).estado, 409, 'madrugada del día siguiente (01:00):'); igual((await asignar(justo.id, [a.id])).estado, 200, 'a las 02:00 en punto:')
+})
+await t('Cruces: un evento SIN hora de inicio (anteriores a esta regla) ocupa todo el día', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'SinHora')
+  const sinHora = await eventoA('SinHora', dia, undefined); igual(sinHora.hora_inicio, null, 'hora_inicio:')
+  igual((await asignar(sinHora.id, [a.id])).estado, 200)
+  const tarde = await eventoA('Tarde', dia, '18:00'); const r = await asignar(tarde.id, [a.id]); igual(r.estado, 409); cierto(/todo el día/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+})
+await t('Meseros disponibles: marca los asignados a este evento y los ocupados en otro evento que se cruza (con evento y horario)', async () => {
+  const dia = fechaLibre(); const [libre, propio, ocupado] = await crearMeseros(3, 'Disponible')
+  const otro = await eventoA('Otro', dia, '18:00'), este = await eventoA('Este', dia, '20:00')
+  await asignar(otro.id, [ocupado.id]); await asignar(este.id, [propio.id])
+  const r = (await api(`/eventos/${este.id}/meseros/disponibles`)).cuerpo; igual(r.meseros_requeridos, 5, 'requeridos:')
+  const f = (m) => r.meseros.find((x) => x.id === m.id)
+  igual(f(libre).asignado, false); igual(f(libre).ocupado_en.length, 0, 'libre:'); igual(f(propio).asignado, true, 'propio:')
+  igual(f(ocupado).ocupado_en.length, 1, 'ocupado:'); igual(f(ocupado).ocupado_en[0].nombre_evento, `Otro ${LETRAS}`); igual(f(ocupado).ocupado_en[0].horario, '18:00 – 22:00', 'horario:')
+  igual((await api('/eventos/999999999/meseros/disponibles')).estado, 404); igual((await api('/eventos/abc/meseros/disponibles')).estado, 400)
+})
+await t('Dos asignaciones a la vez del mismo mesero a eventos que se cruzan: solo una entra (nunca queda en los dos)', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Doble')
+  const e1 = await eventoA('Doble Uno', dia, '18:00'), e2 = await eventoA('Doble Dos', dia, '19:00')
+  const rs = await Promise.all([asignar(e1.id, [a.id]), asignar(e2.id, [a.id])])
+  igual(rs.filter((r) => r.estado === 200).length, 1, 'asignaciones que entraron:'); igual(rs.filter((r) => r.estado === 409).length, 1, 'rechazadas por cruce:'); igual(rs.filter((r) => r.estado >= 500).length, 0, 'errores 500:')
+  igual((await meserosDe(e1.id)).total_asignados + (await meserosDe(e2.id)).total_asignados, 1, 'queda asignado en los dos:')
+})
+await t('Hora de inicio del evento: «HH:MM» de 00:00 a 23:59 (25:61, 18, 6:00, texto o número dan 400), se devuelve en el detalle y la lista, y es opcional en la API', async () => {
+  for (const hora of ['25:61', '24:00', '18', '6:00', '18:60', 'abc', '18:00:00', 1800, {}, []]) igual((await eventoMeseros(100, { hora_inicio: hora })).estado, 400, `hora ${JSON.stringify(hora)}:`)
+  for (const hora of ['00:00', '23:59', '09:05']) { const r = await eventoMeseros(100, { hora_inicio: hora }); igual(r.estado, 201, hora + ':'); igual(r.cuerpo.evento.hora_inicio, hora, 'respuesta:') ; igual((await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo.hora_inicio, hora, 'detalle:') ; igual((await api('/eventos')).cuerpo.find((e) => e.id === r.cuerpo.evento.id).hora_inicio, hora, 'lista:') }
+  const sin = await eventoMeseros(100); igual(sin.estado, 201, 'sin hora:'); igual(sin.cuerpo.evento.hora_inicio, null)
 })
 await t('Asignaciones simultáneas sobre el mismo evento: 10 listas distintas a la vez terminan con UNA lista completa (sin mezclas ni 500)', async () => {
   const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(7, 'Carrera')
@@ -1949,12 +2007,38 @@ await t('Pantalla: en un evento de 40 asistentes (2 requeridos), asignar 2 muest
   const ev = (await eventoMeseros(40)).cuerpo.evento; const ms = await crearMeseros(2, 'Completo'); await asignar(ev.id, ms.map((m) => m.id)); await abrirDetalleEvento(ev.id)
   await seccionAsignados().getByText('Completo', { exact: true }).waitFor(); igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '2 de 2')
 })
-await t('Pantalla: si un mesero ya está en otro evento ese día, avisa «Ojo con la disponibilidad» al guardar', async () => {
-  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Aviso')
-  const e1 = (await eventoMeseros(100, { fecha_evento: dia, nombre_evento: `Aviso Uno ${LETRAS}` })).cuerpo.evento; const e2 = (await eventoMeseros(100, { fecha_evento: dia })).cuerpo.evento
-  await asignar(e1.id, [a.id]); await abrirDetalleEvento(e2.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click()
-  await page.fill('#buscar-asignacion', a.nombre_completo); await page.getByRole('list', { name: 'Meseros disponibles para asignar' }).locator('label', { hasText: a.nombre_completo }).locator('input[type=checkbox]').check()
-  await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click(); await page.waitForSelector('text=Ojo con la disponibilidad'); await page.waitForSelector(`text=Aviso Uno ${LETRAS}`)
+await t('Pantalla: un mesero ocupado en otro evento que se cruza aparece bloqueado con «Ocupado en…» y uno que empieza cuando termina el otro se puede marcar', async () => {
+  const dia = fechaLibre(); const [cruza, toca] = await crearMeseros(2, 'Bloqueo')
+  const a = await eventoA('Primero', dia, '18:00'), b = await eventoA('Segundo', dia, '20:00'), c = await eventoA('Tercero', dia, '22:00')
+  await asignar(a.id, [cruza.id, toca.id]); await abrirDetalleEvento(b.id)
+  await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', `Bloqueo`)
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor()
+  const filaCruza = lista.locator('label', { hasText: cruza.nombre_completo }); await filaCruza.waitFor()
+  igual(await filaCruza.locator('input[type=checkbox]').isDisabled(), true, 'el que se cruza no está bloqueado:'); cierto((await filaCruza.innerText()).includes(`Ocupado en «Primero ${LETRAS}» (18:00 – 22:00)`), 'sin el aviso «Ocupado en…»')
+  await abrirDetalleEvento(c.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', `Bloqueo`)
+  const filaToca = lista.locator('label', { hasText: toca.nombre_completo }); await filaToca.waitFor()
+  igual(await filaToca.locator('input[type=checkbox]').isDisabled(), false, 'el que empieza cuando termina el otro está bloqueado:')
+  await filaToca.locator('input[type=checkbox]').check(); await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click(); await page.waitForSelector('text=Asignación guardada: 1 de 5 meseros')
+})
+await t('Pantalla: al marcar tantos meseros como requiere el evento, los demás se bloquean (tope)', async () => {
+  const ev = (await eventoMeseros(40)).cuerpo.evento; await crearMeseros(3, 'Cupo'); await abrirDetalleEvento(ev.id)
+  await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', `Cupo`)
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor()
+  const cajas = lista.locator('input[type=checkbox]'); igual(await cajas.count() >= 3, true, 'menos de 3 meseros:')
+  await cajas.nth(0).check(); await cajas.nth(1).check()
+  await page.waitForSelector('text=2 seleccionados · el evento requiere 2 (ya no puedes marcar más)')
+  igual(await cajas.nth(2).isDisabled(), true, 'el tercero no está bloqueado:'); await cajas.nth(0).uncheck(); igual(await cajas.nth(2).isDisabled(), false, 'no se liberó el cupo:')
+})
+await t('Registro: la hora de inicio es obligatoria (aviso junto al campo) y la vista previa muestra el horario «18:00 – 23:00»; el detalle del evento lo muestra', async () => {
+  await page.goto(`${URL}/eventos/nuevo`)
+  await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', 'Hora de inicio' + sufijo); await page.selectOption('select', 'Boda'); await page.fill('input[type=date]', fechaLibre())
+  await page.fill('input[placeholder="Ej. 6"]', '5'); await page.getByLabel('Número de asistentes').fill('100')
+  await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.waitForSelector('text=Indica la hora de inicio'); igual(await page.getByRole('tab', { name: /Alimentos/ }).count(), 0, 'avanzó sin hora:')
+  await page.fill('#horaInicio', '18:00'); await page.waitForSelector('text=18:00 – 23:00')
+  await aRequerimientos(); await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.getByRole('button', { name: 'Guardar evento' }).waitFor()
+  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('Horario 18:00 – 23:00'), 'el resumen no muestra el horario')
+  await page.getByRole('button', { name: 'Guardar evento' }).click(); await page.waitForURL('**/eventos?evento=*')
+  await page.waitForSelector('text=18:00 – 23:00')
 })
 await t('Pantalla: un mesero eliminado ya no aparece en el selector de asignación', async () => {
   const [a] = await crearMeseros(1, 'Eliminado'); igual((await eliminarMesero(a.id)).status, 204)

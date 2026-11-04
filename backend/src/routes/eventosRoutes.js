@@ -8,7 +8,7 @@ const { Router } = require('express');
 const { crearEvento, listarEventos, obtenerDetalleEvento } = require('../controllers/eventosController');
 const { validarCreacionEvento } = require('../middlewares/validarEvento');
 const { calcularComprasPrevio } = require('../controllers/comprasController');
-const { listarMeserosDelEvento, asignarMeseros } = require('../controllers/asignacionMeserosController');
+const { listarMeserosDelEvento, listarMeserosDisponibles, asignarMeseros } = require('../controllers/asignacionMeserosController');
 
 const router = Router();
 
@@ -23,6 +23,7 @@ router.get('/', listarEventos);
 
 // Meseros asignados a un evento (HU-28 · RF-35). PUT y POST hacen lo mismo: sincronizar la lista completa.
 router.get('/:id/meseros', listarMeserosDelEvento);
+router.get('/:id/meseros/disponibles', listarMeserosDisponibles);
 router.put('/:id/meseros', asignarMeseros);
 router.post('/:id/meseros', asignarMeseros);
 
