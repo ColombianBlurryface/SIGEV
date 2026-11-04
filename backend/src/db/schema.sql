@@ -263,3 +263,25 @@ CREATE TABLE IF NOT EXISTS plato_ingredientes (
     CONSTRAINT uq_plato_ingrediente UNIQUE (plato_id, ingrediente_id)
 );
 CREATE INDEX IF NOT EXISTS idx_plato_ingredientes_plato ON plato_ingredientes(plato_id);
+
+
+-- =============================================================================
+-- HU-26 (RF-33): Personal de servicio. Una sola tabla genérica con un rol (hoy solo «mesero»; mañana cocineros u
+-- otros perfiles sin crear tablas nuevas). `activo` permite el borrado lógico de la HU-27 (RF-34): un mesero
+-- eliminado se marca inactivo y deja de listarse, pero no se pierde el historial de los eventos donde participó.
+-- Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS personal (
+    id SERIAL PRIMARY KEY,
+    nombre_completo VARCHAR(150) NOT NULL,
+    contacto VARCHAR(150) NOT NULL,
+    rol VARCHAR(20) NOT NULL DEFAULT 'mesero',
+    activo BOOLEAN NOT NULL DEFAULT true,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_personal_rol CHECK (rol IN ('mesero', 'cocinero')),
+    CONSTRAINT chk_personal_nombre CHECK (length(btrim(nombre_completo)) > 0),
+    CONSTRAINT chk_personal_contacto CHECK (length(btrim(contacto)) > 0)
+);
+-- No puede haber dos personas ACTIVAS iguales (mismo rol, nombre y contacto); un eliminado se puede volver a crear
+CREATE UNIQUE INDEX IF NOT EXISTS uq_personal_activo ON personal (rol, lower(nombre_completo), lower(contacto)) WHERE activo;
+CREATE INDEX IF NOT EXISTS idx_personal_rol_activo ON personal (rol) WHERE activo;

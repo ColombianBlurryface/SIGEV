@@ -1622,6 +1622,116 @@ await t('Campos numéricos del registro, el inventario y el catálogo: se pueden
 })
 
 
+// ============ HU-26 · Registrar meseros (RF-33) ============
+grupo = 'HU-26 Registrar meseros (RF-33)'
+// Los nombres no llevan números: cada corrida se distingue con letras (el identificador de la corrida, con los dígitos pasados a letras)
+const LETRAS = corrida.replace(/[0-9]/g, (d) => 'abcdefghij'[d])
+const tel = () => '3' + String(Math.floor(Math.random() * 1e9)).padStart(9, '0') // teléfono distinto en cada llamada
+const nuevoMesero = (nombre, contacto = tel(), extra = {}) => api('/personal', { method: 'POST', body: { nombre_completo: nombre, contacto, ...extra } })
+const listaMeseros = async () => (await api('/personal?rol=mesero')).cuerpo
+const MESERO_A = `Carlos Rodríguez ${LETRAS}`, MESERO_B = `Ana María López ${LETRAS}`
+
+await t('Escenario 1: registrar un mesero con nombre y contacto da 201, con id, rol «mesero» y activo', async () => {
+  const r = await nuevoMesero(MESERO_A, '3001234567')
+  igual(r.estado, 201, 'estado:'); cierto(Number.isInteger(r.cuerpo.id) && r.cuerpo.id > 0, 'sin id')
+  igual(r.cuerpo.nombre_completo, MESERO_A); igual(r.cuerpo.contacto, '3001234567'); igual(r.cuerpo.rol, 'mesero'); igual(r.cuerpo.activo, true)
+})
+await t('Escenario 2: el listado devuelve un arreglo con los meseros registrados (nombre y contacto), solo activos', async () => {
+  await nuevoMesero(MESERO_B, '+57 315 987 6543')
+  const r = await api('/personal'); igual(r.estado, 200, 'estado:'); cierto(Array.isArray(r.cuerpo), 'no es un arreglo')
+  const a = r.cuerpo.find((m) => m.nombre_completo === MESERO_A), b = r.cuerpo.find((m) => m.nombre_completo === MESERO_B)
+  cierto(a && b, 'faltan meseros en el listado')
+  igual(b.contacto, '+57 315 987 6543'); cierto(r.cuerpo.every((m) => m.activo === true && m.rol === 'mesero'), 'hay un inactivo o con otro rol')
+  const orden = r.cuerpo.map((m) => m.nombre_completo.toLowerCase()); cierto(JSON.stringify(orden) === JSON.stringify([...orden].sort((x, y) => x.localeCompare(y, 'es'))) || orden.length > 1, 'sin orden por nombre')
+})
+await t('Escenario 3: sin contacto da 400 diciendo que el contacto es obligatorio (también con espacios o null)', async () => {
+  for (const contacto of ['', '   ', null]) {
+    const r = await nuevoMesero(`Sin contacto ${LETRAS}`, contacto)
+    igual(r.estado, 400, `contacto ${JSON.stringify(contacto)}:`); cierto(/contacto es obligatorio/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+  }
+  // sin el campo contacto (no se manda)
+  const sinCampo = await api('/personal', { method: 'POST', body: { nombre_completo: `Sin contacto ${LETRAS}` } })
+  igual(sinCampo.estado, 400, 'sin el campo contacto:'); cierto(/contacto es obligatorio/.test(sinCampo.cuerpo.detalle), sinCampo.cuerpo.detalle)
+})
+await t('El nombre es obligatorio y solo letras: vacío, con números, símbolos, emoji o de un carácter dan 400', async () => {
+  for (const nombre of ['', '   ', null, 'A', `Carlos 123`, 'Carlos_R', 'Carlos <b>', 'Carlos 🍕', 'x'.repeat(151)]) {
+    igual((await nuevoMesero(nombre)).estado, 400, `nombre ${JSON.stringify(nombre)}:`)
+  }
+  igual((await nuevoMesero(`María-José O'Brien Jr. ${LETRAS}`)).estado, 201, 'nombre con guion, apóstrofo y punto:')
+})
+await t('El contacto debe traer un teléfono (7 dígitos o más) o un correo: «hola», «12345», símbolos raros o más de 150 caracteres dan 400', async () => {
+  for (const contacto of ['hola', '12345', 'ana@', 'ana@correo', '<script>alert(1)</script>', '3'.repeat(151), 5, {}]) {
+    igual((await nuevoMesero(`Contacto malo ${LETRAS}`, contacto)).estado, 400, `contacto ${JSON.stringify(contacto)}`.slice(0, 50) + ':')
+  }
+  for (const contacto of ['carlos.r@email.com', 'carlos.r@email.com / +57 300 123 4567', '(601) 555-1234']) igual((await nuevoMesero(`Contacto bueno ${LETRAS}`, contacto)).estado, 201, contacto + ':')
+})
+await t('Los espacios de más se limpian y WAITER se entiende como mesero; id, activo y otros campos enviados se ignoran', async () => {
+  const r = await nuevoMesero(`  Luis    Fernando   ${LETRAS}  `, `  +57   300 ${Math.floor(1000000 + Math.random() * 8999999)} `, { rol: 'WAITER', id: 1, activo: false, creado_en: '2000-01-01' })
+  igual(r.estado, 201); igual(r.cuerpo.nombre_completo, `Luis Fernando ${LETRAS}`); igual(r.cuerpo.rol, 'mesero'); igual(r.cuerpo.activo, true); cierto(r.cuerpo.id !== 1, 'el cliente fijó el id')
+  igual(new Date(r.cuerpo.creado_en).getFullYear() >= 2026, true, 'el cliente fijó la fecha:')
+})
+await t('Rol no permitido: «cocinero», «admin» o vacío dan 400; el filtro ?rol= se valida igual', async () => {
+  for (const rol of ['cocinero', 'COOK', 'admin', '']) igual((await nuevoMesero(`Rol malo ${LETRAS}`, tel(), { rol })).estado, 400, `rol ${rol}:`)
+  igual((await api('/personal?rol=cocinero')).estado, 400); igual((await api('/personal?rol=WAITER')).estado, 200); igual((await api('/personal?rol=mesero')).estado, 200)
+})
+await t('Dos meseros activos iguales (mismo nombre y contacto, sin importar mayúsculas) dan 409; con otro contacto sí se puede', async () => {
+  const contacto = tel(), nombre = `Repetido Pérez ${LETRAS}`
+  igual((await nuevoMesero(nombre, contacto)).estado, 201)
+  const r = await nuevoMesero(nombre.toUpperCase(), contacto); igual(r.estado, 409, 'repetido:'); cierto(/Ya hay un mesero activo/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+  igual((await nuevoMesero(nombre, tel())).estado, 201, 'mismo nombre con otro contacto:')
+})
+await t('10 registros iguales a la vez: entra uno solo y no hay errores 500', async () => {
+  const contacto = tel(), nombre = `Simultáneo Gómez ${LETRAS}`
+  const rs = await Promise.all(Array.from({ length: 10 }, () => nuevoMesero(nombre, contacto)))
+  igual(rs.filter((r) => r.estado === 201).length, 1, 'creados:'); igual(rs.filter((r) => r.estado === 500).length, 0, 'errores 500:')
+  igual((await listaMeseros()).filter((m) => m.contacto === contacto).length, 1, 'en el listado:')
+})
+await t('Sin sesión no se ve ni se registra personal (401)', async () => {
+  const sin = (op = {}) => fetch(`${API}/personal`, { headers: { 'Content-Type': 'application/json' }, ...op }).then((r) => r.status)
+  igual(await sin(), 401); igual(await sin({ method: 'POST', body: JSON.stringify({ nombre_completo: 'Ana', contacto: '3001234567' }) }), 401)
+})
+
+// --- Pantalla: Personal
+const abrirPersonal = async () => { await page.goto(`${URL}/personal`); await page.getByLabel('Nombre completo').waitFor() }
+await t('Pantalla: «Personal» es una opción del menú y abre la pantalla con el formulario y el listado', async () => {
+  await page.goto(`${URL}/eventos`); await abrirMenu()
+  await page.getByRole('link', { name: 'Personal' }).click(); await page.waitForURL('**/personal')
+  await page.getByRole('heading', { name: 'Registrar mesero' }).waitFor(); await page.getByRole('list', { name: 'Meseros registrados' }).waitFor()
+})
+await t('Pantalla: registrar un mesero con nombre y contacto lo muestra en el listado con su contacto', async () => {
+  const nombre = `Pantalla Mesero ${LETRAS}`, contacto = tel()
+  await page.getByLabel('Nombre completo').fill(nombre); await page.getByLabel('Datos de contacto').fill(contacto)
+  await page.getByRole('button', { name: 'Registrar mesero' }).click()
+  await page.waitForSelector(`text=«${nombre}» quedó registrado como mesero`)
+  const fila = page.getByRole('list', { name: 'Meseros registrados' }).locator('li', { hasText: nombre })
+  cierto((await fila.innerText()).includes(contacto), 'el listado no muestra el contacto')
+  igual(await page.getByLabel('Nombre completo').inputValue(), '', 'el formulario no se limpió:')
+  cierto((await listaMeseros()).some((m) => m.nombre_completo === nombre && m.contacto === contacto), 'no quedó guardado')
+})
+await t('Pantalla: nombre con números, contacto sin teléfono ni correo y campos vacíos se avisan junto al campo y no se guarda', async () => {
+  await abrirPersonal()
+  const antes = (await listaMeseros()).length
+  await page.getByLabel('Nombre completo').fill('Carlos 123'); await page.waitForSelector('text=Solo letras, espacios')
+  await page.getByLabel('Datos de contacto').fill('hola'); await page.waitForSelector('text=Escribe un teléfono (mínimo 7 dígitos) o un correo válido')
+  await page.getByLabel('Datos de contacto').fill('ana@correo.com'); igual(await page.getByText('Escribe un teléfono').count(), 0, 'un correo sí es válido:')
+  await page.getByLabel('Nombre completo').fill(''); await page.getByLabel('Datos de contacto').fill('')
+  await page.getByRole('button', { name: 'Registrar mesero' }).click()
+  await page.waitForSelector('text=Escribe el nombre completo'); await page.waitForSelector('text=El contacto es obligatorio')
+  igual((await listaMeseros()).length, antes, 'se guardó un mesero inválido:')
+})
+await t('Pantalla: un mesero repetido muestra el aviso del servidor, y el buscador filtra por nombre o contacto', async () => {
+  await abrirPersonal()
+  const nombre = `Repetido Pantalla ${LETRAS}`, contacto = tel()
+  await page.getByLabel('Nombre completo').fill(nombre); await page.getByLabel('Datos de contacto').fill(contacto); await page.getByRole('button', { name: 'Registrar mesero' }).click(); await page.waitForSelector(`text=«${nombre}» quedó registrado`)
+  await page.getByLabel('Nombre completo').fill(nombre); await page.getByLabel('Datos de contacto').fill(contacto); await page.getByRole('button', { name: 'Registrar mesero' }).click()
+  await page.waitForSelector('text=Ya hay un mesero activo con ese nombre y ese contacto')
+  await page.fill('#buscar-personal', `Repetido Pantalla ${LETRAS}`)
+  await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Meseros registrados"] > li').length === 1)
+  await page.fill('#buscar-personal', contacto); await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Meseros registrados"] > li').length === 1)
+  await page.fill('#buscar-personal', 'zzzz-no-existe'); await page.waitForSelector('text=Ningún mesero coincide con la búsqueda')
+})
+
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {

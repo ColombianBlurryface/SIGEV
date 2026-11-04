@@ -91,7 +91,7 @@ Comprueba que responde en <http://localhost:3000/api/health>.
 npm test
 ```
 
-Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros (HU-21), los cocineros (HU-22), las reglas de las recetas de platos (HU-46) y el cálculo de ingredientes a comprar (HU-47). Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
+Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros (HU-21), los cocineros (HU-22), las reglas de las recetas de platos (HU-46), el cálculo de ingredientes a comprar (HU-47) y el registro de meseros (HU-26). Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
 
 ---
 
@@ -179,6 +179,8 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | POST | `/catalogo` | Crear un producto del catálogo |
 | PUT | `/catalogo/:id` | Editar un producto del catálogo |
 | PATCH | `/catalogo/:id/estado` | Activar o desactivar un producto |
+| POST | `/personal` | Registrar un mesero: `{ nombre_completo, contacto, rol? }` (HU-26) |
+| GET | `/personal` | Listar el personal activo, ordenado por nombre; filtro opcional `?rol=mesero` (HU-26) |
 | GET | `/catalogo/recetas` | Resumen: cuántos ingredientes tiene la receta de cada plato (HU-46) |
 | GET | `/catalogo/ingredientes` | El maestro de ingredientes con su unidad de compra (HU-46) |
 | GET | `/catalogo/:id/receta` | La receta de un plato (HU-46) |
@@ -309,6 +311,26 @@ Respuesta `200` (la misma de `GET`):
 | Datos de prueba | `es_dato_prueba` es `true` mientras la receta sea la de ejemplo; al guardar la receta real pasa a `false`. El cliente no puede marcarla |
 
 `GET /api/catalogo/recetas` devuelve, por plato, `ingredientes` (cantidad de líneas; 0 = sin receta) y `es_dato_prueba`. `GET /api/catalogo/ingredientes` devuelve el maestro (`nombre`, `unidad_compra`, `platos` que lo usan). Las reglas están en [`src/config/reglasReceta.js`](src/config/reglasReceta.js) y se prueban con `npm test`.
+
+#### `POST /api/personal` y `GET /api/personal` (HU-26 · RF-33)
+
+Personal de servicio, hoy solo **meseros**. Una sola tabla `personal` con un `rol` (`mesero` hoy; cocineros u otros perfiles después, sin tablas nuevas) y `activo`, que permite el borrado lógico de la HU-27.
+
+```json
+{ "nombre_completo": "Carlos Rodríguez", "contacto": "carlos.r@email.com / +57 300 123 4567", "rol": "mesero" }
+```
+
+`POST` responde `201` con `{ id, nombre_completo, contacto, rol, activo: true, creado_en }`. `GET` devuelve un arreglo con el personal **activo** (`?rol=mesero` o `WAITER` filtra; otro valor da `400`).
+
+| Regla | Detalle |
+| --- | --- |
+| `nombre_completo` | Obligatorio, de 2 a 150 caracteres, solo letras (tildes, ñ, otros alfabetos), espacios, apóstrofo, punto y guion: sin números, símbolos ni emoji. Los espacios de más se limpian |
+| `contacto` | Obligatorio («El contacto es obligatorio», `400`), máximo 150 caracteres, texto libre con un **teléfono (mínimo 7 dígitos) o un correo válido**, o ambos; sin símbolos raros |
+| `rol` | Opcional, `mesero` por defecto (`WAITER` también se entiende); cualquier otro da `400` |
+| Repetidos | No puede haber dos personas **activas** con el mismo rol, nombre y contacto (sin importar mayúsculas): `409`. Con otro contacto sí se puede |
+| Otros campos | `id`, `activo`, `creado_en` enviados por el cliente se ignoran |
+
+Las reglas están en [`src/config/reglasRegistroPersonal.js`](src/config/reglasRegistroPersonal.js) y se prueban con `npm test`. La tabla es nueva (solo agrega): ver `docs/sql-hu-26-personal.sql`.
 
 #### `POST /api/eventos/calcular-compras` (HU-47 · RF-55)
 

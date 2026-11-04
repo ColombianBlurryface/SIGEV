@@ -45,6 +45,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-22 | **Calcular los cocineros** de cada evento con una sola regla general: 2 cocineros por cada 25 asistentes, con los grupos de 25 redondeados hacia arriba (100 asistentes → 8; 320 → 12,8 → 13 grupos → 26; 51 → 6). **No depende del tipo de evento ni de la comida** (cena, buffet, cóctel…): aplica igual a todos, también a los buffet de más de 300 asistentes. Se muestra en el detalle con la cuenta explicada, en la vista previa (cambia al escribir los asistentes) y en el resumen del registro. | Nuevo evento · paso 1 y 3, detalle del evento |
 | HU-46 | **Registrar la receta de cada plato:** los ingredientes de un plato del catálogo (alimento), cada uno con la **cantidad que consume una persona** (mayor a 0), su **unidad** (gramos, kilos, libras o arrobas, únicas permitidas) y **cómo se compra** en el mercado (kilo, libra o arroba). La receta se edita y se guarda completa; el sistema trae tres platos de ejemplo marcados como **datos de prueba**: Arroz verde con almendras (arroz 80 g / kilo, almendras 15 g / libra, cilantro 10 g / libra), Pechuga a la plancha (pechuga de pollo 200 g / kilo) y Papa salada (papa 150 g / arroba). Es la base para que una historia futura calcule las compras. | Catálogo · pestaña «Recetas de Platos» |
 | HU-47 | **Calcular los ingredientes a comprar** de un evento: con los asistentes y las recetas de los platos, la cantidad de cada ingrediente **en la unidad en que se compra** (kilo, libra o arroba), con el **10 % de margen** y **redondeada hacia arriba**. Si varios platos usan el mismo ingrediente se muestra **un solo total**. Ejemplos: 100 asistentes × 200 g de pechuga → 22 kilos; 50 asistentes con cilantro de dos platos (10 g y 5 g) → 825 g → 2 libras; 200 asistentes × 150 g de papa → 33.000 g → 3 arrobas. Se ve en el detalle del evento y en el resumen del registro (antes de guardar), y avisa de los platos que aún no tienen receta. | Detalle del evento · Nuevo evento (paso 3) |
+| HU-26 | **Registrar meseros:** nombre completo y datos de contacto (un teléfono, un correo o ambos). El nombre solo lleva letras y el contacto debe traer de verdad un teléfono (mínimo 7 dígitos) o un correo; no se repite un mesero activo con el mismo nombre y contacto. Los meseros registrados aparecen en un listado con buscador. Es la base de los eventos con personal asignado (HU-28). | Personal |
 
 Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
 
@@ -118,6 +119,10 @@ Aquí se mantienen los productos que se ofrecen al registrar un evento. Cada uno
 
 ![Receta de un plato en el catálogo](docs/imagenes/recetas-platos.png)
 
+### Personal (HU-26)
+
+En **Personal** se registran los meseros con su nombre completo y sus datos de contacto, y se ven en un listado con buscador. El nombre solo admite letras (con tildes, ñ, apóstrofos, puntos y guiones); el contacto es de texto libre pero debe incluir un teléfono (mínimo 7 dígitos) o un correo, o ambos («carlos.r@email.com / +57 300 123 4567»). Los errores se avisan junto al campo mientras se escribe, y no se puede registrar dos veces el mismo mesero activo.
+
 ### Inventario (HU-08 y HU-09)
 
 Registro de elementos y adquisiciones, tabla con búsqueda y filtros por categoría, y el historial de movimientos (registros, adquisiciones y ajustes).
@@ -184,7 +189,7 @@ SIGEV/
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
 │   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-├── qa/                      Pruebas automáticas (172 de regresión y 194 casos límite)
+├── qa/                      Pruebas automáticas (188 de regresión y 203 casos límite)
 ├── docs/
 │   ├── imagenes/            Capturas usadas en la documentación
 │   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
@@ -252,7 +257,7 @@ Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del m
 
 ## Pruebas y entorno de QA
 
-El proyecto trae pruebas automáticas en [`qa/`](qa) (172 pruebas de los checklists y 194 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+El proyecto trae pruebas automáticas en [`qa/`](qa) (188 pruebas de los checklists y 203 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
 
 - [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
 - [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.
