@@ -1732,6 +1732,93 @@ await t('Pantalla: un mesero repetido muestra el aviso del servidor, y el buscad
 })
 
 
+// ============ HU-27 · Eliminar meseros (RF-34) ============
+grupo = 'HU-27 Eliminar meseros (RF-34)'
+const eliminarMesero = (id) => fetch(`${API}/personal/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${TOKEN}` } })
+const registrar = async (nombre) => (await nuevoMesero(nombre)).cuerpo
+
+await t('Escenario 1: eliminar un mesero activo da 204 sin cuerpo y deja de aparecer en el listado', async () => {
+  const m = await registrar(`Eliminar Uno ${LETRAS}`); const otro = await registrar(`Se Queda ${LETRAS}`)
+  const r = await eliminarMesero(m.id); igual(r.status, 204, 'estado:'); igual((await r.text()), '', 'cuerpo:')
+  const lista = await listaMeseros()
+  cierto(!lista.some((x) => x.id === m.id), 'sigue en el listado'); cierto(lista.some((x) => x.id === otro.id), 'se eliminó también a otro mesero')
+})
+await t('Escenario 2: un mesero que no existe (999999999) o ya fue eliminado da 404 con el mensaje «no existe o ya fue eliminado»', async () => {
+  const r = await eliminarMesero(999999999); igual(r.status, 404); const c = await r.json()
+  cierto(/El mesero con ID 999999999 no existe o ya fue eliminado/.test(c.detalle), c.detalle)
+  const m = await registrar(`Eliminar Dos ${LETRAS}`); igual((await eliminarMesero(m.id)).status, 204)
+  const otra = await eliminarMesero(m.id); igual(otra.status, 404, 'segunda eliminación:'); cierto(/ya fue eliminado/.test((await otra.json()).detalle), 'mensaje de la segunda eliminación')
+})
+await t('Escenario 3: no existe forma de modificar un mesero: PUT y PATCH sobre /personal/:id dan 405 (Allow: DELETE) y no cambian nada', async () => {
+  const m = await registrar(`No Modificar ${LETRAS}`)
+  for (const metodo of ['PUT', 'PATCH']) {
+    const r = await fetch(`${API}/personal/${m.id}`, { method: metodo, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` }, body: JSON.stringify({ nombre_completo: 'Otro Nombre', contacto: '3009999999' }) })
+    igual(r.status, 405, `${metodo}:`); igual(r.headers.get('allow'), 'DELETE', `${metodo} Allow:`); cierto(/elimínalo y regístralo de nuevo/.test((await r.json()).detalle), 'mensaje')
+  }
+  for (const metodo of ['POST', 'GET']) igual((await fetch(`${API}/personal/${m.id}`, { method: metodo, headers: { Authorization: `Bearer ${TOKEN}` } })).status, 405, `${metodo} sobre /:id:`)
+  const igualQueAntes = (await listaMeseros()).find((x) => x.id === m.id)
+  igual(igualQueAntes.nombre_completo, `No Modificar ${LETRAS}`, 'el nombre cambió:'); igual(igualQueAntes.contacto, m.contacto, 'el contacto cambió:')
+})
+await t('Un id inválido (texto, 0, negativo, decimal, gigante) da 400, nunca 500; sin sesión da 401', async () => {
+  for (const id of ['abc', '0', '-1', '1.5', '1e21', '99999999999', 'stf-001']) igual((await eliminarMesero(id)).status, 400, `id ${id}:`)
+  igual((await fetch(`${API}/personal/1`, { method: 'DELETE' })).status, 401, 'sin sesión:')
+})
+await t('Borrado lógico: un mesero eliminado se puede volver a registrar con los mismos datos (eliminar y volver a crear es el flujo de corrección)', async () => {
+  const contacto = tel(), nombre = `Corregir Datos ${LETRAS}`
+  const a = (await nuevoMesero(nombre, contacto)).cuerpo; igual((await eliminarMesero(a.id)).status, 204)
+  const b = await nuevoMesero(nombre, contacto); igual(b.estado, 201, 'volver a registrar:'); cierto(b.cuerpo.id !== a.id, 'reutilizó el id')
+  igual((await listaMeseros()).filter((x) => x.contacto === contacto).length, 1, 'copias activas:')
+})
+await t('10 eliminaciones simultáneas del mismo mesero: una da 204, las otras 404, ninguna 500', async () => {
+  const m = await registrar(`Eliminar Junto ${LETRAS}`)
+  const rs = await Promise.all(Array.from({ length: 10 }, () => eliminarMesero(m.id)))
+  const estados = rs.map((r) => r.status)
+  igual(estados.filter((e) => e === 204).length, 1, '204:'); igual(estados.filter((e) => e === 404).length, 9, '404:'); igual(estados.filter((e) => e >= 500).length, 0, '500:')
+})
+
+// --- Pantalla: eliminar
+const filaMesero = (nombre) => page.getByRole('list', { name: 'Meseros registrados' }).locator('li', { hasText: nombre })
+await t('Pantalla: cada mesero tiene «Eliminar» pero ninguna opción de editar; «Cancelar» no elimina nada', async () => {
+  const nombre = `Pantalla Eliminar ${LETRAS}`; await nuevoMesero(nombre)
+  await abrirPersonal()
+  const fila = filaMesero(nombre); await fila.waitFor()
+  igual(await fila.getByRole('button', { name: `Eliminar a ${nombre}` }).count(), 1, 'botón eliminar:')
+  // (el nombre de un mesero puede contener esas palabras: se miran solo los botones que EMPIEZAN con ellas)
+  igual(await page.getByRole('button', { name: /^(editar|modificar|actualizar)/i }).count(), 0, 'hay un botón para editar:')
+  igual(await page.getByRole('link', { name: /^(editar|modificar)/i }).count(), 0, 'hay un enlace para editar:')
+  await fila.getByRole('button', { name: `Eliminar a ${nombre}` }).click()
+  await page.getByText(`¿Eliminar a ${nombre}?`).waitFor()
+  await page.getByRole('button', { name: 'Cancelar' }).click()
+  igual(await page.getByText(`¿Eliminar a ${nombre}?`).count(), 0, 'la confirmación sigue visible:')
+  cierto((await listaMeseros()).some((m) => m.nombre_completo === nombre), 'se eliminó al cancelar')
+})
+await t('Pantalla: confirmar con «Sí, eliminar» quita al mesero del listado, avisa y actualiza el conteo', async () => {
+  const nombre = `Pantalla Eliminar ${LETRAS}`
+  const antes = Number((await page.locator('header p').innerText()).match(/\d+/)[0])
+  const fila = filaMesero(nombre); await fila.getByRole('button', { name: `Eliminar a ${nombre}` }).click()
+  await page.getByRole('button', { name: 'Sí, eliminar' }).click()
+  await page.waitForSelector(`text=«${nombre}» fue eliminado y ya no aparece en el listado`)
+  igual(await filaMesero(nombre).count(), 0, 'sigue en el listado:')
+  cierto(!(await listaMeseros()).some((m) => m.nombre_completo === nombre), 'sigue activo en el servidor')
+  await page.waitForFunction((n) => Number(document.querySelector('header p').innerText.match(/\d+/)[0]) === n, antes - 1)
+})
+await t('Pantalla: si otra persona ya lo eliminó, avisa que ya no existe y actualiza el listado (sin error)', async () => {
+  const m = await registrar(`Eliminado Antes ${LETRAS}`); await abrirPersonal()
+  const fila = filaMesero(m.nombre_completo); await fila.waitFor()
+  igual((await eliminarMesero(m.id)).status, 204) // otra sesión lo elimina primero
+  await fila.getByRole('button', { name: `Eliminar a ${m.nombre_completo}` }).click(); await page.getByRole('button', { name: 'Sí, eliminar' }).click()
+  await page.waitForSelector(`text=«${m.nombre_completo}» ya no existe o ya había sido eliminado`)
+  igual(await filaMesero(m.nombre_completo).count(), 0, 'sigue en el listado:')
+})
+await t('Pantalla: eliminar y volver a registrar con los mismos datos funciona (así se corrige un error)', async () => {
+  const nombre = `Corregir Pantalla ${LETRAS}`, contacto = tel(); await nuevoMesero(nombre, contacto); await abrirPersonal()
+  await filaMesero(nombre).getByRole('button', { name: `Eliminar a ${nombre}` }).click(); await page.getByRole('button', { name: 'Sí, eliminar' }).click()
+  await page.waitForSelector(`text=«${nombre}» fue eliminado`)
+  await page.getByLabel('Nombre completo').fill(nombre); await page.getByLabel('Datos de contacto').fill(contacto); await page.getByRole('button', { name: 'Registrar mesero' }).click()
+  await page.waitForSelector(`text=«${nombre}» quedó registrado como mesero`); await filaMesero(nombre).waitFor()
+})
+
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {

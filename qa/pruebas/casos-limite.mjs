@@ -190,7 +190,8 @@ await caso('30 registros simultáneos en la misma fecha: entran 3 como máximo',
   // Una fecha sin ningún evento todavía (si ya hubiera uno de otra corrida, entrarían menos de 3 y la prueba confundiría)
   const ocupadas = new Set((await call('/eventos')).c.map((e) => String(e.fecha_evento).slice(0, 10)))
   let f = fechaLibre()
-  while (ocupadas.has(f)) f = fechaLibre()
+  for (let i = 0; i < 30 && ocupadas.has(f); i++) f = fechaLibre()
+  if (ocupadas.has(f)) return { s: 'SIN FECHA LIBRE', nota: 'la base de pruebas está llena de eventos: recréala (schema + seeds + catálogo + usuario local)' }
   const rs = await Promise.all(Array.from({ length: 30 }, () => call('/eventos', { method: 'POST', body: ev({ fecha_evento: f }) })))
   const ok = rs.filter((r) => r.s === 201).length
   return { s: ok, nota: `entraron ${ok}` }
@@ -409,6 +410,33 @@ await caso('Mesero: el filtro ?rol= acepta mesero y WAITER, rechaza lo demás', 
   const r = await Promise.all(['mesero', 'WAITER'].map(async (x) => (await call('/personal?rol=' + x)).s))
   const malos = await Promise.all(['cocinero', 'x', '1'].map(async (x) => (await call('/personal?rol=' + x)).s))
   return { s: r.every((x) => x === 200) && malos.every((x) => x === 400) ? 200 : `${r}/${malos}`, nota: `${r} / ${malos}` }
+})
+
+console.log('\n== HU-27: eliminar meseros (RF-34) · entradas raras')
+const delP = (id, extra = {}) => fetch(`${API}/personal/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${TOKEN_C}` }, ...extra })
+const TOKEN_C = (await call('/auth/login', { method: 'POST', body: { usuario: USUARIO, password: clave } })).c.token
+const nuevoM = async () => (await call('/personal', { method: 'POST', body: { nombre_completo: `Borrar Límite ${LETRAS_C}`, contacto: telC() } })).c
+await caso('Eliminar un mesero válido (204)', [204], async () => ({ s: (await delP((await nuevoM()).id)).status }))
+await caso('Eliminar con id de texto, 0, negativo, decimal, notación científica o gigante', [400], async () => {
+  const r = await Promise.all(['abc', '0', '-1', '1.5', '1e21', '2147483648', '99999999999999999999', 'stf-001', '%20', '1;DROP'].map(async (id) => (await delP(id)).status))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Eliminar el id más grande permitido que no existe (404, no 500)', [404], async () => ({ s: (await delP(2147483647)).status }))
+await caso('Eliminar dos veces el mismo mesero: 204 y luego 404', [204], async () => {
+  const m = await nuevoM(); const a = (await delP(m.id)).status; const b = (await delP(m.id)).status
+  return { s: a === 204 && b === 404 ? 204 : `${a}/${b}`, nota: `${a}/${b}` }
+})
+await caso('Modificar un mesero con PUT, PATCH, POST o GET sobre /personal/:id da 405 (nunca 200 ni 500)', [405], async () => {
+  const m = await nuevoM()
+  const r = await Promise.all(['PUT', 'PATCH', 'POST', 'GET'].map(async (metodo) => (await fetch(`${API}/personal/${m.id}`, { method: metodo, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN_C}` }, body: metodo === 'GET' ? undefined : JSON.stringify({ nombre_completo: 'Cambiado', contacto: '3000000000' }) })).status))
+  const intacto = (await call('/personal')).c.find((x) => x.id === m.id)?.nombre_completo === m.nombre_completo
+  return { s: r.every((x) => x === 405) && intacto ? 405 : r.join('/') + (intacto ? '' : ' cambió'), nota: r.join('/') }
+})
+await caso('Eliminar con cuerpo en la petición lo ignora (204)', [204], async () => ({ s: (await delP((await nuevoM()).id, { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN_C}` }, body: JSON.stringify({ activo: true, nombre_completo: 'x' }) })).status }))
+await caso('Eliminar a un mesero no toca a los demás (el listado conserva a los otros)', [true], async () => {
+  const a = await nuevoM(); const b = await nuevoM(); await delP(a.id)
+  const lista = (await call('/personal')).c
+  return { s: lista.some((x) => x.id === b.id) && !lista.some((x) => x.id === a.id) }
 })
 
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)

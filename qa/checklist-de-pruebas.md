@@ -219,6 +219,14 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **Repetidos:** el mismo mesero activo (mismo nombre y contacto, sin importar mayúsculas) se rechaza con «Ya hay un mesero activo con ese nombre y ese contacto»; el mismo nombre con otro contacto sí se puede.
 - [ ] 🤖👀 El **buscador** filtra por nombre o contacto y avisa cuando ninguno coincide. Sin sesión, la API responde 401.
 
+
+### HU-27 · Eliminar meseros (RF-34)
+
+- [ ] 🤖👀 **Escenario 1:** en «Personal», cada mesero tiene un botón de papelera («Eliminar a …»). Al pulsarlo pide confirmación en la misma fila; «Cancelar» no elimina nada y «Sí, eliminar» lo quita del listado, avisa («… fue eliminado y ya no aparece en el listado») y actualiza el conteo. La API responde **204** sin cuerpo.
+- [ ] 🤖 **Escenario 2:** eliminar un mesero que no existe (o que ya se eliminó) da **404** con «El mesero con ID … no existe o ya fue eliminado». En pantalla, si otra persona ya lo eliminó, avisa «ya no existe o ya había sido eliminado» y actualiza el listado, sin error.
+- [ ] 🤖👀 **Escenario 3 · no se modifica:** no hay ningún botón o enlace para editar a un mesero. Por la API, `PUT` y `PATCH` sobre `/api/personal/:id` dan **405** (cabecera `Allow: DELETE`) y no cambian nada.
+- [ ] 🤖 **Borrado lógico:** el eliminado deja de listarse pero se puede volver a registrar con los mismos datos (así se corrige un error). Un id inválido (`abc`, `0`, `-1`, `1.5`, gigante) da 400; sin sesión, 401. 10 eliminaciones simultáneas del mismo mesero: un 204 y nueve 404, ninguna 500.
+
 ---
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)
