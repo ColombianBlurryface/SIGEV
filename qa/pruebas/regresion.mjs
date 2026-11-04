@@ -987,14 +987,33 @@ await t('COR-06 pantalla: 4 DJs y 6 horas se rechazan; el tope de DJs cuenta tod
   await page.waitForSelector('text=DJ largo')
   await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ otro'); await page.fill('#servicio-cantidad', '2')
   await page.waitForSelector('text=solo puedes agregar 1 más')
-  await page.fill('#servicio-cantidad', '1'); await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.fill('#servicio-cantidad', '1'); await page.fill('#servicio-horas', '3'); await page.getByRole('button', { name: 'Agregar', exact: true }).click()
   await page.waitForSelector('text=DJ otro')
   // ya están los 3: un DJ más se avisa de inmediato
   await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ cuarto'); await page.fill('#servicio-cantidad', '1')
   await page.waitForSelector('text=Ya agregaste el máximo de «DJ» para un evento (3)')
-  // las horas que propone el formulario no pasan de 5 aunque el evento dure 8
+})
+await t('Servicios: el campo de horas NO se rellena solo con la duración del evento; hay que escribirlas, y no deja pasar de la duración ni de 5', async () => {
+  // el evento dura 8 horas: ni la duración ni 5 se proponen por su cuenta
   await page.selectOption('#servicio-tipo', 'sonido')
-  igual(await page.inputValue('#servicio-horas'), '5', 'horas por defecto:')
+  igual(await page.inputValue('#servicio-horas'), '', 'horas al elegir el tipo:')
+  await page.fill('#servicio-descripcion', 'Sonido sin horas'); await page.fill('#servicio-cantidad', '1')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.waitForSelector('text=Indica las horas del servicio')
+  igual(await page.getByText('Sonido sin horas').count() > 0 && (await page.getByRole('list', { name: 'Servicios agregados' }).innerText()).includes('Sonido sin horas'), false, 'se agregó sin horas:')
+  igual(await page.inputValue('#servicio-horas'), '', 'horas tras el intento:')
+  await page.fill('#servicio-horas', '3'); await page.getByRole('button', { name: 'Agregar', exact: true }).click(); await page.waitForSelector('text=Sonido sin horas')
+  // tras agregar, el campo vuelve a quedar vacío
+  igual(await page.inputValue('#servicio-horas'), '', 'horas tras agregar:')
+})
+await t('Servicios: en un evento de 3 horas no deja escribir más de 3 (el campo queda vacío y se avisa)', async () => {
+  await page.getByRole('button', { name: 'Atrás' }).click(); await page.fill('#duracion', '3'); await aRequerimientos(); await pestana('Servicios')
+  igual(await page.inputValue('#servicio-horas'), '', 'horas vacías:')
+  await page.selectOption('#servicio-tipo', 'iluminacion'); await page.fill('#servicio-descripcion', 'Luces'); await page.fill('#servicio-cantidad', '1')
+  await page.fill('#servicio-horas', '4'); await page.waitForSelector('text=Las horas no pueden superar la duración del evento (3 h)')
+  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  igual((await page.getByRole('list', { name: 'Servicios agregados' }).innerText()).includes('Luces'), false, 'se agregó con 4 h en un evento de 3 h:')
+  await page.fill('#servicio-horas', '3'); igual(await page.getByText('no pueden superar la duración').count(), 0, '3 h sí es válido:')
 })
 
 
