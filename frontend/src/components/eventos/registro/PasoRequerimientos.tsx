@@ -1,6 +1,6 @@
 /**
  * Paso 2 del registro de eventos: pestañas para agregar alimentos (HU-02), bebidas (HU-03),
- * mobiliario (HU-04, relacionado con el inventario en HU-12) y servicios adicionales (HU-05),
+ * mobiliario (HU-04, relacionado con el inventario en HU-12) y servicios adicionales (HU-05, HU-48),
  * con un resumen lateral de costos.
  */
 import { useState } from 'react'
@@ -49,6 +49,12 @@ export function PasoRequerimientos({ asistentes, duracionHoras, requerimientos, 
     servicios: requerimientos.servicios.length,
   }
 
+  // RN-18 / HU-48: Solo se validan horas sobre servicios con modalidad 'por_hora'
+  const serviciosPorHora = requerimientos.servicios.filter(
+    (s) => s.tipo_cobro === 'por_hora' && typeof s.horas === 'number'
+  )
+  const serviciosExcedidos = serviciosFueraDeDuracion(serviciosPorHora, duracionHoras)
+
   const agregarAlimento = (alimento: AlimentoAgregado) =>
     onCambio({ ...requerimientos, alimentos: [...requerimientos.alimentos, alimento] })
   const quitarAlimento = (productoId: number) =>
@@ -76,11 +82,11 @@ export function PasoRequerimientos({ asistentes, duracionHoras, requerimientos, 
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex min-w-0 flex-col gap-4">
-        {serviciosFueraDeDuracion(requerimientos.servicios, duracionHoras).length > 0 && (
+        {serviciosExcedidos.length > 0 && (
           <Alert variant="warning">
             <strong>Hay servicios que duran más que el evento ({formatearNumero(duracionHoras)} h).</strong>{' '}
-            {serviciosFueraDeDuracion(requerimientos.servicios, duracionHoras)
-              .map((s) => `${etiquetaServicio(s.tipo)} (${describirHoras(s.horas)})`)
+            {serviciosExcedidos
+              .map((s) => `${etiquetaServicio(s.tipo)} (${describirHoras(s.horas ?? 0)})`)
               .join(', ')}
             . Corrige sus horas o quítalos en la pestaña Servicios adicionales para poder continuar.
           </Alert>

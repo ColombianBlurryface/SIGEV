@@ -51,10 +51,12 @@ export function NuevoEventoPage() {
   const [intentoAvanzar, setIntentoAvanzar] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [errorServidor, setErrorServidor] = useState<string | null>(null)
-// Cuenta cuántos eventos hay ya registrados en esa misma fecha
+
+  // Cuenta cuántos eventos hay ya registrados en esa misma fecha
   const eventosEnFecha = valores.fecha
     ? eventos.filter((e) => e.fecha_evento.slice(0, 10) === valores.fecha && e.estado !== 'cancelado').length
     : 0
+
   // Los errores del paso 1 solo se muestran después del primer intento de avanzar,
   // para no llenar de rojo el formulario mientras el usuario apenas empieza a escribir.
   const errores: ErroresEvento = intentoAvanzar
@@ -62,15 +64,20 @@ export function NuevoEventoPage() {
     : eventosEnFecha >= MAX_EVENTOS_POR_FECHA
       ? { fecha: `Ya no se puede registrar más. Esta fecha ya tiene el límite máximo de ${MAX_EVENTOS_POR_FECHA} eventos programados.` }
       : {}
-  // RN-18: las horas de cada servicio no pueden superar la duración del evento. Si se acorta el evento después de
-  // agregar servicios, el sistema avisa (paso 1 y paso 2) y no deja continuar hasta corregirlo.
+
+  // RN-18 / HU-48: Validar horas ÚNICAMENTE en servicios cuya modalidad sea 'por_hora'.
+  // Los servicios de tarifa fija ('por_servicio') no tienen horas y no deben evaluarse aquí.
   const duracionNumero = valores.duracion.trim() === '' ? Number.NaN : Number(valores.duracion)
-  const serviciosPasados = serviciosFueraDeDuracion(requerimientos.servicios, duracionNumero)
-  const descripcionPasados = serviciosPasados.map((s) => `${etiquetaServicio(s.tipo)} (${describirHoras(s.horas)})`).join(', ')
+  const serviciosPorHora = requerimientos.servicios.filter((s) => s.tipo_cobro === 'por_hora' && typeof s.horas === 'number')
+  const serviciosPasados = serviciosFueraDeDuracion(serviciosPorHora, duracionNumero)
+  const descripcionPasados = serviciosPasados
+    .map((s) => `${etiquetaServicio(s.tipo)} (${describirHoras(s.horas ?? 0)})`)
+    .join(', ')
   const avisoDuracion =
     serviciosPasados.length > 0
       ? `Con ${formatearNumero(duracionNumero)} h de duración, estos servicios ya no caben: ${descripcionPasados}. Corrige sus horas en el paso 2.`
       : null
+
   const asistentes = validarAsistentes(valores.asistentes)
   const asistentesFueraDeRango = asistentes.estado === 'bajo' || asistentes.estado === 'alto'
 
@@ -88,7 +95,7 @@ export function NuevoEventoPage() {
     if (Object.keys(validarEvento(valores, eventosEnFecha)).length === 0) irAPaso(2)
   }
 
-  // Pasa al resumen solo si todos los servicios caben en la duración del evento (RN-18)
+  // Pasa al resumen solo si los servicios por hora caben en la duración del evento (RN-18)
   function irAlResumen() {
     if (serviciosPasados.length > 0) {
       setErrorServidor(
@@ -100,7 +107,7 @@ export function NuevoEventoPage() {
   }
 
   // Envía todo el evento en una sola petición: datos, productos (alimentos y bebidas)
-  // y requerimientos adicionales (mobiliario y servicios). El backend calcula y guarda todo junto.
+  // y requerimientos adicionales (mobiliario y servicios con modalidad y tarifa HU-48).
   async function guardar() {
     setEnviando(true)
     setErrorServidor(null)
@@ -121,7 +128,6 @@ export function NuevoEventoPage() {
           ...requerimientos.bebidas.map((b) => ({
             producto_id: b.producto.id,
             porcion_por_persona: b.porcion,
-            // El valor unitario puede haberse escrito en el evento (QA-04); queda guardado con el costo
             precio_unitario: Number(b.producto.precio_unitario),
           })),
         ],
@@ -131,13 +137,15 @@ export function NuevoEventoPage() {
             descripcion: m.elemento,
             cantidad: m.cantidad,
             notas: m.referencia || undefined,
-            producto_id: m.productoId ?? undefined, // HU-12: elemento del inventario (si no hay, va a alquiler)
+            producto_id: m.productoId ?? undefined,
           })),
           ...requerimientos.servicios.map((s) => ({
             tipo: s.tipo,
             descripcion: s.descripcion,
-            cantidad: s.cantidad,
-            horas: s.horas,
+            tipo_cobro: s.tipo_cobro || 'por_servicio',
+            valor_unitario: Number(s.valor_unitario) || 0,
+            cantidad: Number(s.cantidad || 1),
+            horas: s.tipo_cobro === 'por_hora' ? (s.horas !== undefined ? Number(s.horas) : null) : null,
             notas: s.notas || undefined,
           })),
         ],

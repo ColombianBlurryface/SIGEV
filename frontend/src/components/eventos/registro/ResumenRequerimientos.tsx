@@ -17,6 +17,18 @@ interface ResumenRequerimientosProps {
 
 export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenRequerimientosProps) {
   const totales = calcularTotales(requerimientos, asistentes)
+  const subtotalServicios = requerimientos.servicios.reduce((acumulado, s) => {
+    const tarifa = Number(s.valor_unitario) || 0
+    const costo =
+      s.costo_total != null
+        ? Number(s.costo_total)
+        : s.tipo_cobro === 'por_hora'
+          ? tarifa * (Number(s.horas) || 0)
+          : tarifa * (Number(s.cantidad) || 1)
+    return acumulado + costo
+  }, 0)
+  const totalConsolidado = totales.total + subtotalServicios
+
   const unidadesMobiliario = requerimientos.mobiliario.reduce((suma, m) => suma + m.cantidad, 0)
   const unidadesAlquilar = totalAlquilar(requerimientos.mobiliario.map((m) => repartirMobiliario(m.cantidad, m.disponible)))
   const productos = (n: number) => `${n} ${n === 1 ? 'producto' : 'productos'}`
@@ -51,7 +63,7 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
       clave: 'servicios',
       config: CATEGORIAS.servicios,
       detalle: `${requerimientos.servicios.length} ${requerimientos.servicios.length === 1 ? 'servicio' : 'servicios'}`,
-      valor: 'Aparte',
+      valor: formatearMoneda(subtotalServicios),
     },
   ]
 
@@ -80,8 +92,8 @@ export function ResumenRequerimientos({ requerimientos, asistentes }: ResumenReq
       </ul>
       <div className="flex flex-col gap-1 border-t border-border pt-3.5">
         <span className="text-[13px] text-subtle">Total estimado</span>
-        <span className="font-display text-3xl font-extrabold tracking-tight">{formatearMoneda(totales.total)}</span>
-        <span className="text-[12.5px] leading-relaxed text-muted-foreground">Alimentos y bebidas. El mobiliario y los servicios se cotizan aparte.</span>
+        <span className="font-display text-3xl font-extrabold tracking-tight">{formatearMoneda(totalConsolidado)}</span>
+        <span className="text-[12.5px] leading-relaxed text-muted-foreground">Alimentos, bebidas y servicios. El mobiliario se cotiza aparte.</span>
       </div>
     </Card>
   )
