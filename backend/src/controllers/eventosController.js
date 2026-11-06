@@ -20,9 +20,14 @@ const {
 // Redondea hacia arriba evitando errores de precisión decimal de JavaScript.
 const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
 
-// RN-03 (P-05): con más asistentes que este umbral se avisa que probablemente haya que alquilar mobiliario.
+// La hora de inicio llega de la base como «18:00:00»; se entrega como «18:00» (o null si el evento no la tiene)
+const horaCorta = (hora) => (hora ? String(hora).slice(0, 5) : null);
+
+// RN-03 (P-05): con más asistentes que este umbral se avisa que probablemente haya que alquilar
+// mobiliario. No es un número fijo: sale de MAX_OWNED_CAPACITY_THRESHOLD (ver config/parametros.js).
 const { UMBRAL_ALQUILER } = require('../config/parametros');
 const { comprasDeEvento } = require('./comprasController');
+const { armarAsignacion } = require('./asignacionMeserosController');
 
 /**
  * POST /api/eventos
@@ -38,6 +43,7 @@ const crearEvento = async (req, res) => {
       tipo_evento,
       duracion_horas,
       asistentes,
+      hora_inicio,
       observaciones_generales,
       productos = [],           // IDs de alimentos o bebidas predeterminadas
       servicios_adicionales = [] // DJ, música, sonido, requerimientos de mobiliario
@@ -65,8 +71,8 @@ const crearEvento = async (req, res) => {
 
     // 1. Insertar el evento base (RF-01, RF-02)
     const queryEvento = `
-      INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales, hora_inicio)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *;
     `;
     const resEvento = await client.query(queryEvento, [
@@ -75,7 +81,8 @@ const crearEvento = async (req, res) => {
       tipo_evento,
       duracion_horas,
       asistentes,
-      (typeof observaciones_generales === 'string' && observaciones_generales.trim()) || null
+      (typeof observaciones_generales === 'string' && observaciones_generales.trim()) || null,
+      hora_inicio || null
     ]);
     const nuevoEvento = resEvento.rows[0];
 
@@ -299,7 +306,7 @@ const crearEvento = async (req, res) => {
 
     res.status(201).json({
       mensaje: 'Evento registrado con insumos calculados y servicios adicionales exitosamente',
-      evento: nuevoEvento
+      evento: { ...nuevoEvento, hora_inicio: horaCorta(nuevoEvento.hora_inicio) }
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -326,6 +333,7 @@ const listarEventos = async (req, res) => {
         asistentes,
         estado,
         observaciones_generales,
+        to_char(hora_inicio, 'HH24:MI') AS hora_inicio,
         creado_en,
         CASE 
           WHEN asistentes > 300 THEN true 
@@ -441,6 +449,7 @@ const obtenerDetalleEvento = async (req, res) => {
 
     res.json({
       ...resEvento.rows[0],
+      hora_inicio: horaCorta(resEvento.rows[0].hora_inicio),
       es_modalidad_buffet: asistentes > 300,
       aviso_alquiler: umbralSuperado,
       estado_alquiler: {
@@ -469,7 +478,10 @@ const obtenerDetalleEvento = async (req, res) => {
         cocineros_por_grupo: COCINEROS_POR_GRUPO,
         relacion_cocineros: `${COCINEROS_POR_GRUPO} por cada ${ASISTENTES_POR_GRUPO_COCINA} asistentes`
       },
-      compras_ingredientes: await comprasDeEvento(pool, id, asistentes)
+      // Ingredientes a comprar (HU-47 · RF-55, RN-09, RN-20): salen de las recetas de los platos y los asistentes
+      compras_ingredientes: await comprasDeEvento(pool, id, asistentes),
+      // Meseros asignados al evento y cuántos faltan o sobran frente a los requeridos (HU-28 · RF-35)
+      asignacion_meseros: await armarAsignacion(pool, id, asistentes)
     });
   } catch (error) {
     console.error('Error al obtener detalle del evento:', error);

@@ -91,7 +91,7 @@ Comprueba que responde en <http://localhost:3000/api/health>.
 npm test
 ```
 
-Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros (HU-21), los cocineros (HU-22), las reglas de las recetas de platos (HU-46) y el cálculo de ingredientes a comprar (HU-47). Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
+Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros (HU-21), los cocineros (HU-22), las reglas de las recetas de platos (HU-46), el cálculo de ingredientes a comprar (HU-47) y el registro de meseros (HU-26). Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
 
 ---
 
@@ -179,6 +179,12 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | POST | `/catalogo` | Crear un producto del catálogo |
 | PUT | `/catalogo/:id` | Editar un producto del catálogo |
 | PATCH | `/catalogo/:id/estado` | Activar o desactivar un producto |
+| POST | `/personal` | Registrar un mesero: `{ nombre_completo, contacto, rol? }` (HU-26) |
+| GET | `/personal` | Listar el personal activo, ordenado por nombre; filtro opcional `?rol=mesero` (HU-26) |
+| DELETE | `/personal/:id` | Eliminar un mesero (borrado lógico, `204`; HU-27) |
+| GET | `/eventos/:id/meseros` | Meseros asignados a un evento y cuántos faltan frente a los requeridos (HU-28) |
+| GET | `/eventos/:id/meseros/disponibles` | Meseros registrados marcando los asignados y los ocupados en otro evento que se cruza (HU-28) |
+| PUT / POST | `/eventos/:id/meseros` | Asignar meseros a un evento: sincroniza la lista completa `{ personal_ids: [..] }` (HU-28) |
 | GET | `/catalogo/recetas` | Resumen: cuántos ingredientes tiene la receta de cada plato (HU-46) |
 | GET | `/catalogo/ingredientes` | El maestro de ingredientes con su unidad de compra (HU-46) |
 | GET | `/catalogo/:id/receta` | La receta de un plato (HU-46) |
@@ -310,6 +316,56 @@ Respuesta `200` (la misma de `GET`):
 
 `GET /api/catalogo/recetas` devuelve, por plato, `ingredientes` (cantidad de líneas; 0 = sin receta) y `es_dato_prueba`. `GET /api/catalogo/ingredientes` devuelve el maestro (`nombre`, `unidad_compra`, `platos` que lo usan). Las reglas están en [`src/config/reglasReceta.js`](src/config/reglasReceta.js) y se prueban con `npm test`.
 
+#### `POST /api/personal` y `GET /api/personal` (HU-26 · RF-33)
+
+Personal de servicio, hoy solo **meseros**. Una sola tabla `personal` con un `rol` (`mesero` hoy; cocineros u otros perfiles después, sin tablas nuevas) y `activo`, que permite el borrado lógico de la HU-27.
+
+```json
+{ "nombre_completo": "Carlos Rodríguez", "contacto": "carlos.r@email.com / +57 300 123 4567", "rol": "mesero" }
+```
+
+`POST` responde `201` con `{ id, nombre_completo, contacto, rol, activo: true, creado_en }`. `GET` devuelve un arreglo con el personal **activo** (`?rol=mesero` o `WAITER` filtra; otro valor da `400`).
+
+| Regla | Detalle |
+| --- | --- |
+| `nombre_completo` | Obligatorio, de 2 a 150 caracteres, solo letras (tildes, ñ, otros alfabetos), espacios, apóstrofo, punto y guion: sin números, símbolos ni emoji. Los espacios de más se limpian |
+| `contacto` | Obligatorio («El contacto es obligatorio», `400`), máximo 150 caracteres, texto libre con un **teléfono (mínimo 7 dígitos) o un correo válido**, o ambos; sin símbolos raros |
+| `rol` | Opcional, `mesero` por defecto (`WAITER` también se entiende); cualquier otro da `400` |
+| Repetidos | No puede haber dos personas **activas** con el mismo rol, nombre y contacto (sin importar mayúsculas): `409`. Con otro contacto sí se puede |
+| Otros campos | `id`, `activo`, `creado_en` enviados por el cliente se ignoran |
+
+Las reglas están en [`src/config/reglasRegistroPersonal.js`](src/config/reglasRegistroPersonal.js) y se prueban con `npm test`. La tabla es nueva (solo agrega): ver `docs/sql-hu-26-personal.sql`.
+
+**`DELETE /api/personal/:id` (HU-27 · RF-34).** Elimina un mesero con **borrado lógico**: pone `activo = false` (no se borra la fila, para no perder el historial de los eventos donde participe en la HU-28) y deja de aparecer en `GET /api/personal`. Respuestas: `204` sin cuerpo; `404` si el mesero no existe o ya fue eliminado (`«El mesero con ID 123 no existe o ya fue eliminado.»`); `400` si el id no es un entero positivo (`abc`, `0`, `-1`, `1.5`, gigantes); `401` sin sesión. Es una sola sentencia (`UPDATE … WHERE id = $1 AND activo = true`): 10 eliminaciones simultáneas del mismo mesero dan un `204` y nueve `404`, nunca un `500`. Un mesero eliminado se puede volver a registrar con los mismos datos (el índice único solo cuenta a los activos).
+
+**Asignar meseros a un evento (HU-28 · RF-35).** `PUT /api/eventos/:id/meseros` (también `POST`, como lo define la historia) con `{ "personal_ids": [3, 7, 9] }` **sincroniza la lista completa**: los meseros que no vienen se quitan, los nuevos se agregan (sin duplicar) y una lista vacía los quita a todos. `GET /api/eventos/:id/meseros` y el bloque `asignacion_meseros` del detalle del evento devuelven lo mismo:
+
+```json
+{
+  "evento_id": 201, "total_asignados": 4, "meseros_requeridos": 5,
+  "diferencia": -1, "deficit": 1, "excedente": 0, "estado": "deficit",
+  "meseros_asignados": [ { "id": 3, "nombre_completo": "Carlos Rodríguez", "contacto": "3001234567" } ]
+}
+```
+
+`meseros_requeridos` es el de la HU-21 (1 por cada 20 asistentes); `deficit` es lo que falta y `estado` es `completo` o `deficit`: es el valor que usará la HU-25 para las desviaciones (escenario 3: un evento de 100 asistentes requiere 5; con 4 asignados, déficit de 1). `GET /api/eventos/:id/meseros/disponibles` lista todos los meseros activos marcando los `asignado` a este evento y, en `ocupado_en`, el evento y el horario donde están ocupados (los usa el selector de la pantalla).
+
+| Regla | Detalle |
+| --- | --- |
+| Evento | Debe existir (`404`); su id debe ser un entero positivo (`400`); un evento `realizado` o `cancelado` no admite asignaciones (`409`) |
+| `personal_ids` | Lista (puede ir vacía) de ids enteros positivos, **sin repetidos**; también se entiende `staff_ids` |
+| **Tope** | No se pueden asignar **más meseros que los requeridos** (1 por cada 20 asistentes): `400` «Este evento requiere 5 meseros (1 por cada 20 asistentes): no puedes asignar más (enviaste 6)» |
+| Meseros | Todos deben existir, estar **activos** y ser meseros; si no, `400` «Uno o más meseros no son válidos o están inactivos (ids: …)» y **no se cambia nada** (todo o nada) |
+| **Cruces** | Un mesero **no puede estar en dos eventos que se cruzan en el tiempo**: `409` «… ya está asignado a «Boda» el 2027-03-20 (18:00 – 22:00), que se cruza con este evento», con la lista `conflictos`. Dos eventos se cruzan si cada uno empieza antes de que el otro termine; **si uno termina justo cuando empieza el otro, no se cruzan y sí se puede**. Un evento **sin hora de inicio** (anteriores a esta regla) ocupa todo el día; uno cancelado no cuenta; los eventos que cruzan la medianoche (22:00 + 4 h) se tratan bien |
+| Concurrencia | El evento y los meseros de la lista se bloquean durante la sincronización (en orden de id): dos asignaciones a la vez del mismo mesero a eventos que se cruzan dejan entrar solo una (la otra recibe `409`); eliminar un mesero mientras se asigna nunca deja un inactivo asignado |
+| Mesero eliminado después (HU-27) | Su asignación queda como historial, pero deja de contar y de aparecer: el déficit se recalcula solo |
+
+**Hora de inicio del evento.** `POST /api/eventos` acepta `hora_inicio` (`"18:00"`, formato `HH:MM` de `00:00` a `23:59`; cualquier otra cosa da `400`). Es **opcional en la API** (los eventos anteriores no la tienen) pero el registro en pantalla la exige. Se devuelve en la lista y el detalle como `"hora_inicio": "18:00"` (o `null`). Sin ella no se puede saber si dos eventos se cruzan.
+
+Necesita una columna y una tabla nuevas (solo agregan): `docs/sql-hu-28-asignacion-meseros.sql`. Las reglas están en [`src/config/reglasAsignacionPersonal.js`](src/config/reglasAsignacionPersonal.js) y se prueban con `npm test`.
+
+**No hay `PUT` ni `PATCH`** (sobre `/api/personal/:id`). Los datos de un mesero no se modifican (decisión de negocio): cualquier otro método sobre `/api/personal/:id` (`PUT`, `PATCH`, `POST`, `GET`) responde `405 Method Not Allowed` con la cabecera `Allow: DELETE`. Si hubo un error al registrarlo, se elimina y se registra de nuevo. No necesita SQL propio: reutiliza la tabla `personal` de la HU-26.
+
 #### `POST /api/eventos/calcular-compras` (HU-47 · RF-55)
 
 El mismo cálculo de `compras_ingredientes`, pero **antes de guardar el evento** (lo usa el resumen del registro): `{ "asistentes": 100, "productos": [3, 22] }`, donde `productos` son los ids de los platos (alimentos) elegidos. Responde `200` con la misma estructura que `compras_ingredientes`. `asistentes` debe ser un entero de 40 a 600 (RN-01); `productos`, una lista de máximo 100 ids enteros positivos de alimentos del catálogo (los repetidos se cuentan una vez; una bebida o un id inexistente dan `400`). Sin sesión, `401`.
@@ -363,6 +419,7 @@ Respuesta `201`: `{ "mensaje": "...", "evento": { "id": 4, "estado": "planificac
 | Nombre | Texto con contenido, máximo 150 caracteres |
 | Tipo de evento | Uno de: Boda, Corporativo, Quinceañero, Gala, Cumpleaños, Otro |
 | Fecha | Día real `AAAA-MM-DD`, desde hoy (hora de Colombia) hasta 5 años adelante, y máximo 3 eventos activos por día (RN-13) |
+| Hora de inicio | Opcional: `HH:MM` de `00:00` a `23:59` (HU-28); el registro en pantalla la exige |
 | Duración | Número de 3 a 8 horas (RN-14); un texto como «4 horas» no vale |
 | Asistentes | Entero de 40 a 600 (RN-01) |
 | Observaciones | Texto de máximo 2.000 caracteres |

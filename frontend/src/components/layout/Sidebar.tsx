@@ -2,7 +2,7 @@
  * Menú lateral: logo, navegación entre módulos, interruptor de modo oscuro,
  * datos del usuario y botón para cerrar sesión.
  */
-import { Boxes, CalendarDays, CirclePlus, LogOut, Package, X, type LucideIcon } from 'lucide-react'
+import { Boxes, CalendarDays, CirclePlus, LogOut, Package, Users, X, type LucideIcon } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { Logo } from '@/components/brand/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -21,6 +21,7 @@ const navegacion: ItemNavegacion[] = [
   { etiqueta: 'Nuevo evento', icono: CirclePlus, ruta: '/eventos/nuevo' },
   { etiqueta: 'Inventario', icono: Boxes, ruta: '/inventario' },
   { etiqueta: 'Catálogo', icono: Package, ruta: '/catalogo' },
+  { etiqueta: 'Personal', icono: Users, ruta: '/personal' },
 ]
 
 const claseItem = 'flex h-11 items-center gap-3 rounded-[10px] px-3 text-[15px] font-semibold'

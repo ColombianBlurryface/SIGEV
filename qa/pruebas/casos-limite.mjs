@@ -190,7 +190,8 @@ await caso('30 registros simultáneos en la misma fecha: entran 3 como máximo',
   // Una fecha sin ningún evento todavía (si ya hubiera uno de otra corrida, entrarían menos de 3 y la prueba confundiría)
   const ocupadas = new Set((await call('/eventos')).c.map((e) => String(e.fecha_evento).slice(0, 10)))
   let f = fechaLibre()
-  while (ocupadas.has(f)) f = fechaLibre()
+  for (let i = 0; i < 30 && ocupadas.has(f); i++) f = fechaLibre()
+  if (ocupadas.has(f)) return { s: 'SIN FECHA LIBRE', nota: 'la base de pruebas está llena de eventos: recréala (schema + seeds + catálogo + usuario local)' }
   const rs = await Promise.all(Array.from({ length: 30 }, () => call('/eventos', { method: 'POST', body: ev({ fecha_evento: f }) })))
   const ok = rs.filter((r) => r.s === 201).length
   return { s: ok, nota: `entraron ${ok}` }
@@ -373,6 +374,131 @@ for (const [g, esperado] of [[15000, 400], [1001, 400], [0, 400], [0.5, 400], [1
 await caso('Evento: valor unitario de 1e15 o de 100.000.001', [400], async () => {
   const r = await Promise.all([1e15, 100000001].map(async (precio) => (await call('/eventos', { method: 'POST', body: ev({ productos: [{ producto_id: alimentoCat.id, porcion_por_persona: 100, precio_unitario: precio }] }) })).s))
   return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+
+console.log('\n== HU-26: registrar meseros (RF-33) · entradas raras')
+const LETRAS_C = corrida.replace(/[0-9]/g, (d) => 'abcdefghij'[d])
+const telC = () => '3' + String(Math.floor(Math.random() * 1e9)).padStart(9, '0')
+const mesero = async (body) => m(await call('/personal', { method: 'POST', body: { nombre_completo: `Límite Mesero ${LETRAS_C}`, contacto: telC(), ...body } }))
+await caso('Mesero válido', [201], async () => mesero({}))
+await caso('Mesero: cuerpo que no es un objeto (lista, texto, número, null)', [400], async () => {
+  const r = await Promise.all([[], 'hola', 5, null].map(async (b) => (await call('/personal', { method: 'POST', body: b })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Mesero: nombre de 150 caracteres (límite exacto)', [201], async () => mesero({ nombre_completo: 'a'.repeat(150) }))
+await caso('Mesero: nombre de 151 caracteres', [400], async () => mesero({ nombre_completo: 'a'.repeat(151) }))
+await caso('Mesero: nombre con HTML, emoji, números o solo símbolos', [400], async () => {
+  const r = await Promise.all(['<img src=x onerror=alert(1)>', 'Carlos 🍕', 'Carlos 123', '!!!', '1234567', '.', '-'].map(async (nombre_completo) => (await call('/personal', { method: 'POST', body: { nombre_completo, contacto: telC() } })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Mesero: nombre y contacto de tipo número, lista, objeto o booleano', [400], async () => {
+  const raros = [5, [], {}, true]
+  const r = await Promise.all(raros.flatMap((v) => [call('/personal', { method: 'POST', body: { nombre_completo: v, contacto: telC() } }), call('/personal', { method: 'POST', body: { nombre_completo: `Raro ${LETRAS_C}`, contacto: v } })].map(async (p) => (await p).s)))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Mesero: inyección SQL en el nombre o el contacto no rompe nada', [400], async () => {
+  const r = await Promise.all([call('/personal', { method: 'POST', body: { nombre_completo: "Robert'); DROP TABLE personal;--", contacto: telC() } }), call('/personal', { method: 'POST', body: { nombre_completo: `Sql ${LETRAS_C}`, contacto: "3001234567'; DROP TABLE personal;--" } })])
+  const sigue = (await call('/personal')).s === 200
+  return { s: r.every((x) => x.s === 400) && sigue ? 400 : r.map((x) => x.s).join('/') + (sigue ? '' : ' tabla rota') }
+})
+await caso('Mesero: contacto con 6 dígitos (no alcanza) y con 7 (límite exacto)', [400], async () => {
+  const a = await call('/personal', { method: 'POST', body: { nombre_completo: `Siete ${LETRAS_C}`, contacto: '123456' } })
+  const b = await call('/personal', { method: 'POST', body: { nombre_completo: `Siete ${LETRAS_C}`, contacto: String(Math.floor(1000000 + Math.random() * 8999999)) } })
+  return { s: a.s === 400 && b.s === 201 ? 400 : `${a.s}/${b.s}`, nota: `6 dígitos ${a.s}, 7 dígitos ${b.s}` }
+})
+await caso('Mesero: el filtro ?rol= acepta mesero y WAITER, rechaza lo demás', [200], async () => {
+  const r = await Promise.all(['mesero', 'WAITER'].map(async (x) => (await call('/personal?rol=' + x)).s))
+  const malos = await Promise.all(['cocinero', 'x', '1'].map(async (x) => (await call('/personal?rol=' + x)).s))
+  return { s: r.every((x) => x === 200) && malos.every((x) => x === 400) ? 200 : `${r}/${malos}`, nota: `${r} / ${malos}` }
+})
+
+console.log('\n== HU-27: eliminar meseros (RF-34) · entradas raras')
+const delP = (id, extra = {}) => fetch(`${API}/personal/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${TOKEN_C}` }, ...extra })
+const TOKEN_C = (await call('/auth/login', { method: 'POST', body: { usuario: USUARIO, password: clave } })).c.token
+const nuevoM = async () => (await call('/personal', { method: 'POST', body: { nombre_completo: `Borrar Límite ${LETRAS_C}`, contacto: telC() } })).c
+await caso('Eliminar un mesero válido (204)', [204], async () => ({ s: (await delP((await nuevoM()).id)).status }))
+await caso('Eliminar con id de texto, 0, negativo, decimal, notación científica o gigante', [400], async () => {
+  const r = await Promise.all(['abc', '0', '-1', '1.5', '1e21', '2147483648', '99999999999999999999', 'stf-001', '%20', '1;DROP'].map(async (id) => (await delP(id)).status))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Eliminar el id más grande permitido que no existe (404, no 500)', [404], async () => ({ s: (await delP(2147483647)).status }))
+await caso('Eliminar dos veces el mismo mesero: 204 y luego 404', [204], async () => {
+  const m = await nuevoM(); const a = (await delP(m.id)).status; const b = (await delP(m.id)).status
+  return { s: a === 204 && b === 404 ? 204 : `${a}/${b}`, nota: `${a}/${b}` }
+})
+await caso('Modificar un mesero con PUT, PATCH, POST o GET sobre /personal/:id da 405 (nunca 200 ni 500)', [405], async () => {
+  const m = await nuevoM()
+  const r = await Promise.all(['PUT', 'PATCH', 'POST', 'GET'].map(async (metodo) => (await fetch(`${API}/personal/${m.id}`, { method: metodo, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN_C}` }, body: metodo === 'GET' ? undefined : JSON.stringify({ nombre_completo: 'Cambiado', contacto: '3000000000' }) })).status))
+  const intacto = (await call('/personal')).c.find((x) => x.id === m.id)?.nombre_completo === m.nombre_completo
+  return { s: r.every((x) => x === 405) && intacto ? 405 : r.join('/') + (intacto ? '' : ' cambió'), nota: r.join('/') }
+})
+await caso('Eliminar con cuerpo en la petición lo ignora (204)', [204], async () => ({ s: (await delP((await nuevoM()).id, { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN_C}` }, body: JSON.stringify({ activo: true, nombre_completo: 'x' }) })).status }))
+await caso('Eliminar a un mesero no toca a los demás (el listado conserva a los otros)', [true], async () => {
+  const a = await nuevoM(); const b = await nuevoM(); await delP(a.id)
+  const lista = (await call('/personal')).c
+  return { s: lista.some((x) => x.id === b.id) && !lista.some((x) => x.id === a.id) }
+})
+
+console.log('\n== HU-28: asignar meseros a un evento (RF-35) · entradas raras')
+const evAsig = async () => (await call('/eventos', { method: 'POST', body: ev({ asistentes: 100 }) })).c.evento
+const meseroAsig = async () => (await call('/personal', { method: 'POST', body: { nombre_completo: `Asignable Límite ${LETRAS_C}`, contacto: telC() } })).c
+const put = (id, body, metodo = 'PUT') => call(`/eventos/${id}/meseros`, { method: metodo, body })
+await caso('Asignar 2 meseros válidos y consultar', [2], async () => {
+  const e = await evAsig(); const a = await meseroAsig(); const b = await meseroAsig()
+  const r = await put(e.id, { personal_ids: [a.id, b.id] }); return { s: r.c?.total_asignados, nota: `estado ${r.s}` }
+})
+await caso('Asignar con un id de texto con inyección SQL, notación científica o un objeto', [400], async () => {
+  const e = await evAsig()
+  const r = await Promise.all([["1; DROP TABLE evento_personal;--"], [1e21], [{ id: 1 }], [[1]], ['']].map(async (ids) => (await put(e.id, { personal_ids: ids })).s))
+  const sigue = (await call(`/eventos/${e.id}/meseros`)).s === 200
+  return { s: r.every((x) => x === 400) && sigue ? 400 : r.join('/') + (sigue ? '' : ' tabla rota'), nota: r.join('/') }
+})
+await caso('Asignar 100 ids que no existen da 400 (no 500)', [400], async () => {
+  const e = await evAsig(); return m(await put(e.id, { personal_ids: Array.from({ length: 100 }, (_, i) => 900000000 + i) }))
+})
+await caso('Asignar 101 ids da 400', [400], async () => { const e = await evAsig(); return m(await put(e.id, { personal_ids: Array.from({ length: 101 }, (_, i) => i + 1) })) })
+await caso('Id del evento: el más grande permitido que no existe (404) y uno fuera de rango (400)', [404], async () => {
+  const a = (await put(2147483647, { personal_ids: [] })).s; const b = (await put(2147483648, { personal_ids: [] })).s
+  return { s: a === 404 && b === 400 ? 404 : `${a}/${b}`, nota: `${a}/${b}` }
+})
+await caso('Campos de más en el cuerpo (evento_id, total_asignados) se ignoran', [1], async () => {
+  const e = await evAsig(); const a = await meseroAsig()
+  const r = await put(e.id, { personal_ids: [a.id], evento_id: 999999, total_asignados: 50, meseros_requeridos: 0 })
+  return { s: r.c?.total_asignados, nota: `estado ${r.s}, evento ${r.c?.evento_id === e.id}` }
+})
+await caso('Cuerpo que no es un objeto o con personal_ids de otro tipo', [400], async () => {
+  const e = await evAsig()
+  const r = await Promise.all([[], 'hola', 5, null, { personal_ids: 'x' }, { personal_ids: {} }, { personal_ids: null }].map(async (b) => (await call(`/eventos/${e.id}/meseros`, { method: 'PUT', body: b })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
+await caso('Asignar, vaciar y volver a asignar deja la lista final correcta', [1], async () => {
+  const e = await evAsig(); const a = await meseroAsig()
+  await put(e.id, { personal_ids: [a.id] }); await put(e.id, { personal_ids: [] }); const r = await put(e.id, { personal_ids: [a.id] })
+  return { s: r.c?.total_asignados }
+})
+
+console.log('\n== HU-28: hora de inicio, tope de meseros y cruces de horario')
+const evH = async (hora, extra = {}) => (await call('/eventos', { method: 'POST', body: ev({ ...(hora !== undefined ? { hora_inicio: hora } : {}), ...extra }) }))
+for (const [hora, esperado] of [['00:00', 201], ['23:59', 201], ['09:05', 201], ['24:00', 400], ['25:61', 400], ['18:60', 400], ['6:00', 400], ['18', 400], ['18:00:00', 400], ['', 400], [1800, 400], [null, 201], [true, 400], [[], 400], [{}, 400]]) {
+  await caso(`Evento con hora_inicio ${JSON.stringify(hora)}`, [esperado], async () => m(await evH(hora)))
+}
+await caso('Tope: 6 meseros en un evento de 100 asistentes (5 requeridos) da 400; 5 sí', [400], async () => {
+  const e = (await evH('10:00')).c.evento; const ms = []; for (let i = 0; i < 6; i++) ms.push((await call('/personal', { method: 'POST', body: { nombre_completo: `Tope Límite ${LETRAS_C}`, contacto: telC() } })).c)
+  const seis = await put(e.id, { personal_ids: ms.map((x) => x.id) }); const cinco = await put(e.id, { personal_ids: ms.slice(0, 5).map((x) => x.id) })
+  return { s: seis.s === 400 && cinco.s === 200 ? 400 : `${seis.s}/${cinco.s}`, nota: `6 → ${seis.s}, 5 → ${cinco.s}` }
+})
+await caso('Cruce: asignar al mismo mesero a un evento del mismo día que se cruza da 409; si termina justo cuando empieza el otro, 200', [409], async () => {
+  const dia = (await evH('18:00')).c.evento.fecha_evento.slice(0, 10)
+  const e1 = (await evH('18:00', { fecha_evento: dia, duracion_horas: 4 })).c, e2 = (await evH('20:00', { fecha_evento: dia, duracion_horas: 3 })).c, e3 = (await evH('22:00', { fecha_evento: dia, duracion_horas: 3 })).c
+  if (!e1.evento || !e2.evento) return { s: 'SIN EVENTOS', nota: `${e1.error} / ${e2.error}` }
+  const mes = (await call('/personal', { method: 'POST', body: { nombre_completo: `Cruce Límite ${LETRAS_C}`, contacto: telC() } })).c
+  const a = await put(e1.evento.id, { personal_ids: [mes.id] }); const b = await put(e2.evento.id, { personal_ids: [mes.id] })
+  const c = e3.evento ? await put(e3.evento.id, { personal_ids: [mes.id] }) : { s: 'sin tercer evento (tope de 3 por día)' }
+  return { s: a.s === 200 && b.s === 409 && (c.s === 200 || typeof c.s === 'string') ? 409 : `${a.s}/${b.s}/${c.s}`, nota: `18–22: ${a.s}, 20–23: ${b.s}, 22–01: ${c.s}` }
+})
+await caso('Candidatos: GET /eventos/:id/meseros/disponibles con id inválido, inexistente y válido', [200], async () => {
+  const e = (await evH('10:00')).c.evento; const a = (await call('/eventos/abc/meseros/disponibles')).s; const b = (await call('/eventos/2147483647/meseros/disponibles')).s; const c = await call(`/eventos/${e.id}/meseros/disponibles`)
+  return { s: a === 400 && b === 404 && c.s === 200 && Array.isArray(c.c.meseros) ? 200 : `${a}/${b}/${c.s}`, nota: `${a}/${b}/${c.s}` }
 })
 
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)

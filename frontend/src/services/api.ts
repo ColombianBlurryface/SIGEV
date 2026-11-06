@@ -62,9 +62,11 @@ export async function apiRequest<T>(ruta: string, { method = 'GET', body }: Opci
 
   if (!respuesta.ok) {
     const { error, detalle } = (datos ?? {}) as { error?: string; detalle?: string }
-    // En errores de validación (400) el backend explica el motivo en "detalle"; en los demás, en "error"
+    // En errores de validación (400) y de conflicto (409) el backend explica el motivo en "detalle"; en los demás, en "error"
     const mensaje =
-      respuesta.status === 400 && detalle ? detalle : (error ?? 'Ocurrió un error inesperado. Intenta de nuevo.')
+      (respuesta.status === 400 || respuesta.status === 409) && detalle
+        ? detalle
+        : (error ?? 'Ocurrió un error inesperado. Intenta de nuevo.')
     throw new ApiError(mensaje, respuesta.status)
   }
 

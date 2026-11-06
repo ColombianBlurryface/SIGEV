@@ -16,6 +16,8 @@ export interface Evento {
   fecha_evento: string
   tipo_evento: string
   duracion_horas: string
+  // Hora de inicio «HH:MM»; los eventos anteriores a la HU-28 no la tienen (ocupan todo el día)
+  hora_inicio: string | null
   asistentes: number
   estado: EstadoEvento
   observaciones_generales: string | null
@@ -44,6 +46,7 @@ export interface NuevoEvento {
   fecha_evento: string
   tipo_evento: string
   duracion_horas: number
+  hora_inicio?: string
   asistentes: number
   observaciones_generales?: string
   productos?: ProductoEventoPayload[]
@@ -149,6 +152,38 @@ export interface ResumenPresupuesto {
   costo_total_estimado: number
 }
 
+// HU-28 (RF-35): meseros asignados al evento y cuántos faltan o sobran frente a los requeridos (HU-21)
+export interface MeseroAsignado {
+  id: number
+  nombre_completo: string
+  contacto: string
+}
+
+export type EstadoAsignacion = 'completo' | 'deficit' | 'excedente'
+
+export interface AsignacionMeseros {
+  evento_id: number
+  total_asignados: number
+  meseros_requeridos: number
+  diferencia: number
+  deficit: number
+  excedente: number
+  estado: EstadoAsignacion
+  meseros_asignados: MeseroAsignado[]
+}
+
+// Un mesero registrado frente a UN evento: si ya está asignado y si está ocupado en otro evento que se cruza (HU-28)
+export interface MeseroCandidato extends MeseroAsignado {
+  asignado: boolean
+  ocupado_en: { evento_id: number; nombre_evento: string; fecha: string; horario: string }[]
+}
+
+export interface MeserosDisponibles {
+  evento_id: number
+  meseros_requeridos: number
+  meseros: MeseroCandidato[]
+}
+
 export interface EventoDetalle extends EventoListado {
   estado_alquiler: EstadoAlquiler
   resumen_presupuesto?: ResumenPresupuesto
@@ -156,6 +191,7 @@ export interface EventoDetalle extends EventoListado {
   logistica: LogisticaEvento
   // HU-47: ingredientes a comprar, calculados por el backend al consultar el evento
   compras_ingredientes: ComprasIngredientes
+  asignacion_meseros: AsignacionMeseros
   productos_calculados: ProductoCalculado[]
   servicios_adicionales: ServicioAdicional[]
 }

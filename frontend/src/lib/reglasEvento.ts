@@ -3,6 +3,7 @@
  * El umbral de alquiler de la HU-12 (RN-03) no está aquí: lo define el backend y se obtiene con useUmbralAlquiler.
  * Son las mismas que valida el backend; aquí se revisan antes de enviar para avisar al usuario de inmediato.
  */
+import { HORA_VALIDA } from './horario'
 import { hoyIso } from './formato'
 
 // Rango permitido de asistentes (HU-07, RN-01) y desde cuántos asistentes el evento es buffet (RN-02)
@@ -58,6 +59,8 @@ export interface ValoresEvento {
   nombre: string
   tipo: string
   fecha: string
+  // Hora de inicio «HH:MM» (HU-28): con ella se sabe si dos eventos se cruzan al asignar meseros
+  horaInicio: string
   duracion: string
   asistentes: string
   observaciones: string
@@ -86,6 +89,9 @@ export function validarEvento(valores: ValoresEvento, eventosEnFecha=0): Errores
   } else if (eventosEnFecha >= MAX_EVENTOS_POR_FECHA) {
     errores.fecha = `Ya hay ${MAX_EVENTOS_POR_FECHA} eventos registrados en esta fecha (máximo permitido).`
   }
+
+  if (!valores.horaInicio) errores.horaInicio = 'Indica la hora de inicio.'
+  else if (!HORA_VALIDA.test(valores.horaInicio)) errores.horaInicio = 'La hora de inicio no es válida (HH:MM).'
 
   const duracion = Number(valores.duracion)
   if (!valores.duracion.trim()) errores.duracion = 'Indica la duración en horas.'

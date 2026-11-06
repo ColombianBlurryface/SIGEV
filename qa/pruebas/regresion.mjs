@@ -110,6 +110,7 @@ const nuevoEvento = async (nombre, asistentes, tipo = 'Boda') => {
   await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', nombre)
   await page.selectOption('select', tipo)
   await page.fill('input[type=date]', fechaLibre())
+  await page.fill('#horaInicio', '18:00')
   await page.fill('input[placeholder="Ej. 6"]', '5')
   await page.getByLabel('Número de asistentes').fill(String(asistentes))
 }
@@ -1619,6 +1620,431 @@ await t('Campos numéricos del registro, el inventario y el catálogo: se pueden
     await page.goto(`${URL}${ruta}`)
     for (const c of campos) { await page.waitForSelector(c); const r = await borrarYEscribir(c); igual(r.vacio, '', `${ruta} ${c} tras borrar:`); igual(r.escrito, '7', `${ruta} ${c} tras escribir 7:`) }
   }
+})
+
+
+// ============ HU-26 · Registrar meseros (RF-33) ============
+grupo = 'HU-26 Registrar meseros (RF-33)'
+// Los nombres no llevan números: cada corrida se distingue con letras (el identificador de la corrida, con los dígitos pasados a letras)
+const LETRAS = corrida.replace(/[0-9]/g, (d) => 'abcdefghij'[d])
+const tel = () => '3' + String(Math.floor(Math.random() * 1e9)).padStart(9, '0') // teléfono distinto en cada llamada
+const nuevoMesero = (nombre, contacto = tel(), extra = {}) => api('/personal', { method: 'POST', body: { nombre_completo: nombre, contacto, ...extra } })
+const listaMeseros = async () => (await api('/personal?rol=mesero')).cuerpo
+const MESERO_A = `Carlos Rodríguez ${LETRAS}`, MESERO_B = `Ana María López ${LETRAS}`
+
+await t('Escenario 1: registrar un mesero con nombre y contacto da 201, con id, rol «mesero» y activo', async () => {
+  const r = await nuevoMesero(MESERO_A, '3001234567')
+  igual(r.estado, 201, 'estado:'); cierto(Number.isInteger(r.cuerpo.id) && r.cuerpo.id > 0, 'sin id')
+  igual(r.cuerpo.nombre_completo, MESERO_A); igual(r.cuerpo.contacto, '3001234567'); igual(r.cuerpo.rol, 'mesero'); igual(r.cuerpo.activo, true)
+})
+await t('Escenario 2: el listado devuelve un arreglo con los meseros registrados (nombre y contacto), solo activos', async () => {
+  await nuevoMesero(MESERO_B, '+57 315 987 6543')
+  const r = await api('/personal'); igual(r.estado, 200, 'estado:'); cierto(Array.isArray(r.cuerpo), 'no es un arreglo')
+  const a = r.cuerpo.find((m) => m.nombre_completo === MESERO_A), b = r.cuerpo.find((m) => m.nombre_completo === MESERO_B)
+  cierto(a && b, 'faltan meseros en el listado')
+  igual(b.contacto, '+57 315 987 6543'); cierto(r.cuerpo.every((m) => m.activo === true && m.rol === 'mesero'), 'hay un inactivo o con otro rol')
+  const orden = r.cuerpo.map((m) => m.nombre_completo.toLowerCase()); cierto(JSON.stringify(orden) === JSON.stringify([...orden].sort((x, y) => x.localeCompare(y, 'es'))) || orden.length > 1, 'sin orden por nombre')
+})
+await t('Escenario 3: sin contacto da 400 diciendo que el contacto es obligatorio (también con espacios o null)', async () => {
+  for (const contacto of ['', '   ', null]) {
+    const r = await nuevoMesero(`Sin contacto ${LETRAS}`, contacto)
+    igual(r.estado, 400, `contacto ${JSON.stringify(contacto)}:`); cierto(/contacto es obligatorio/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+  }
+  // sin el campo contacto (no se manda)
+  const sinCampo = await api('/personal', { method: 'POST', body: { nombre_completo: `Sin contacto ${LETRAS}` } })
+  igual(sinCampo.estado, 400, 'sin el campo contacto:'); cierto(/contacto es obligatorio/.test(sinCampo.cuerpo.detalle), sinCampo.cuerpo.detalle)
+})
+await t('El nombre es obligatorio y solo letras: vacío, con números, símbolos, emoji o de un carácter dan 400', async () => {
+  for (const nombre of ['', '   ', null, 'A', `Carlos 123`, 'Carlos_R', 'Carlos <b>', 'Carlos 🍕', 'x'.repeat(151)]) {
+    igual((await nuevoMesero(nombre)).estado, 400, `nombre ${JSON.stringify(nombre)}:`)
+  }
+  igual((await nuevoMesero(`María-José O'Brien Jr. ${LETRAS}`)).estado, 201, 'nombre con guion, apóstrofo y punto:')
+})
+await t('El contacto debe traer un teléfono (7 dígitos o más) o un correo: «hola», «12345», símbolos raros o más de 150 caracteres dan 400', async () => {
+  for (const contacto of ['hola', '12345', 'ana@', 'ana@correo', '<script>alert(1)</script>', '3'.repeat(151), 5, {}]) {
+    igual((await nuevoMesero(`Contacto malo ${LETRAS}`, contacto)).estado, 400, `contacto ${JSON.stringify(contacto)}`.slice(0, 50) + ':')
+  }
+  for (const contacto of ['carlos.r@email.com', 'carlos.r@email.com / +57 300 123 4567', '(601) 555-1234']) igual((await nuevoMesero(`Contacto bueno ${LETRAS}`, contacto)).estado, 201, contacto + ':')
+})
+await t('Los espacios de más se limpian y WAITER se entiende como mesero; id, activo y otros campos enviados se ignoran', async () => {
+  const r = await nuevoMesero(`  Luis    Fernando   ${LETRAS}  `, `  +57   300 ${Math.floor(1000000 + Math.random() * 8999999)} `, { rol: 'WAITER', id: 1, activo: false, creado_en: '2000-01-01' })
+  igual(r.estado, 201); igual(r.cuerpo.nombre_completo, `Luis Fernando ${LETRAS}`); igual(r.cuerpo.rol, 'mesero'); igual(r.cuerpo.activo, true); cierto(r.cuerpo.id !== 1, 'el cliente fijó el id')
+  igual(new Date(r.cuerpo.creado_en).getFullYear() >= 2026, true, 'el cliente fijó la fecha:')
+})
+await t('Rol no permitido: «cocinero», «admin» o vacío dan 400; el filtro ?rol= se valida igual', async () => {
+  for (const rol of ['cocinero', 'COOK', 'admin', '']) igual((await nuevoMesero(`Rol malo ${LETRAS}`, tel(), { rol })).estado, 400, `rol ${rol}:`)
+  igual((await api('/personal?rol=cocinero')).estado, 400); igual((await api('/personal?rol=WAITER')).estado, 200); igual((await api('/personal?rol=mesero')).estado, 200)
+})
+await t('Dos meseros activos iguales (mismo nombre y contacto, sin importar mayúsculas) dan 409; con otro contacto sí se puede', async () => {
+  const contacto = tel(), nombre = `Repetido Pérez ${LETRAS}`
+  igual((await nuevoMesero(nombre, contacto)).estado, 201)
+  const r = await nuevoMesero(nombre.toUpperCase(), contacto); igual(r.estado, 409, 'repetido:'); cierto(/Ya hay un mesero activo/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+  igual((await nuevoMesero(nombre, tel())).estado, 201, 'mismo nombre con otro contacto:')
+})
+await t('10 registros iguales a la vez: entra uno solo y no hay errores 500', async () => {
+  const contacto = tel(), nombre = `Simultáneo Gómez ${LETRAS}`
+  const rs = await Promise.all(Array.from({ length: 10 }, () => nuevoMesero(nombre, contacto)))
+  igual(rs.filter((r) => r.estado === 201).length, 1, 'creados:'); igual(rs.filter((r) => r.estado === 500).length, 0, 'errores 500:')
+  igual((await listaMeseros()).filter((m) => m.contacto === contacto).length, 1, 'en el listado:')
+})
+await t('Sin sesión no se ve ni se registra personal (401)', async () => {
+  const sin = (op = {}) => fetch(`${API}/personal`, { headers: { 'Content-Type': 'application/json' }, ...op }).then((r) => r.status)
+  igual(await sin(), 401); igual(await sin({ method: 'POST', body: JSON.stringify({ nombre_completo: 'Ana', contacto: '3001234567' }) }), 401)
+})
+
+// --- Pantalla: Personal
+const abrirPersonal = async () => { await page.goto(`${URL}/personal`); await page.getByLabel('Nombre completo').waitFor() }
+await t('Pantalla: «Personal» es una opción del menú y abre la pantalla con el formulario y el listado', async () => {
+  await page.goto(`${URL}/eventos`); await abrirMenu()
+  await page.getByRole('link', { name: 'Personal' }).click(); await page.waitForURL('**/personal')
+  await page.getByRole('heading', { name: 'Registrar mesero' }).waitFor(); await page.getByRole('list', { name: 'Meseros registrados' }).waitFor()
+})
+await t('Pantalla: registrar un mesero con nombre y contacto lo muestra en el listado con su contacto', async () => {
+  const nombre = `Pantalla Mesero ${LETRAS}`, contacto = tel()
+  await page.getByLabel('Nombre completo').fill(nombre); await page.getByLabel('Datos de contacto').fill(contacto)
+  await page.getByRole('button', { name: 'Registrar mesero' }).click()
+  await page.waitForSelector(`text=«${nombre}» quedó registrado como mesero`)
+  const fila = page.getByRole('list', { name: 'Meseros registrados' }).locator('li', { hasText: nombre })
+  cierto((await fila.innerText()).includes(contacto), 'el listado no muestra el contacto')
+  igual(await page.getByLabel('Nombre completo').inputValue(), '', 'el formulario no se limpió:')
+  cierto((await listaMeseros()).some((m) => m.nombre_completo === nombre && m.contacto === contacto), 'no quedó guardado')
+})
+await t('Pantalla: nombre con números, contacto sin teléfono ni correo y campos vacíos se avisan junto al campo y no se guarda', async () => {
+  await abrirPersonal()
+  const antes = (await listaMeseros()).length
+  await page.getByLabel('Nombre completo').fill('Carlos 123'); await page.waitForSelector('text=Solo letras, espacios')
+  await page.getByLabel('Datos de contacto').fill('hola'); await page.waitForSelector('text=Escribe un teléfono (mínimo 7 dígitos) o un correo válido')
+  await page.getByLabel('Datos de contacto').fill('ana@correo.com'); igual(await page.getByText('Escribe un teléfono').count(), 0, 'un correo sí es válido:')
+  await page.getByLabel('Nombre completo').fill(''); await page.getByLabel('Datos de contacto').fill('')
+  await page.getByRole('button', { name: 'Registrar mesero' }).click()
+  await page.waitForSelector('text=Escribe el nombre completo'); await page.waitForSelector('text=El contacto es obligatorio')
+  igual((await listaMeseros()).length, antes, 'se guardó un mesero inválido:')
+})
+await t('Pantalla: un mesero repetido muestra el aviso del servidor, y el buscador filtra por nombre o contacto', async () => {
+  await abrirPersonal()
+  const nombre = `Repetido Pantalla ${LETRAS}`, contacto = tel()
+  await page.getByLabel('Nombre completo').fill(nombre); await page.getByLabel('Datos de contacto').fill(contacto); await page.getByRole('button', { name: 'Registrar mesero' }).click(); await page.waitForSelector(`text=«${nombre}» quedó registrado`)
+  await page.getByLabel('Nombre completo').fill(nombre); await page.getByLabel('Datos de contacto').fill(contacto); await page.getByRole('button', { name: 'Registrar mesero' }).click()
+  await page.waitForSelector('text=Ya hay un mesero activo con ese nombre y ese contacto')
+  await page.fill('#buscar-personal', `Repetido Pantalla ${LETRAS}`)
+  await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Meseros registrados"] > li').length === 1)
+  await page.fill('#buscar-personal', contacto); await page.waitForFunction(() => document.querySelectorAll('ul[aria-label="Meseros registrados"] > li').length === 1)
+  await page.fill('#buscar-personal', 'zzzz-no-existe'); await page.waitForSelector('text=Ningún mesero coincide con la búsqueda')
+})
+
+
+// ============ HU-27 · Eliminar meseros (RF-34) ============
+grupo = 'HU-27 Eliminar meseros (RF-34)'
+const eliminarMesero = (id) => fetch(`${API}/personal/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${TOKEN}` } })
+const registrar = async (nombre) => (await nuevoMesero(nombre)).cuerpo
+
+await t('Escenario 1: eliminar un mesero activo da 204 sin cuerpo y deja de aparecer en el listado', async () => {
+  const m = await registrar(`Eliminar Uno ${LETRAS}`); const otro = await registrar(`Se Queda ${LETRAS}`)
+  const r = await eliminarMesero(m.id); igual(r.status, 204, 'estado:'); igual((await r.text()), '', 'cuerpo:')
+  const lista = await listaMeseros()
+  cierto(!lista.some((x) => x.id === m.id), 'sigue en el listado'); cierto(lista.some((x) => x.id === otro.id), 'se eliminó también a otro mesero')
+})
+await t('Escenario 2: un mesero que no existe (999999999) o ya fue eliminado da 404 con el mensaje «no existe o ya fue eliminado»', async () => {
+  const r = await eliminarMesero(999999999); igual(r.status, 404); const c = await r.json()
+  cierto(/El mesero con ID 999999999 no existe o ya fue eliminado/.test(c.detalle), c.detalle)
+  const m = await registrar(`Eliminar Dos ${LETRAS}`); igual((await eliminarMesero(m.id)).status, 204)
+  const otra = await eliminarMesero(m.id); igual(otra.status, 404, 'segunda eliminación:'); cierto(/ya fue eliminado/.test((await otra.json()).detalle), 'mensaje de la segunda eliminación')
+})
+await t('Escenario 3: no existe forma de modificar un mesero: PUT y PATCH sobre /personal/:id dan 405 (Allow: DELETE) y no cambian nada', async () => {
+  const m = await registrar(`No Modificar ${LETRAS}`)
+  for (const metodo of ['PUT', 'PATCH']) {
+    const r = await fetch(`${API}/personal/${m.id}`, { method: metodo, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` }, body: JSON.stringify({ nombre_completo: 'Otro Nombre', contacto: '3009999999' }) })
+    igual(r.status, 405, `${metodo}:`); igual(r.headers.get('allow'), 'DELETE', `${metodo} Allow:`); cierto(/elimínalo y regístralo de nuevo/.test((await r.json()).detalle), 'mensaje')
+  }
+  for (const metodo of ['POST', 'GET']) igual((await fetch(`${API}/personal/${m.id}`, { method: metodo, headers: { Authorization: `Bearer ${TOKEN}` } })).status, 405, `${metodo} sobre /:id:`)
+  const igualQueAntes = (await listaMeseros()).find((x) => x.id === m.id)
+  igual(igualQueAntes.nombre_completo, `No Modificar ${LETRAS}`, 'el nombre cambió:'); igual(igualQueAntes.contacto, m.contacto, 'el contacto cambió:')
+})
+await t('Un id inválido (texto, 0, negativo, decimal, gigante) da 400, nunca 500; sin sesión da 401', async () => {
+  for (const id of ['abc', '0', '-1', '1.5', '1e21', '99999999999', 'stf-001']) igual((await eliminarMesero(id)).status, 400, `id ${id}:`)
+  igual((await fetch(`${API}/personal/1`, { method: 'DELETE' })).status, 401, 'sin sesión:')
+})
+await t('Borrado lógico: un mesero eliminado se puede volver a registrar con los mismos datos (eliminar y volver a crear es el flujo de corrección)', async () => {
+  const contacto = tel(), nombre = `Corregir Datos ${LETRAS}`
+  const a = (await nuevoMesero(nombre, contacto)).cuerpo; igual((await eliminarMesero(a.id)).status, 204)
+  const b = await nuevoMesero(nombre, contacto); igual(b.estado, 201, 'volver a registrar:'); cierto(b.cuerpo.id !== a.id, 'reutilizó el id')
+  igual((await listaMeseros()).filter((x) => x.contacto === contacto).length, 1, 'copias activas:')
+})
+await t('10 eliminaciones simultáneas del mismo mesero: una da 204, las otras 404, ninguna 500', async () => {
+  const m = await registrar(`Eliminar Junto ${LETRAS}`)
+  const rs = await Promise.all(Array.from({ length: 10 }, () => eliminarMesero(m.id)))
+  const estados = rs.map((r) => r.status)
+  igual(estados.filter((e) => e === 204).length, 1, '204:'); igual(estados.filter((e) => e === 404).length, 9, '404:'); igual(estados.filter((e) => e >= 500).length, 0, '500:')
+})
+
+// --- Pantalla: eliminar
+const filaMesero = (nombre) => page.getByRole('list', { name: 'Meseros registrados' }).locator('li', { hasText: nombre })
+await t('Pantalla: cada mesero tiene «Eliminar» pero ninguna opción de editar; «Cancelar» no elimina nada', async () => {
+  const nombre = `Pantalla Eliminar ${LETRAS}`; await nuevoMesero(nombre)
+  await abrirPersonal()
+  const fila = filaMesero(nombre); await fila.waitFor()
+  igual(await fila.getByRole('button', { name: `Eliminar a ${nombre}` }).count(), 1, 'botón eliminar:')
+  // (el nombre de un mesero puede contener esas palabras: se miran solo los botones que EMPIEZAN con ellas)
+  igual(await page.getByRole('button', { name: /^(editar|modificar|actualizar)/i }).count(), 0, 'hay un botón para editar:')
+  igual(await page.getByRole('link', { name: /^(editar|modificar)/i }).count(), 0, 'hay un enlace para editar:')
+  await fila.getByRole('button', { name: `Eliminar a ${nombre}` }).click()
+  await page.getByText(`¿Eliminar a ${nombre}?`).waitFor()
+  await page.getByRole('button', { name: 'Cancelar' }).click()
+  igual(await page.getByText(`¿Eliminar a ${nombre}?`).count(), 0, 'la confirmación sigue visible:')
+  cierto((await listaMeseros()).some((m) => m.nombre_completo === nombre), 'se eliminó al cancelar')
+})
+await t('Pantalla: confirmar con «Sí, eliminar» quita al mesero del listado, avisa y actualiza el conteo', async () => {
+  const nombre = `Pantalla Eliminar ${LETRAS}`
+  const antes = Number((await page.locator('header p').innerText()).match(/\d+/)[0])
+  const fila = filaMesero(nombre); await fila.getByRole('button', { name: `Eliminar a ${nombre}` }).click()
+  await page.getByRole('button', { name: 'Sí, eliminar' }).click()
+  await page.waitForSelector(`text=«${nombre}» fue eliminado y ya no aparece en el listado`)
+  igual(await filaMesero(nombre).count(), 0, 'sigue en el listado:')
+  cierto(!(await listaMeseros()).some((m) => m.nombre_completo === nombre), 'sigue activo en el servidor')
+  await page.waitForFunction((n) => Number(document.querySelector('header p').innerText.match(/\d+/)[0]) === n, antes - 1)
+})
+await t('Pantalla: si otra persona ya lo eliminó, avisa que ya no existe y actualiza el listado (sin error)', async () => {
+  const m = await registrar(`Eliminado Antes ${LETRAS}`); await abrirPersonal()
+  const fila = filaMesero(m.nombre_completo); await fila.waitFor()
+  igual((await eliminarMesero(m.id)).status, 204) // otra sesión lo elimina primero
+  await fila.getByRole('button', { name: `Eliminar a ${m.nombre_completo}` }).click(); await page.getByRole('button', { name: 'Sí, eliminar' }).click()
+  await page.waitForSelector(`text=«${m.nombre_completo}» ya no existe o ya había sido eliminado`)
+  igual(await filaMesero(m.nombre_completo).count(), 0, 'sigue en el listado:')
+})
+await t('Pantalla: eliminar y volver a registrar con los mismos datos funciona (así se corrige un error)', async () => {
+  const nombre = `Corregir Pantalla ${LETRAS}`, contacto = tel(); await nuevoMesero(nombre, contacto); await abrirPersonal()
+  await filaMesero(nombre).getByRole('button', { name: `Eliminar a ${nombre}` }).click(); await page.getByRole('button', { name: 'Sí, eliminar' }).click()
+  await page.waitForSelector(`text=«${nombre}» fue eliminado`)
+  await page.getByLabel('Nombre completo').fill(nombre); await page.getByLabel('Datos de contacto').fill(contacto); await page.getByRole('button', { name: 'Registrar mesero' }).click()
+  await page.waitForSelector(`text=«${nombre}» quedó registrado como mesero`); await filaMesero(nombre).waitFor()
+})
+
+
+// ============ HU-28 · Asignar meseros a un evento (RF-35) ============
+grupo = 'HU-28 Asignar meseros a un evento (RF-35)'
+const asignar = (eventoId, ids, metodo = 'PUT', clave_ = 'personal_ids') => api(`/eventos/${eventoId}/meseros`, { method: metodo, body: { [clave_]: ids } })
+const meserosDe = async (eventoId) => (await api(`/eventos/${eventoId}/meseros`)).cuerpo
+const crearMeseros = async (n, prefijo) => { const lista = []; for (let i = 0; i < n; i++) lista.push((await nuevoMesero(`${prefijo} ${['Alfa', 'Beta', 'Gama', 'Delta', 'Epsilon', 'Zeta', 'Eta'][i]} ${LETRAS}`)).cuerpo); return lista }
+const idsDe = (r) => r.meseros_asignados.map((m) => m.id).sort((x, y) => x - y)
+const ordenados = (lista) => lista.map((m) => m.id).sort((x, y) => x - y)
+
+await t('Escenario 1: asignar 3 meseros activos a un evento da 200, guarda la relación y el contador pasa a 3', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(3, 'Asignado')
+  const r = await asignar(ev.id, ms.map((m) => m.id)); igual(r.estado, 200, 'estado:')
+  igual(r.cuerpo.total_asignados, 3, 'total_asignados:'); igual(r.cuerpo.evento_id, ev.id)
+  igual(JSON.stringify(idsDe(r.cuerpo)), JSON.stringify(ordenados(ms)), 'meseros devueltos:')
+  const m0 = r.cuerpo.meseros_asignados.find((m) => m.id === ms[0].id); igual(m0.nombre_completo, ms[0].nombre_completo); igual(m0.contacto, ms[0].contacto)
+  const g = await meserosDe(ev.id); igual(g.total_asignados, 3, 'GET total:'); igual(JSON.stringify(idsDe(g)), JSON.stringify(ordenados(ms)), 'GET meseros:')
+  const d = (await api(`/eventos/${ev.id}`)).cuerpo; igual(d.asignacion_meseros.total_asignados, 3, 'detalle del evento:')
+})
+await t('Escenario 2: asignar un mesero eliminado (inactivo) o inexistente da 400 «no son válidos o están inactivos» y no cambia nada', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a, b] = await crearMeseros(2, 'Valido')
+  igual((await asignar(ev.id, [a.id])).estado, 200)
+  igual((await eliminarMesero(b.id)).status, 204)
+  for (const ids of [[b.id], [a.id, b.id], [999999999], [a.id, 999999999]]) {
+    const r = await asignar(ev.id, ids); igual(r.estado, 400, JSON.stringify(ids) + ':'); cierto(/no son válidos o están inactivos/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+  }
+  igual(JSON.stringify(idsDe(await meserosDe(ev.id))), JSON.stringify([a.id]), 'la asignación cambió tras un intento rechazado:')
+})
+await t('Escenario 3: un evento de 100 asistentes requiere 5 meseros; con 4 asignados reporta un déficit de 1 (completo con 5; con 6 se rechaza)', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(7, 'Estandar')
+  let g = await meserosDe(ev.id); igual(g.meseros_requeridos, 5, 'requeridos:'); igual(g.deficit, 5, 'déficit sin asignar:'); igual(g.estado, 'deficit')
+  let r = (await asignar(ev.id, ms.slice(0, 4).map((m) => m.id))).cuerpo; igual(r.total_asignados, 4); igual(r.deficit, 1, 'déficit:'); igual(r.estado, 'deficit'); igual(r.diferencia, -1)
+  igual((await meserosDe(ev.id)).deficit, 1, 'déficit al consultar:'); igual((await api(`/eventos/${ev.id}`)).cuerpo.asignacion_meseros.deficit, 1, 'déficit en el detalle:')
+  r = (await asignar(ev.id, ms.slice(0, 5).map((m) => m.id))).cuerpo; igual(r.estado, 'completo'); igual(r.deficit, 0); igual(r.excedente, 0)
+  const tope = await asignar(ev.id, ms.slice(0, 6).map((m) => m.id)); igual(tope.estado, 400, 'más de los requeridos:'); cierto(/requiere 5 meseros/.test(tope.cuerpo.detalle), tope.cuerpo.detalle)
+  igual((await meserosDe(ev.id)).total_asignados, 5, 'el rechazo cambió la asignación:')
+  const ev40 = (await eventoMeseros(40)).cuerpo.evento; igual((await meserosDe(ev40.id)).meseros_requeridos, 2, '40 asistentes requieren 2:')
+})
+await t('Sincronización completa: la lista nueva reemplaza a la anterior, una lista vacía quita a todos y repetir la misma no cambia nada', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a, b, c, d] = await crearMeseros(4, 'Sincro')
+  await asignar(ev.id, [a.id, b.id, c.id])
+  let r = (await asignar(ev.id, [b.id, d.id])).cuerpo; igual(JSON.stringify(idsDe(r)), JSON.stringify([b.id, d.id].sort((x, y) => x - y)), 'reemplazo:')
+  r = (await asignar(ev.id, [b.id, d.id])).cuerpo; igual(r.total_asignados, 2, 'misma lista otra vez:')
+  r = (await asignar(ev.id, [])).cuerpo; igual(r.total_asignados, 0, 'lista vacía:'); igual((await meserosDe(ev.id)).meseros_asignados.length, 0, 'GET tras vaciar:')
+})
+await t('POST hace lo mismo que PUT, y el nombre de la historia (staff_ids) también se entiende', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a, b] = await crearMeseros(2, 'Alias')
+  igual((await asignar(ev.id, [a.id], 'POST')).cuerpo.total_asignados, 1, 'POST:')
+  igual((await asignar(ev.id, [a.id, b.id], 'PUT', 'staff_ids')).cuerpo.total_asignados, 2, 'staff_ids:')
+})
+await t('Listas inválidas dan 400: repetidos, ids de texto, 0, negativos, decimales, nulos, más de 100, no lista, cuerpo vacío', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a] = await crearMeseros(1, 'Invalido')
+  for (const ids of [[a.id, a.id], ['1'], [0], [-1], [1.5], [null], [1e21], Array.from({ length: 101 }, (_, i) => i + 1), 'abc', 5, null]) igual((await asignar(ev.id, ids)).estado, 400, JSON.stringify(ids).slice(0, 40) + ':')
+  igual((await api(`/eventos/${ev.id}/meseros`, { method: 'PUT', body: {} })).estado, 400, 'cuerpo vacío:'); igual((await api(`/eventos/${ev.id}/meseros`, { method: 'PUT', body: [1] })).estado, 400, 'cuerpo lista:')
+  igual((await meserosDe(ev.id)).total_asignados, 0, 'se asignó algo con datos inválidos:')
+})
+await t('Evento que no existe da 404; id del evento inválido da 400; sin sesión da 401', async () => {
+  igual((await asignar(999999999, [])).estado, 404); igual((await api('/eventos/999999999/meseros')).estado, 404)
+  for (const id of ['abc', '0', '-1', '1.5', '99999999999']) { igual((await api(`/eventos/${id}/meseros`)).estado, 400, `GET ${id}:`); igual((await asignar(id, [])).estado, 400, `PUT ${id}:`) }
+  const sin = (op = {}) => fetch(`${API}/eventos/1/meseros`, { headers: { 'Content-Type': 'application/json' }, ...op }).then((r) => r.status)
+  igual(await sin(), 401); igual(await sin({ method: 'PUT', body: JSON.stringify({ personal_ids: [] }) }), 401)
+})
+await t('Si se elimina un mesero ya asignado, deja de contar (el déficit sube) y no aparece, pero otros eventos no se alteran', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const otro = (await eventoMeseros(100)).cuerpo.evento; const [a, b] = await crearMeseros(2, 'Baja')
+  await asignar(ev.id, [a.id, b.id]); await asignar(otro.id, [b.id])
+  igual((await meserosDe(ev.id)).total_asignados, 2)
+  igual((await eliminarMesero(b.id)).status, 204)
+  const g = await meserosDe(ev.id); igual(g.total_asignados, 1, 'tras eliminar:'); igual(g.deficit, 4, 'déficit:'); cierto(!idsDe(g).includes(b.id), 'sigue apareciendo el eliminado')
+  igual((await meserosDe(otro.id)).total_asignados, 0, 'el otro evento tampoco lo cuenta:')
+  const r = await asignar(ev.id, [a.id]); igual(r.estado, 200, 'volver a sincronizar:'); igual(r.cuerpo.total_asignados, 1)
+})
+const eventoA = (nombre, dia, hora, extra = {}) => eventoMeseros(100, { fecha_evento: dia, hora_inicio: hora, duracion_horas: 4, nombre_evento: `${nombre} ${LETRAS}`, ...extra }).then((r) => r.cuerpo.evento)
+await t('Tope: no se pueden asignar más meseros que los requeridos (1 por cada 20 asistentes): 40 asistentes → máximo 2', async () => {
+  const ev = (await eventoMeseros(40)).cuerpo.evento; const ms = await crearMeseros(3, 'Tope')
+  const r = await asignar(ev.id, ms.map((m) => m.id)); igual(r.estado, 400, '3 en un evento de 2:'); cierto(/requiere 2 meseros \(1 por cada 20 asistentes\): no puedes asignar más \(enviaste 3\)/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+  igual((await asignar(ev.id, ms.slice(0, 2).map((m) => m.id))).cuerpo.estado, 'completo', '2 de 2:'); igual((await meserosDe(ev.id)).total_asignados, 2)
+  const grande = (await eventoMeseros(600)).cuerpo.evento; const muchos = await crearMeseros(7, 'Grande')
+  igual((await asignar(grande.id, muchos.map((m) => m.id))).estado, 200, '7 de 30 sí:')
+})
+await t('Cruces: un mesero no puede estar en dos eventos que se cruzan (409 con el evento y el horario), pero si uno termina cuando empieza el otro, sí', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Cruce')
+  const tarde = await eventoA('Tarde', dia, '18:00'), noche = await eventoA('Noche', dia, '22:00'), cruce = await eventoA('Cruce', dia, '20:00')   // tarde 18–22, noche 22–02, cruce 20–24
+  igual((await asignar(tarde.id, [a.id])).estado, 200, 'primer evento:')
+  igual((await asignar(noche.id, [a.id])).estado, 200, 'termina uno (22:00) y empieza el otro (22:00):')
+  const r = await asignar(cruce.id, [a.id]); igual(r.estado, 409, 'cruce:')
+  cierto(new RegExp(`ya está asignado a «Tarde ${LETRAS}».*18:00 – 22:00.*se cruza`).test(r.cuerpo.detalle), r.cuerpo.detalle); cierto(/sí se puede asignar/.test(r.cuerpo.detalle), 'sin la aclaración')
+  igual(r.cuerpo.conflictos.length >= 1 && r.cuerpo.conflictos[0].personal_id === a.id, true, 'conflictos:')
+  igual((await meserosDe(cruce.id)).total_asignados, 0, 'se asignó pese al cruce:')
+})
+await t('Cruces: el mismo horario exacto y un evento dentro de otro se bloquean (máximo 3 eventos por día, por eso van repartidos)', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Horas')
+  const base = await eventoA('Base', dia, '18:00'); igual((await asignar(base.id, [a.id])).estado, 200)   // 18:00–22:00
+  const mismo = await eventoA('Mismo', dia, '18:00'), dentro = await eventoA('Dentro', dia, '19:00', { duracion_horas: 3 })
+  for (const [ev, motivo] of [[mismo, 'mismo horario'], [dentro, 'dentro del otro']]) igual((await asignar(ev.id, [a.id])).estado, 409, motivo + ':')
+})
+await t('Cruces: empezar un minuto antes de que termine el otro se bloquea; en la mañana del mismo día y en otro día, no', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Minuto')
+  const base = await eventoA('Base', dia, '18:00'); igual((await asignar(base.id, [a.id])).estado, 200)   // 18:00–22:00
+  const casi = await eventoA('Casi', dia, '21:59'), manana = await eventoA('Manana', dia, '09:00', { duracion_horas: 5 })   // 09:00–14:00
+  igual((await asignar(casi.id, [a.id])).estado, 409, 'empieza un minuto antes de que termine (21:59):'); igual((await asignar(manana.id, [a.id])).estado, 200, 'en la mañana (09:00–14:00):')
+  const otroDia = await eventoA('OtroDia', fechaLibre(), '18:00'); igual((await asignar(otroDia.id, [a.id])).estado, 200, 'otro día:')
+})
+await t('Cruces: un evento que cruza la medianoche (22:00 + 4 h) choca con uno al día siguiente que empieza antes de las 02:00, no con uno a las 02:00', async () => {
+  const dia = new Date(Date.parse(fechaLibre()) ); const sig = new Date(dia.getTime() + 86400000).toISOString().slice(0, 10); const d0 = dia.toISOString().slice(0, 10)
+  const [a] = await crearMeseros(1, 'Medianoche')
+  const noche = await eventoA('Noche', d0, '22:00'); igual((await asignar(noche.id, [a.id])).estado, 200)
+  const temprano = await eventoA('Temprano', sig, '01:00'), justo = await eventoA('Justo', sig, '02:00')
+  igual((await asignar(temprano.id, [a.id])).estado, 409, 'madrugada del día siguiente (01:00):'); igual((await asignar(justo.id, [a.id])).estado, 200, 'a las 02:00 en punto:')
+})
+await t('Cruces: un evento SIN hora de inicio (anteriores a esta regla) ocupa todo el día', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'SinHora')
+  const sinHora = await eventoA('SinHora', dia, undefined); igual(sinHora.hora_inicio, null, 'hora_inicio:')
+  igual((await asignar(sinHora.id, [a.id])).estado, 200)
+  const tarde = await eventoA('Tarde', dia, '18:00'); const r = await asignar(tarde.id, [a.id]); igual(r.estado, 409); cierto(/todo el día/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+})
+await t('Meseros disponibles: marca los asignados a este evento y los ocupados en otro evento que se cruza (con evento y horario)', async () => {
+  const dia = fechaLibre(); const [libre, propio, ocupado] = await crearMeseros(3, 'Disponible')
+  const otro = await eventoA('Otro', dia, '18:00'), este = await eventoA('Este', dia, '20:00')
+  await asignar(otro.id, [ocupado.id]); await asignar(este.id, [propio.id])
+  const r = (await api(`/eventos/${este.id}/meseros/disponibles`)).cuerpo; igual(r.meseros_requeridos, 5, 'requeridos:')
+  const f = (m) => r.meseros.find((x) => x.id === m.id)
+  igual(f(libre).asignado, false); igual(f(libre).ocupado_en.length, 0, 'libre:'); igual(f(propio).asignado, true, 'propio:')
+  igual(f(ocupado).ocupado_en.length, 1, 'ocupado:'); igual(f(ocupado).ocupado_en[0].nombre_evento, `Otro ${LETRAS}`); igual(f(ocupado).ocupado_en[0].horario, '18:00 – 22:00', 'horario:')
+  igual((await api('/eventos/999999999/meseros/disponibles')).estado, 404); igual((await api('/eventos/abc/meseros/disponibles')).estado, 400)
+})
+await t('Dos asignaciones a la vez del mismo mesero a eventos que se cruzan: solo una entra (nunca queda en los dos)', async () => {
+  const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Doble')
+  const e1 = await eventoA('Doble Uno', dia, '18:00'), e2 = await eventoA('Doble Dos', dia, '19:00')
+  const rs = await Promise.all([asignar(e1.id, [a.id]), asignar(e2.id, [a.id])])
+  igual(rs.filter((r) => r.estado === 200).length, 1, 'asignaciones que entraron:'); igual(rs.filter((r) => r.estado === 409).length, 1, 'rechazadas por cruce:'); igual(rs.filter((r) => r.estado >= 500).length, 0, 'errores 500:')
+  igual((await meserosDe(e1.id)).total_asignados + (await meserosDe(e2.id)).total_asignados, 1, 'queda asignado en los dos:')
+})
+await t('Hora de inicio del evento: «HH:MM» de 00:00 a 23:59 (25:61, 18, 6:00, texto o número dan 400), se devuelve en el detalle y la lista, y es opcional en la API', async () => {
+  for (const hora of ['25:61', '24:00', '18', '6:00', '18:60', 'abc', '18:00:00', 1800, {}, []]) igual((await eventoMeseros(100, { hora_inicio: hora })).estado, 400, `hora ${JSON.stringify(hora)}:`)
+  for (const hora of ['00:00', '23:59', '09:05']) { const r = await eventoMeseros(100, { hora_inicio: hora }); igual(r.estado, 201, hora + ':'); igual(r.cuerpo.evento.hora_inicio, hora, 'respuesta:') ; igual((await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo.hora_inicio, hora, 'detalle:') ; igual((await api('/eventos')).cuerpo.find((e) => e.id === r.cuerpo.evento.id).hora_inicio, hora, 'lista:') }
+  const sin = await eventoMeseros(100); igual(sin.estado, 201, 'sin hora:'); igual(sin.cuerpo.evento.hora_inicio, null)
+})
+await t('Asignaciones simultáneas sobre el mismo evento: 10 listas distintas a la vez terminan con UNA lista completa (sin mezclas ni 500)', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(7, 'Carrera')
+  const listas = Array.from({ length: 10 }, (_, i) => ms.filter((_, k) => (k + i) % 3 !== 0).map((m) => m.id))
+  const rs = await Promise.all(listas.map((l) => asignar(ev.id, l)))
+  igual(rs.filter((r) => r.estado >= 500).length, 0, 'errores 500:'); igual(rs.filter((r) => r.estado === 200).length, 10, 'respuestas 200:')
+  const final = idsDe(await meserosDe(ev.id)); cierto(listas.some((l) => JSON.stringify([...l].sort((x, y) => x - y)) === JSON.stringify(final)), 'la lista final no es ninguna de las enviadas: ' + final)
+})
+await t('Eliminar un mesero mientras se asigna: nunca queda un inactivo asignado ni un 500', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(4, 'Cruce')
+  const rs = await Promise.all([asignar(ev.id, ms.map((m) => m.id)), eliminarMesero(ms[0].id), eliminarMesero(ms[1].id)])
+  cierto(rs.every((r) => (r.estado ?? r.status) < 500), 'hubo un 500: ' + rs.map((r) => r.estado ?? r.status))
+  const activos = new Set((await listaMeseros()).map((m) => m.id)); cierto(idsDe(await meserosDe(ev.id)).every((id) => activos.has(id)), 'quedó asignado un mesero inactivo')
+})
+
+// --- Pantalla: detalle del evento
+const abrirDetalleEvento = async (id) => { await page.goto(`${URL}/eventos?evento=${id}`); await page.getByRole('region', { name: 'Meseros asignados' }).waitFor() }
+const seccionAsignados = () => page.getByRole('region', { name: 'Meseros asignados' })
+await t('Pantalla: el detalle muestra «0 de 5 · Faltan 5» y el botón «Asignar meseros»', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; await abrirDetalleEvento(ev.id)
+  igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '0 de 5'); await seccionAsignados().getByText('Faltan 5').waitFor()
+  await seccionAsignados().getByText('Todavía no hay meseros asignados a este evento').waitFor(); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).waitFor()
+})
+await t('Pantalla: marcar 3 meseros y guardar los asigna («3 de 5 · Faltan 2») y quedan en el listado del evento', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(3, 'Pantalla')
+  await abrirDetalleEvento(ev.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click()
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor()
+  await page.fill('#buscar-asignacion', LETRAS)   // todos los de esta corrida
+  for (const m of ms) await lista.locator('label', { hasText: m.nombre_completo }).locator('input[type=checkbox]').check()
+  await page.waitForSelector('text=/3 seleccionados · el evento requiere 5/')
+  await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click()
+  await page.waitForSelector('text=Asignación guardada: 3 de 5 meseros')
+  igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '3 de 5'); await seccionAsignados().getByText('Faltan 2').waitFor()
+  const asignados = await seccionAsignados().getByRole('list', { name: 'Meseros asignados al evento' }).innerText()
+  for (const m of ms) cierto(asignados.includes(m.nombre_completo), `falta ${m.nombre_completo} en el listado`)
+  igual((await meserosDe(ev.id)).total_asignados, 3, 'guardado en el servidor:')
+})
+await t('Pantalla: «Cambiar asignación» precarga los asignados; desmarcar uno lo quita, y cancelar no cambia nada', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(3, 'Cambio')
+  await asignar(ev.id, ms.map((m) => m.id)); await abrirDetalleEvento(ev.id)
+  await seccionAsignados().getByRole('button', { name: 'Cambiar asignación' }).click()
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await page.fill('#buscar-asignacion', LETRAS)
+  for (const m of ms) igual(await lista.locator('label', { hasText: m.nombre_completo }).locator('input[type=checkbox]').isChecked(), true, `${m.nombre_completo} precargado:`)
+  await lista.locator('label', { hasText: ms[0].nombre_completo }).locator('input[type=checkbox]').uncheck()
+  await seccionAsignados().getByRole('button', { name: 'Cancelar' }).click(); igual((await meserosDe(ev.id)).total_asignados, 3, 'cancelar cambió la asignación:')
+  await seccionAsignados().getByRole('button', { name: 'Cambiar asignación' }).click(); await page.fill('#buscar-asignacion', LETRAS)
+  await lista.locator('label', { hasText: ms[0].nombre_completo }).locator('input[type=checkbox]').uncheck(); await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click()
+  await page.waitForSelector('text=Asignación guardada: 2 de 5 meseros'); igual((await meserosDe(ev.id)).total_asignados, 2, 'tras desmarcar:')
+})
+await t('Pantalla: en un evento de 40 asistentes (2 requeridos), asignar 2 muestra «Completo»', async () => {
+  const ev = (await eventoMeseros(40)).cuerpo.evento; const ms = await crearMeseros(2, 'Completo'); await asignar(ev.id, ms.map((m) => m.id)); await abrirDetalleEvento(ev.id)
+  await seccionAsignados().getByText('Completo', { exact: true }).waitFor(); igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '2 de 2')
+})
+await t('Pantalla: un mesero ocupado en otro evento que se cruza aparece bloqueado con «Ocupado en…» y uno que empieza cuando termina el otro se puede marcar', async () => {
+  const dia = fechaLibre(); const [cruza, toca] = await crearMeseros(2, 'Bloqueo')
+  const a = await eventoA('Primero', dia, '18:00'), b = await eventoA('Segundo', dia, '20:00'), c = await eventoA('Tercero', dia, '22:00')
+  await asignar(a.id, [cruza.id, toca.id]); await abrirDetalleEvento(b.id)
+  await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', `Bloqueo`)
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor()
+  const filaCruza = lista.locator('label', { hasText: cruza.nombre_completo }); await filaCruza.waitFor()
+  igual(await filaCruza.locator('input[type=checkbox]').isDisabled(), true, 'el que se cruza no está bloqueado:'); cierto((await filaCruza.innerText()).includes(`Ocupado en «Primero ${LETRAS}» (18:00 – 22:00)`), 'sin el aviso «Ocupado en…»')
+  await abrirDetalleEvento(c.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', `Bloqueo`)
+  const filaToca = lista.locator('label', { hasText: toca.nombre_completo }); await filaToca.waitFor()
+  igual(await filaToca.locator('input[type=checkbox]').isDisabled(), false, 'el que empieza cuando termina el otro está bloqueado:')
+  await filaToca.locator('input[type=checkbox]').check(); await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click(); await page.waitForSelector('text=Asignación guardada: 1 de 5 meseros')
+})
+await t('Pantalla: al marcar tantos meseros como requiere el evento, los demás se bloquean (tope)', async () => {
+  const ev = (await eventoMeseros(40)).cuerpo.evento; await crearMeseros(3, 'Cupo'); await abrirDetalleEvento(ev.id)
+  await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', `Cupo`)
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor()
+  const cajas = lista.locator('input[type=checkbox]'); igual(await cajas.count() >= 3, true, 'menos de 3 meseros:')
+  await cajas.nth(0).check(); await cajas.nth(1).check()
+  await page.waitForSelector('text=2 seleccionados · el evento requiere 2 (ya no puedes marcar más)')
+  igual(await cajas.nth(2).isDisabled(), true, 'el tercero no está bloqueado:'); await cajas.nth(0).uncheck(); igual(await cajas.nth(2).isDisabled(), false, 'no se liberó el cupo:')
+})
+await t('Registro: la hora de inicio es obligatoria (aviso junto al campo) y la vista previa muestra el horario «18:00 – 23:00»; el detalle del evento lo muestra', async () => {
+  await page.goto(`${URL}/eventos/nuevo`)
+  await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', 'Hora de inicio' + sufijo); await page.selectOption('select', 'Boda'); await page.fill('input[type=date]', fechaLibre())
+  await page.fill('input[placeholder="Ej. 6"]', '5'); await page.getByLabel('Número de asistentes').fill('100')
+  await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.waitForSelector('text=Indica la hora de inicio'); igual(await page.getByRole('tab', { name: /Alimentos/ }).count(), 0, 'avanzó sin hora:')
+  await page.fill('#horaInicio', '18:00'); await page.waitForSelector('text=18:00 – 23:00')
+  await aRequerimientos(); await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.getByRole('button', { name: 'Guardar evento' }).waitFor()
+  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('Horario 18:00 – 23:00'), 'el resumen no muestra el horario')
+  await page.getByRole('button', { name: 'Guardar evento' }).click(); await page.waitForURL('**/eventos?evento=*')
+  await page.waitForSelector('text=18:00 – 23:00')
+})
+await t('Pantalla: un mesero eliminado ya no aparece en el selector de asignación', async () => {
+  const [a] = await crearMeseros(1, 'Eliminado'); igual((await eliminarMesero(a.id)).status, 204)
+  const ev = (await eventoMeseros(100)).cuerpo.evento; await abrirDetalleEvento(ev.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click()
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor(); await page.fill('#buscar-asignacion', a.nombre_completo)
+  await page.waitForSelector('text=Ningún mesero coincide con la búsqueda'); igual(await lista.locator('label', { hasText: a.nombre_completo }).count(), 0)
 })
 
 

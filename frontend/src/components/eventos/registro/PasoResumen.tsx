@@ -13,6 +13,7 @@ import { useUmbralAlquiler } from '@/hooks/useUmbralAlquiler'
 import { describirReparto, repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { calcularProducto } from '@/lib/calculos'
 import { CATEGORIAS, etiquetaServicio, TIPOS_BEBIDA, type ConfigCategoria } from '@/lib/categorias'
+import { describirHorario } from '@/lib/horario'
 import { formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
 import { calcularCocineros, calcularMeseros, relacionCocineros, relacionMeseros } from '@/lib/reglasPersonal'
 import { describirHoras } from '@/lib/reglasServicios'
@@ -147,6 +148,7 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
     { etiqueta: 'Tipo', valor: valores.tipo },
     { etiqueta: 'Fecha', valor: formatearFecha(valores.fecha) },
     { etiqueta: 'Duración', valor: `${formatearNumero(valores.duracion)} horas` },
+    { etiqueta: 'Horario', valor: describirHorario(valores.horaInicio, Number(valores.duracion)) ?? '—' },
     { etiqueta: 'Asistentes', valor: formatearNumero(cantidad) },
     { etiqueta: 'Modalidad', valor: asistentes.esBuffet ? 'Buffet' : 'Servida a la mesa' },
     { etiqueta: 'Meseros requeridos', valor: `${formatearNumero(calcularMeseros(cantidad))} (${relacionMeseros})` },

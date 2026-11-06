@@ -276,3 +276,47 @@ CREATE TABLE IF NOT EXISTS plato_ingredientes (
     CONSTRAINT uq_plato_ingrediente UNIQUE (plato_id, ingrediente_id)
 );
 CREATE INDEX IF NOT EXISTS idx_plato_ingredientes_plato ON plato_ingredientes(plato_id);
+
+
+-- =============================================================================
+-- HU-26 (RF-33): Personal de servicio. Una sola tabla genérica con un rol (hoy solo «mesero»; mañana cocineros u
+-- otros perfiles sin crear tablas nuevas). `activo` permite el borrado lógico de la HU-27 (RF-34): un mesero
+-- eliminado se marca inactivo y deja de listarse, pero no se pierde el historial de los eventos donde participó.
+-- Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS personal (
+    id SERIAL PRIMARY KEY,
+    nombre_completo VARCHAR(150) NOT NULL,
+    contacto VARCHAR(150) NOT NULL,
+    rol VARCHAR(20) NOT NULL DEFAULT 'mesero',
+    activo BOOLEAN NOT NULL DEFAULT true,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_personal_rol CHECK (rol IN ('mesero', 'cocinero')),
+    CONSTRAINT chk_personal_nombre CHECK (length(btrim(nombre_completo)) > 0),
+    CONSTRAINT chk_personal_contacto CHECK (length(btrim(contacto)) > 0)
+);
+-- No puede haber dos personas ACTIVAS iguales (mismo rol, nombre y contacto); un eliminado se puede volver a crear
+CREATE UNIQUE INDEX IF NOT EXISTS uq_personal_activo ON personal (rol, lower(nombre_completo), lower(contacto)) WHERE activo;
+CREATE INDEX IF NOT EXISTS idx_personal_rol_activo ON personal (rol) WHERE activo;
+
+
+-- =============================================================================
+-- Hora de inicio del evento (HU-28): para saber si dos eventos se cruzan en el tiempo hace falta la hora. Columna
+-- OPCIONAL: los eventos anteriores no la tienen y se tratan como ocupados todo el día. Solo agrega una columna.
+-- =============================================================================
+ALTER TABLE eventos ADD COLUMN IF NOT EXISTS hora_inicio TIME;
+
+-- =============================================================================
+-- HU-28 (RF-35): Meseros asignados a un evento. Relación muchos a muchos entre eventos y personal. Un mesero no se
+-- puede asignar dos veces al mismo evento. Si un mesero se elimina después (borrado lógico, HU-27) la asignación queda
+-- como historial pero ya no cuenta ni se muestra. Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS evento_personal (
+    id SERIAL PRIMARY KEY,
+    evento_id INTEGER NOT NULL REFERENCES eventos(id) ON DELETE CASCADE,
+    personal_id INTEGER NOT NULL REFERENCES personal(id) ON DELETE RESTRICT,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_evento_personal UNIQUE (evento_id, personal_id)
+);
+CREATE INDEX IF NOT EXISTS idx_evento_personal_evento ON evento_personal (evento_id);
+CREATE INDEX IF NOT EXISTS idx_evento_personal_personal ON evento_personal (personal_id);
