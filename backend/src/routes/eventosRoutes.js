@@ -9,6 +9,7 @@ const { crearEvento, listarEventos, obtenerDetalleEvento } = require('../control
 const { validarCreacionEvento } = require('../middlewares/validarEvento');
 const { calcularComprasPrevio } = require('../controllers/comprasController');
 const { listarMeserosDelEvento, listarMeserosDisponibles, asignarMeseros } = require('../controllers/asignacionMeserosController');
+const { obtenerDesviacionesPersonal } = require('../controllers/desviacionesPersonalController');
 
 const router = Router();
 
@@ -26,6 +27,11 @@ router.get('/:id/meseros', listarMeserosDelEvento);
 router.get('/:id/meseros/disponibles', listarMeserosDisponibles);
 router.put('/:id/meseros', asignarMeseros);
 router.post('/:id/meseros', asignarMeseros);
+
+// Desviaciones y alertas de personal (HU-25 · RF-32)
+router.get('/:id/desviaciones-personal', obtenerDesviacionesPersonal);
+router.get('/:id/desviaciones', obtenerDesviacionesPersonal);
+router.get('/:id/staff-deviations', obtenerDesviacionesPersonal);
 
 // GET /api/eventos/:id -> detalle de un evento con sus requerimientos calculados
 router.get('/:id', obtenerDetalleEvento);

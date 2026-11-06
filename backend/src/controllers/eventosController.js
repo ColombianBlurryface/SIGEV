@@ -28,6 +28,7 @@ const horaCorta = (hora) => (hora ? String(hora).slice(0, 5) : null);
 const { UMBRAL_ALQUILER } = require('../config/parametros');
 const { comprasDeEvento } = require('./comprasController');
 const { armarAsignacion } = require('./asignacionMeserosController');
+const { armarDesviacionesPersonal } = require('./desviacionesPersonalController');
 
 /**
  * POST /api/eventos
@@ -481,7 +482,9 @@ const obtenerDetalleEvento = async (req, res) => {
       // Ingredientes a comprar (HU-47 · RF-55, RN-09, RN-20): salen de las recetas de los platos y los asistentes
       compras_ingredientes: await comprasDeEvento(pool, id, asistentes),
       // Meseros asignados al evento y cuántos faltan o sobran frente a los requeridos (HU-28 · RF-35)
-      asignacion_meseros: await armarAsignacion(pool, id, asistentes)
+      asignacion_meseros: await armarAsignacion(pool, id, asistentes),
+      // Desviaciones y alertas de personal (HU-25 · RF-32)
+      desviaciones_personal: await armarDesviacionesPersonal(pool, id, asistentes)
     });
   } catch (error) {
     console.error('Error al obtener detalle del evento:', error);

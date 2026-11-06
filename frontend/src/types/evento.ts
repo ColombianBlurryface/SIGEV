@@ -161,6 +161,47 @@ export interface MeseroAsignado {
 
 export type EstadoAsignacion = 'completo' | 'deficit' | 'excedente'
 
+// HU-25 (RF-32): Desviaciones y alertas de personal frente al estándar calculado
+export type EstadoDesviacion = 'DEFICIT' | 'OK' | 'SURPLUS'
+export type EstadoGlobalDesviacion = 'COMPLIANT' | 'DEFICIT' | 'SURPLUS'
+
+export interface DesviacionRol {
+  role: 'WAITERS' | 'COOKS'
+  rol: 'mesero' | 'cocinero'
+  nombre_rol: string
+  required_count: number
+  assigned_count: number
+  difference: number
+  deficit: number
+  excedente: number
+  status: EstadoDesviacion
+  message: string
+}
+
+export interface ResumenDesviaciones {
+  total_required: number
+  total_assigned: number
+  total_missing: number
+}
+
+export interface AlertaPersonal {
+  activa: boolean
+  tipo: string
+  diferencia: number
+  deficit: number
+  mensaje: string
+}
+
+export interface EventStaffDeviationResponse {
+  event_id: number | string
+  evento_id: number
+  has_deviations: boolean
+  overall_status: EstadoGlobalDesviacion
+  summary: ResumenDesviaciones
+  roles_breakdown: DesviacionRol[]
+  alerta_meseros?: AlertaPersonal
+}
+
 export interface AsignacionMeseros {
   evento_id: number
   total_asignados: number
@@ -169,6 +210,8 @@ export interface AsignacionMeseros {
   deficit: number
   excedente: number
   estado: EstadoAsignacion
+  alerta_personal?: AlertaPersonal
+  desviaciones_personal?: EventStaffDeviationResponse
   meseros_asignados: MeseroAsignado[]
 }
 
@@ -192,6 +235,7 @@ export interface EventoDetalle extends EventoListado {
   // HU-47: ingredientes a comprar, calculados por el backend al consultar el evento
   compras_ingredientes: ComprasIngredientes
   asignacion_meseros: AsignacionMeseros
+  desviaciones_personal?: EventStaffDeviationResponse
   productos_calculados: ProductoCalculado[]
   servicios_adicionales: ServicioAdicional[]
 }

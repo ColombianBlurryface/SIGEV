@@ -1,7 +1,7 @@
 /**
  * Llamadas a la API de eventos: listar, ver el detalle y registrar.
  */
-import type { AsignacionMeseros, ComprasIngredientes, CrearEventoResponse, MeserosDisponibles, EventoDetalle, EventoListado, NuevoEvento } from '@/types/evento'
+import type { AsignacionMeseros, ComprasIngredientes, CrearEventoResponse, EventStaffDeviationResponse, MeserosDisponibles, EventoDetalle, EventoListado, NuevoEvento } from '@/types/evento'
 import { apiRequest } from './api'
 
 export const eventosService = {
@@ -26,6 +26,11 @@ export const eventosService = {
   // HU-28: sincroniza los meseros del evento con la lista enviada (quita a los que no vienen, agrega a los nuevos)
   asignarMeseros(eventoId: number, personalIds: number[]) {
     return apiRequest<AsignacionMeseros>(`/eventos/${eventoId}/meseros`, { method: 'PUT', body: { personal_ids: personalIds } })
+  },
+
+  // HU-25 (RF-32): alerta y balance de desviaciones de personal frente al estándar calculado
+  desviacionesPersonal(eventoId: number) {
+    return apiRequest<EventStaffDeviationResponse>(`/eventos/${eventoId}/desviaciones-personal`)
   },
 
   crear(evento: NuevoEvento) {

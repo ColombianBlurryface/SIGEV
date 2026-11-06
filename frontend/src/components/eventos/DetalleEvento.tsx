@@ -157,6 +157,7 @@ function agruparRequerimientos(detalle: EventoDetalle) {
     unidadesPedidas,
     compras: detalle.compras_ingredientes,
     asignacion: detalle.asignacion_meseros,
+    desviaciones: detalle.desviaciones_personal,
     vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0,
   }
 }
