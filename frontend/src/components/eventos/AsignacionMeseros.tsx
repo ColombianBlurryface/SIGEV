@@ -61,6 +61,31 @@ export function AsignacionMeseros({ eventoId, estadoEvento, asignacion, mensaje,
         <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-bold', ESTILO_ESTADO[asignacion.estado])}>{etiquetaEstado(asignacion)}</span>
       </div>
 
+      {/* HU-25 (RF-32): Alerta visual explícita de desviación frente al estándar requerido */}
+      {asignacion.estado === 'deficit' && (
+        <Alert variant="warning">
+          <span className="font-semibold">Alerta de personal: </span>
+          {asignacion.alerta_personal?.mensaje ||
+            `Faltan ${formatearNumero(asignacion.deficit)} ${asignacion.deficit === 1 ? 'mesero' : 'meseros'} para cumplir con el estándar requerido para este evento (1 por cada 20 asistentes).`}
+        </Alert>
+      )}
+
+      {asignacion.estado === 'completo' && (
+        <Alert variant="success">
+          <span className="font-semibold">Dotación completa: </span>
+          {asignacion.alerta_personal?.mensaje ||
+            'La asignación de meseros cumple con el estándar requerido (1 por cada 20 asistentes).'}
+        </Alert>
+      )}
+
+      {asignacion.estado === 'excedente' && (
+        <Alert variant="info">
+          <span className="font-semibold">Excedente de personal: </span>
+          {asignacion.alerta_personal?.mensaje ||
+            `Hay ${formatearNumero(asignacion.excedente)} ${asignacion.excedente === 1 ? 'mesero adicional asignado' : 'meseros adicionales asignados'} por encima del estándar requerido.`}
+        </Alert>
+      )}
+
       {mensaje && <Alert variant="success">{mensaje.exito}</Alert>}
 
       {asignacion.meseros_asignados.length === 0 ? (
@@ -230,10 +255,22 @@ function EditorAsignacion({ eventoId, requeridos, inicial, onCancelar, onGuardad
         })}
       </ul>
 
-      <p aria-live="polite" className="text-xs text-muted-foreground">
-        {formatearNumero(seleccionados)} {seleccionados === 1 ? 'seleccionado' : 'seleccionados'} · el evento requiere {formatearNumero(requeridos)}
-        {topeAlcanzado && ' (ya no puedes marcar más)'}
-      </p>
+      {seleccionados < requeridos ? (
+        <Alert variant="warning" className="py-2 text-xs">
+          <span className="font-semibold">Insuficiencia de personal: </span>
+          Faltan {formatearNumero(requeridos - seleccionados)} {requeridos - seleccionados === 1 ? 'mesero' : 'meseros'} para cumplir con el estándar ({formatearNumero(seleccionados)} de {formatearNumero(requeridos)} seleccionados).
+        </Alert>
+      ) : seleccionados === requeridos ? (
+        <Alert variant="success" className="py-2 text-xs">
+          <span className="font-semibold">Dotación completa: </span>
+          Se han seleccionado los {formatearNumero(requeridos)} meseros requeridos (1 por cada 20 asistentes).
+        </Alert>
+      ) : (
+        <Alert variant="info" className="py-2 text-xs">
+          <span className="font-semibold">Sobrecupo: </span>
+          Hay {formatearNumero(seleccionados - requeridos)} {seleccionados - requeridos === 1 ? 'mesero adicional seleccionado' : 'meseros adicionales seleccionados'}.
+        </Alert>
+      )}
 
       {errorServidor && <Alert variant="error">{errorServidor}</Alert>}
 

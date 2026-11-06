@@ -39,11 +39,25 @@ const armarAsignacion = async (cliente, eventoId, asistentes) => {
     [eventoId]
   );
   const requeridos = calcularMeseros(asistentes);
+  const comparacion = compararConRequeridos(rows.length, requeridos);
+  const falta = comparacion.deficit;
+
   return {
     evento_id: eventoId,
     total_asignados: rows.length,
     meseros_requeridos: requeridos,
-    ...compararConRequeridos(rows.length, requeridos),
+    ...comparacion,
+    alerta_personal: {
+      activa: comparacion.estado === 'deficit',
+      tipo: comparacion.estado,
+      diferencia: comparacion.diferencia,
+      deficit: comparacion.deficit,
+      mensaje: comparacion.estado === 'deficit'
+        ? `Faltan ${falta} ${falta === 1 ? 'mesero' : 'meseros'} para cumplir con el estándar requerido para ${asistentes} asistentes (1 por cada 20 asistentes).`
+        : comparacion.estado === 'completo'
+          ? 'La dotación de meseros cumple con el estándar requerido (1 por cada 20 asistentes).'
+          : `La dotación de meseros supera el estándar requerido (+${comparacion.excedente} ${comparacion.excedente === 1 ? 'mesero' : 'meseros'}).`
+    },
     meseros_asignados: rows
   };
 };
