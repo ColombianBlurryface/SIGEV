@@ -111,3 +111,4 @@ test('HU-25 / RF-32 · Mensajes en singular y plural para diferencias', () => {
   const d4 = calcularDesviacionRol('COOKS', 6, 2);
   assert.match(d4.message, /Se requieren 4 cocineros adicionales/);
 });
+

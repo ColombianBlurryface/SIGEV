@@ -125,3 +125,4 @@ module.exports = {
   calcularDesviacionRol,
   calcularDesviacionesPersonal
 };
+
