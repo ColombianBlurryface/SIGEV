@@ -239,3 +239,7 @@ export interface EventoDetalle extends EventoListado {
   productos_calculados: ProductoCalculado[]
   servicios_adicionales: ServicioAdicional[]
 }
+
+
+// Re-exportar tipos del Balance Logístico (Épica 6 · HU-31 a HU-35)
+export type * from './balance'

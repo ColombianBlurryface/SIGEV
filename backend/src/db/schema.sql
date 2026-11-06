@@ -320,3 +320,60 @@ CREATE TABLE IF NOT EXISTS evento_personal (
 );
 CREATE INDEX IF NOT EXISTS idx_evento_personal_evento ON evento_personal (evento_id);
 CREATE INDEX IF NOT EXISTS idx_evento_personal_personal ON evento_personal (personal_id);
+
+-- =============================================================================
+-- Épica 6 (HU-31 a HU-35 · RF-39 a RF-44): Balance logístico de recursos del evento
+--
+-- Tarea adelantada de Sprint 4 (Mitigación de Riesgo R4):
+-- Diseñar el modelo de datos del balance logístico para que el Sprint 5 no arranque
+-- bloqueado. Integra personal, alimentos, bebidas, mobiliario y demás recursos requeridos (RF-40).
+-- Cada elemento tiene un estado: 'disponible', 'por_comprar', 'por_conseguir', 'pendiente' (RF-41).
+-- Permite establecer fecha límite a pendientes (RF-42) y actualización manual a 'disponible' (RF-43).
+-- No maneja facturas ni comprobantes contables (RF-41, RF-43).
+-- =============================================================================
+DO $$ BEGIN
+    CREATE TYPE categoria_balance_enum AS ENUM (
+        'personal',
+        'alimento',
+        'bebida',
+        'mobiliario',
+        'servicio'
+    );
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE estado_balance_enum AS ENUM (
+        'disponible',
+        'por_comprar',
+        'por_conseguir',
+        'pendiente'
+    );
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS evento_balance_recursos (
+    id SERIAL PRIMARY KEY,
+    evento_id INTEGER NOT NULL REFERENCES eventos(id) ON DELETE CASCADE,
+    categoria categoria_balance_enum NOT NULL,
+    recurso_nombre VARCHAR(150) NOT NULL,
+    origen_tipo VARCHAR(30) CHECK (origen_tipo IN ('personal', 'producto_catalogo', 'ingrediente', 'coctel', 'servicio_adicional')),
+    origen_id INTEGER,
+    cantidad_requerida NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    cantidad_disponible NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    unidad_medida VARCHAR(30) NOT NULL DEFAULT 'unidades',
+    estado estado_balance_enum NOT NULL DEFAULT 'pendiente',
+    fecha_limite DATE,
+    notas TEXT,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_cantidad_requerida_positiva CHECK (cantidad_requerida >= 0),
+    CONSTRAINT chk_cantidad_disponible_positiva CHECK (cantidad_disponible >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evento_balance_evento ON evento_balance_recursos (evento_id);
+CREATE INDEX IF NOT EXISTS idx_evento_balance_estado ON evento_balance_recursos (evento_id, estado);
+CREATE INDEX IF NOT EXISTS idx_evento_balance_categoria ON evento_balance_recursos (evento_id, categoria);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_evento_recurso_origen 
+    ON evento_balance_recursos (evento_id, origen_tipo, origen_id) 
+    WHERE origen_tipo IS NOT NULL AND origen_id IS NOT NULL;
