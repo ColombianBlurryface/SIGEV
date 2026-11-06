@@ -86,6 +86,9 @@ export interface ServicioAdicional {
   cantidad: number | null
   // Horas del servicio (RN-18). El mobiliario y los servicios guardados antes de esta regla no la tienen.
   horas: string | number | null
+  tipo_cobro?: 'por_servicio' | 'por_hora' | null
+  valor_unitario?: string | number | null
+  costo_total?: string | number | null
   notas: string | null
   creado_en: string
   // HU-12: solo en el mobiliario. Se comparan con el stock actual del inventario.
@@ -143,6 +146,12 @@ export interface ComprasIngredientes {
   platos_sin_receta: { producto_id: number; nombre: string }[]
 }
 
+export interface ResumenPresupuesto {
+  costo_alimentos_bebidas: number
+  costo_servicios: number
+  costo_total_estimado: number
+}
+
 // HU-28 (RF-35): meseros asignados al evento y cuántos faltan o sobran frente a los requeridos (HU-21)
 export interface MeseroAsignado {
   id: number
@@ -177,6 +186,7 @@ export interface MeserosDisponibles {
 
 export interface EventoDetalle extends EventoListado {
   estado_alquiler: EstadoAlquiler
+  resumen_presupuesto?: ResumenPresupuesto
   // HU-21: personal de servicio calculado por el backend al consultar el evento
   logistica: LogisticaEvento
   // HU-47: ingredientes a comprar, calculados por el backend al consultar el evento

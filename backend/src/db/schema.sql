@@ -116,7 +116,20 @@ ADD COLUMN IF NOT EXISTS producto_id INTEGER REFERENCES catalogo_productos(id) O
 -- RN-18 (HU-05, RF-06): cada servicio adicional tiene sus unidades (columna cantidad, de 1 a 5) y sus horas, que no
 -- pueden superar la duración del evento. Solo se agrega una columna opcional: no cambia ni borra nada de lo que ya hay.
 ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);
+-- HU-48 (RF-47, RF-48, RF-56, RN-18): Registro de costo para servicios adicionales
+-- Modalidad de cobro (por_servicio o por_hora) y su valor unitario mayor que cero
+ALTER TABLE requerimientos_adicionales
+  ADD COLUMN IF NOT EXISTS tipo_cobro VARCHAR(20) DEFAULT 'por_servicio',
+  ADD COLUMN IF NOT EXISTS valor_unitario NUMERIC(12, 2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS costo_total NUMERIC(12, 2) DEFAULT 0;
 
+-- Restricción RN-18 / HU-48: el valor_unitario no puede ser negativo
+ALTER TABLE requerimientos_adicionales 
+  DROP CONSTRAINT IF EXISTS chk_servicio_valor_positivo;
+
+ALTER TABLE requerimientos_adicionales 
+  ADD CONSTRAINT chk_servicio_valor_positivo 
+  CHECK (tipo = 'mobiliario' OR valor_unitario >= 0);
 -- 6. Usuarios del sistema (login únicamente; el alta se hace con src/scripts/crearUsuario.js)
 --    La contraseña se guarda como hash bcrypt, nunca en texto plano.
 CREATE TABLE IF NOT EXISTS usuarios (

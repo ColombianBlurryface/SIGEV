@@ -4,6 +4,17 @@
  */
 import type { ProductoCatalogo } from './catalogo'
 
+export interface ServicioRequerimiento {
+  id?: string
+  tipo: string
+  descripcion: string
+  tipo_cobro?: 'por_hora' | 'por_servicio'
+  valor_unitario?: number
+  cantidad?: number
+  horas?: number
+  costo_total?: number
+  notas?: string
+}
 export interface AlimentoAgregado {
   producto: ProductoCatalogo
   porcion: number
@@ -35,10 +46,12 @@ export interface ServicioAgregado {
   id: string
   tipo: string
   descripcion: string
-  // RN-18: de 1 a 5 unidades y horas que no superan la duración del evento
   cantidad: number
-  horas: number
-  notas: string
+  horas?: number              // Puede ser undefined si se cobra por_servicio
+  tipo_cobro?: 'por_servicio' | 'por_hora'
+  valor_unitario?: number
+  costo_total?: number
+  notas?: string
 }
 
 export interface RequerimientosEvento {

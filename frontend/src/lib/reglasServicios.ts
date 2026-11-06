@@ -72,29 +72,52 @@ export function leerHoras(texto: string): number | null {
 }
 
 /** Mensaje de error de las horas escritas frente a la duración del evento; undefined si están bien. */
-export function errorHoras(texto: string, duracionHoras: number): string | undefined {
-  if (texto.trim() === '') return 'Indica las horas del servicio.'
-  const horas = leerHoras(texto)
-  if (horas === null) return 'Las horas deben ser un número mayor a 0, en horas completas o medias horas.'
-  if (Number.isFinite(duracionHoras) && horas > duracionHoras) {
+export function errorHoras(
+  horas: string | number | undefined | null,
+  duracionHoras: number,
+  tipoCobro?: string
+): string | undefined {
+  // Si la modalidad es por_servicio (tarifa fija), no se requieren horas ni hay error
+  if (tipoCobro === 'por_servicio') return undefined
+  if (tipoCobro === 'por_hora' && (horas === undefined || horas === null || String(horas).trim() === '')) {
+    return 'Indica las horas del servicio.'
+  }
+
+  // Si no hay horas (ej. campo vacío o servicio fijo), NO hay error
+  if (horas === undefined || horas === null) return undefined
+  const cadena = String(horas).trim()
+  if (cadena === '') return undefined
+
+  const num = leerHoras(cadena)
+  if (num === null || num <= 0) {
+    return 'Las horas deben ser un número mayor a 0, en horas completas o medias horas.'
+  }
+  if (Number.isFinite(duracionHoras) && num > duracionHoras) {
     return `Las horas no pueden superar la duración del evento (${formatearNumero(duracionHoras)} h).`
   }
-  if (horas < HORAS_SERVICIO_MIN || horas > HORAS_SERVICIO_MAX) {
+  if (num < HORAS_SERVICIO_MIN || num > HORAS_SERVICIO_MAX) {
     return `Las horas de un servicio van de ${HORAS_SERVICIO_MIN} a ${HORAS_SERVICIO_MAX}.`
   }
   return undefined
 }
-
 export const describirHoras = (horas: number) => `${formatearNumero(horas)} ${horas === 1 ? 'hora' : 'horas'}`
 
-interface ServicioConHoras {
-  tipo: string
-  descripcion: string
-  horas: number
+export interface ServicioConHoras {
+  horas?: number | null
 }
 
 /** Servicios cuyas horas superan la duración del evento (por ejemplo, porque se acortó el evento después). */
-export function serviciosFueraDeDuracion<T extends ServicioConHoras>(servicios: T[], duracionHoras: number): T[] {
+export function serviciosFueraDeDuracion<T extends { tipo_cobro?: string; horas?: number | null }>(
+  servicios: T[],
+  duracionHoras: number
+): T[] {
   if (!Number.isFinite(duracionHoras)) return []
-  return servicios.filter((s) => s.horas > duracionHoras)
+  // FILTRO CLAVE: Solo se evalúan los servicios que se cobran 'por_hora'
+  return servicios.filter(
+    (s) =>
+      s.tipo_cobro === 'por_hora' &&
+      typeof s.horas === 'number' &&
+      Number.isFinite(s.horas) &&
+      s.horas > duracionHoras
+  )
 }

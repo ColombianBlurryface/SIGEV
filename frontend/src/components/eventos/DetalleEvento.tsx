@@ -104,6 +104,23 @@ function agruparRequerimientos(detalle: EventoDetalle) {
           ? 'Elemento alquilado · '
           : ''
     const origen = reparto ? `${prefijoOrigen}${describirReparto(reparto)}` : null
+
+    // HU-48: Costo individual del servicio
+    let costoServicioNum: number | null = null
+    if (!esMobiliario) {
+      if (servicio.costo_total != null) {
+        costoServicioNum = Number(servicio.costo_total)
+      } else if (servicio.valor_unitario != null) {
+        const vu = Number(servicio.valor_unitario)
+        costoServicioNum = servicio.tipo_cobro === 'por_hora'
+          ? vu * Number(servicio.horas || 0)
+          : vu * Number(servicio.cantidad || 1)
+      }
+      if (costoServicioNum !== null && Number.isFinite(costoServicioNum)) {
+        costos.servicios = (costos.servicios ?? 0) + costoServicioNum
+      }
+    }
+
     grupos[esMobiliario ? 'mobiliario' : 'servicios'].push({
       id: `s-${servicio.id}`,
       nombre: esMobiliario
@@ -118,12 +135,17 @@ function agruparRequerimientos(detalle: EventoDetalle) {
         servicio.cantidad === null
           ? '—'
           : `${formatearNumero(servicio.cantidad)}${esMobiliario || (servicio.horas !== null && servicio.horas !== undefined) ? ' und' : ''}`,
-      costo: null,
+      costo: costoServicioNum !== null && Number.isFinite(costoServicioNum) ? formatearMoneda(costoServicioNum) : null,
     })
   }
 
-  // El costo estimado solo incluye alimentos y bebidas; mobiliario y servicios se cotizan aparte
-  const total = detalle.productos_calculados.reduce((suma, p) => suma + Number(p.costo_estimado || 0), 0)
+  // HU-48: Total consolidado del servidor (alimentos, bebidas y servicios) o sumatoria
+  const costoAlimentosBebidas = detalle.productos_calculados.reduce((suma, p) => suma + Number(p.costo_estimado || 0), 0)
+  const costoServicios = costos.servicios ?? 0
+  const total =
+    detalle.resumen_presupuesto?.costo_total_estimado != null
+      ? Number(detalle.resumen_presupuesto.costo_total_estimado)
+      : costoAlimentosBebidas + costoServicios
   const unidadesAlquilar = grupos.mobiliario.reduce((suma, item) => suma + (item.reparto?.alquilar ?? 0), 0)
   const unidadesPedidas = grupos.mobiliario.reduce((suma, item) => suma + (item.reparto ? item.reparto.propias + item.reparto.alquilar : 0), 0)
   return {
@@ -310,7 +332,7 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
 
       {requerimientos && !requerimientos.vacio && (
         <div className="flex items-baseline justify-between border-t border-border pt-3.5">
-          <span className="text-[13px] text-subtle">Costo estimado · alimentos y bebidas</span>
+          <span className="text-[13px] text-subtle">Costo total estimado</span>
           <span className="font-display text-[22px] font-bold">{formatearMoneda(requerimientos.total)}</span>
         </div>
       )}

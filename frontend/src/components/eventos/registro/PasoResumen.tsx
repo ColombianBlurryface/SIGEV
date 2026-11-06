@@ -1,6 +1,7 @@
 /**
  * Paso 3 del registro: revisión final de los datos y requerimientos antes de guardar,
  * con botones para volver a editar cualquier paso. Incluye el aviso de alquiler (HU-12).
+ * HU-48 (RF-56): desglose de costos de insumos y servicios adicionales en el presupuesto consolidado.
  */
 import { Info } from 'lucide-react'
 import { AvisoAlquiler } from '@/components/eventos/AlquilerMobiliario'
@@ -28,6 +29,7 @@ interface LineaResumen {
   nombre: string
   nota?: string
   cantidad: string
+  costo?: number
 }
 
 interface SeccionResumen {
@@ -48,6 +50,22 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
   const asistentes = validarAsistentes(valores.asistentes)
   const cantidad = asistentes.cantidad ?? 0
   const totales = calcularTotales(requerimientos, cantidad)
+
+  // HU-48 / RF-56: Subtotal económico de servicios adicionales
+  const subtotalServicios = requerimientos.servicios.reduce((acumulado, sv) => {
+    const tarifa = Number(sv.valor_unitario) || 0
+    const costo =
+      sv.costo_total != null
+        ? Number(sv.costo_total)
+        : sv.tipo_cobro === 'por_hora'
+          ? tarifa * (Number(sv.horas) || 0)
+          : tarifa * (Number(sv.cantidad) || 1)
+    return acumulado + costo
+  }, 0)
+
+  // Costo total consolidado (Alimentos + Bebidas + Servicios)
+  const costoTotalGeneral = totales.total + subtotalServicios
+
   // HU-47: ingredientes a comprar de los platos elegidos, antes de guardar
   const comprasPrevias = useComprasPrevias(
     asistentes.estado === 'valido' ? cantidad : null,
@@ -99,12 +117,29 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
       {
         clave: 'servicios',
         config: CATEGORIAS.servicios,
-        lineas: requerimientos.servicios.map((sv, indice) => ({
-          id: indice,
-          nombre: `${etiquetaServicio(sv.tipo)} · ${sv.descripcion}`,
-          nota: [describirHoras(sv.horas), sv.notas].filter(Boolean).join(' · '),
-          cantidad: `${formatearNumero(sv.cantidad)} und`,
-        })),
+        lineas: requerimientos.servicios.map((sv, indice) => {
+          const tarifa = Number(sv.valor_unitario) || 0
+          const costoItem =
+            sv.costo_total != null
+              ? Number(sv.costo_total)
+              : sv.tipo_cobro === 'por_hora'
+                ? tarifa * (Number(sv.horas) || 0)
+                : tarifa * (Number(sv.cantidad) || 1)
+
+          const detalleCobro =
+            sv.tipo_cobro === 'por_hora'
+              ? `${describirHoras(sv.horas ?? 0)} · ${formatearMoneda(tarifa)}/h`
+              : `${formatearMoneda(tarifa)} tarifa fija`
+
+          return {
+            id: indice,
+            nombre: `${etiquetaServicio(sv.tipo)} · ${sv.descripcion}`,
+            nota: [detalleCobro, sv.notas].filter(Boolean).join(' · '),
+            cantidad: `${formatearNumero(sv.cantidad)} und`,
+            costo: costoItem,
+          }
+        }),
+        total: subtotalServicios,
       },
     ] satisfies SeccionResumen[]
   ).filter((s) => s.lineas.length > 0)
@@ -121,10 +156,12 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
     { etiqueta: 'Estado inicial', valor: 'Planificación' },
   ]
 
+  // HU-48 / RF-56: Desglose completo de alimentos, bebidas y servicios
   const desglose = [
     { etiqueta: 'Alimentos', valor: totales.alimentos },
     { etiqueta: 'Bebidas generales', valor: totales.bebidasGenerales },
     { etiqueta: 'Bar de coctelería', valor: totales.barCocteleria },
+    { etiqueta: 'Servicios adicionales', valor: subtotalServicios },
   ]
 
   return (
@@ -190,7 +227,7 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
                       {total !== undefined ? (
                         <span className="text-[13.5px] font-bold">{formatearMoneda(total)}</span>
                       ) : (
-                        <span className="text-[12.5px] text-muted-foreground">Cotización aparte</span>
+                        <span className="text-[12.5px] text-muted-foreground">Inventario / Alquiler</span>
                       )}
                     </div>
                     <ul className="flex flex-col gap-1.5">
@@ -200,7 +237,14 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
                             {linea.nombre}
                             {linea.nota && <span className="block truncate text-xs text-muted-foreground">{linea.nota}</span>}
                           </span>
-                          <span className="font-semibold whitespace-nowrap">{linea.cantidad}</span>
+                          <div className="flex flex-col items-end shrink-0">
+                            <span className="font-semibold whitespace-nowrap">{linea.cantidad}</span>
+                            {linea.costo !== undefined && (
+                              <span className="text-[11.5px] font-medium text-muted-foreground">
+                                {formatearMoneda(linea.costo)}
+                              </span>
+                            )}
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -224,8 +268,10 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
 
       <Card className="flex flex-col gap-4 p-6 xl:sticky xl:top-0">
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase">Costo estimado</span>
-          <span className="font-display text-4xl font-extrabold tracking-tight">{formatearMoneda(totales.total)}</span>
+          <span className="text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase">Costo estimado total</span>
+          <span className="font-display text-4xl font-extrabold tracking-tight text-primary">
+            {formatearMoneda(costoTotalGeneral)}
+          </span>
         </div>
         <div className="flex flex-col gap-2.5">
           {desglose.map(({ etiqueta, valor }) => (
@@ -237,7 +283,7 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
         </div>
         <div className="flex items-start gap-2.5 rounded-[10px] bg-accent px-3.5 py-3 text-[13px] leading-relaxed text-accent-foreground">
           <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          Las cantidades incluyen un margen del 10%. Unidades y botellas se redondean hacia arriba.
+          Incluye el total de insumos calculados (+10% margen) y los servicios adicionales registrados (HU-48).
         </div>
       </Card>
     </div>
