@@ -224,22 +224,54 @@ const editarCoctel = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const { rowCount } = await client.query(
+    // 1. Obtener el cóctel actual para verificar existencia y capturar su nombre previo
+    const { rows: coctelActual, rowCount: countPrevio } = await client.query(
+      `SELECT nombre FROM cocteles WHERE id = $1 AND activo = true`,
+      [id]
+    );
+
+    if (countPrevio === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Cóctel no encontrado' });
+    }
+
+    const nombreAnterior = coctelActual[0].nombre;
+
+    // 2. Actualizar el registro en la tabla cocteles
+    await client.query(
       `UPDATE cocteles SET nombre = $1, descripcion = $2, actualizado_en = NOW() WHERE id = $3`,
       [nombre, descripcion, id]
     );
 
-    if (rowCount === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Cóctel no encontrado' });
-    }
-    if (nombreAnterior) {
-      await client.query(
+    // 3. Si el nombre cambió, sincronizar con catalogo_productos para la selección en eventos (HU-45)
+    if (nombreAnterior && nombreAnterior !== nombre) {
+      const { rowCount: actualizado } = await client.query(
         `UPDATE catalogo_productos 
          SET nombre = $1, clasificacion = 'bar_cocteleria', activo = true 
-         WHERE nombre = $2`,
-        [nombre.trim(), nombreAnterior]
+         WHERE nombre = $2 AND clasificacion = 'bar_cocteleria'`,
+        [nombre, nombreAnterior]
       );
+
+      if (actualizado === 0) {
+        const { rows: existeNuevo } = await client.query(
+          `SELECT id FROM catalogo_productos WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($1)) AND clasificacion = 'bar_cocteleria'`,
+          [nombre]
+        );
+        if (existeNuevo.length === 0) {
+          await client.query(
+            `INSERT INTO catalogo_productos (
+               nombre, clasificacion, tipo_calculo, porcion_por_persona,
+               unidad_medida, volumen_botella_ml, tamano_porcion_ml, precio_unitario, activo
+             ) VALUES ($1, 'bar_cocteleria', 'unidad_persona', 1, 'cócteles', 0, 0, 18000, true)`,
+            [nombre]
+          );
+        } else {
+          await client.query(
+            `UPDATE catalogo_productos SET activo = true WHERE id = $1`,
+            [existeNuevo[0].id]
+          );
+        }
+      }
     }
     // Igual que al crear: todos los licores deben ser bebidas de coctelería activas del catálogo
     const licorIds = ingredientes.map((i) => i.licor_id);

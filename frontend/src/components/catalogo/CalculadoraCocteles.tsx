@@ -1,27 +1,73 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { coctelesService, type ResultadoCalculoCocteles } from '@/services/coctelesService'
 import type { Coctel } from '@/types/cocteles'
 import { Calculator, Plus, Trash2 } from 'lucide-react'
 import { ASISTENTES_MAX, ASISTENTES_MIN, errorAsistentesCalculo, errorPorPersona, POR_PERSONA_MAX } from '@/lib/reglasCoctel'
 
 interface Props {
-  coctelesDisponibles: Coctel[]
+  coctelesDisponibles?: Coctel[]
+  asistentesPorDefecto?: number
 }
 
-export const CalculadoraCocteles: React.FC<Props> = ({ coctelesDisponibles }) => {
+export const CalculadoraCocteles: React.FC<Props> = ({ coctelesDisponibles, asistentesPorDefecto }) => {
+  const [coctelesCargados, setCoctelesCargados] = useState<Coctel[]>([])
+  const [cargandoCocteles, setCargandoCocteles] = useState<boolean>(!coctelesDisponibles)
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
+
+  const listaCocteles = coctelesDisponibles ?? coctelesCargados
+
   // Los números se guardan como texto mientras se escriben: así se puede borrar el campo y escribir de cero
   // (con un número, al borrar quedaba un «0» pegado)
-  const [asistentes, setAsistentes] = useState('100')
+  const [asistentes, setAsistentes] = useState(String(asistentesPorDefecto ?? 100))
+  const [prevPropAsistentes, setPrevPropAsistentes] = useState(asistentesPorDefecto)
+
+  // Patrón estándar de React para ajustar estado derivado de prop sin efectos secundarios
+  if (asistentesPorDefecto !== prevPropAsistentes) {
+    setPrevPropAsistentes(asistentesPorDefecto)
+    if (asistentesPorDefecto !== undefined && asistentesPorDefecto > 0) {
+      setAsistentes(String(asistentesPorDefecto))
+    }
+  }
+
   const [seleccionados, setSeleccionados] = useState<{ coctel_id: number; cocteles_por_persona: string }[]>([
-    { coctel_id: coctelesDisponibles[0]?.id || 0, cocteles_por_persona: '2' },
+    { coctel_id: coctelesDisponibles?.[0]?.id || 0, cocteles_por_persona: '2' },
   ])
   const [intento, setIntento] = useState(false)
   const [errorForm, setErrorForm] = useState<string | null>(null)
   const [resultado, setResultado] = useState<ResultadoCalculoCocteles | null>(null)
   const [calculando, setCalculando] = useState(false)
 
+  // Cargar cócteles del catálogo si no fueron provistos por props
+  useEffect(() => {
+    if (coctelesDisponibles) return
+
+    let activo = true
+    coctelesService
+      .listar()
+      .then((data) => {
+        if (!activo) return
+        setCoctelesCargados(data)
+        if (data.length > 0) {
+          setSeleccionados((prev) =>
+            prev.map((item) => (item.coctel_id === 0 ? { ...item, coctel_id: data[0].id } : item)),
+          )
+        }
+      })
+      .catch((err) => {
+        if (!activo) return
+        setErrorCarga(err instanceof Error ? err.message : 'Error al cargar los cócteles del catálogo.')
+      })
+      .finally(() => {
+        if (activo) setCargandoCocteles(false)
+      })
+
+    return () => {
+      activo = false
+    }
+  }, [coctelesDisponibles])
+
   const agregarFila = () => {
-    setSeleccionados((prev) => [...prev, { coctel_id: coctelesDisponibles[0]?.id || 0, cocteles_por_persona: '1' }])
+    setSeleccionados((prev) => [...prev, { coctel_id: listaCocteles[0]?.id || 0, cocteles_por_persona: '1' }])
   }
 
   const eliminarFila = (index: number) => {
@@ -60,6 +106,44 @@ export const CalculadoraCocteles: React.FC<Props> = ({ coctelesDisponibles }) =>
     } finally {
       setCalculando(false)
     }
+  }
+
+  if (cargandoCocteles) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3">
+        <div className="flex items-center gap-2">
+          <Calculator className="w-5 h-5 text-primary animate-pulse" />
+          <h3 className="text-base font-semibold text-foreground">Calcular licor por cóctel (HU-45)</h3>
+        </div>
+        <p className="text-xs text-muted-foreground">Cargando recetas de cócteles…</p>
+      </div>
+    )
+  }
+
+  if (errorCarga) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3">
+        <div className="flex items-center gap-2">
+          <Calculator className="w-5 h-5 text-primary" />
+          <h3 className="text-base font-semibold text-foreground">Calcular licor por cóctel (HU-45)</h3>
+        </div>
+        <p className="text-xs text-red-600 dark:text-red-400">{errorCarga}</p>
+      </div>
+    )
+  }
+
+  if (listaCocteles.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-3">
+        <div className="flex items-center gap-2">
+          <Calculator className="w-5 h-5 text-primary" />
+          <h3 className="text-base font-semibold text-foreground">Calcular licor por cóctel (HU-45)</h3>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          No hay recetas de cócteles registradas en el catálogo. Puedes configurarlas en la sección de Catálogo para realizar cálculos.
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -111,7 +195,7 @@ export const CalculadoraCocteles: React.FC<Props> = ({ coctelesDisponibles }) =>
                 className="w-full min-w-0 sm:flex-1 border border-border rounded-lg p-2 text-sm bg-background text-foreground"
                 required
               >
-                {coctelesDisponibles.map((c) => (
+                {listaCocteles.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.nombre}
                   </option>
