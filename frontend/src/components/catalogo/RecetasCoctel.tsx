@@ -5,7 +5,6 @@ import type { Coctel } from '@/types/cocteles'
 import type { ProductoCatalogo } from '@/types/catalogo'
 import { Plus, Trash2, Edit2, Wine } from 'lucide-react'
 import { errorMl, leerMl, ML_MAX_POR_LICOR, MAX_LICORES_POR_RECETA } from '@/lib/reglasCoctel'
-import { CalculadoraCocteles } from './CalculadoraCocteles'
 const MAX_LICORES_POR_COCTEL = MAX_LICORES_POR_RECETA
 
 export const RecetasCoctel: React.FC = () => {
@@ -337,8 +336,6 @@ export const RecetasCoctel: React.FC = () => {
           ))}
         </div>
       </div>
-      {/* HU-45: Calculadora / Simulador de Licor por Cóctel (AQUÍ ES EL LUGAR CORRECTO) */}
-      {cocteles.length > 0 && <CalculadoraCocteles coctelesDisponibles={cocteles} />}
     </div>
   )
 }

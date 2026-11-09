@@ -25,6 +25,7 @@ import { formatearMoneda, formatearNumero } from '@/lib/formato'
 import { PRECIO_MAX } from '@/lib/limites'
 import { esUnidadesPorPersonaValida, MENSAJE_UNIDADES_POR_PERSONA } from '@/lib/reglasBebidas'
 import { cn } from '@/lib/utils'
+import { CalculadoraCocteles } from '@/components/catalogo/CalculadoraCocteles'
 import type { ProductoCatalogo } from '@/types/catalogo'
 import type { BebidaAgregada } from '@/types/registro'
 
@@ -388,6 +389,11 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
           <span className="font-bold">{formatearMoneda(subtotal)}</span>
         </div>
       </Card>
+
+      {/* HU-45: Calculadora / Simulador de Licor por Cóctel */}
+      {tipo === 'bar_cocteleria' && (
+        <CalculadoraCocteles asistentesPorDefecto={asistentes} />
+      )}
     </div>
   )
 }
