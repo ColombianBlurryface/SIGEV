@@ -6,9 +6,12 @@
 import { Info } from 'lucide-react'
 import { AvisoAlquiler } from '@/components/eventos/AlquilerMobiliario'
 import { ComprasIngredientes } from '@/components/eventos/ComprasIngredientes'
+import { ComprasCocteles } from '@/components/eventos/ComprasCocteles'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useComprasPrevias } from '@/hooks/useComprasPrevias'
+import { useComprasCoctelesPrevias } from '@/hooks/useComprasCoctelesPrevias'
+import { useMemo } from 'react'
 import { useUmbralAlquiler } from '@/hooks/useUmbralAlquiler'
 import { describirReparto, repartirMobiliario, totalAlquilar } from '@/lib/alquiler'
 import { calcularProducto } from '@/lib/calculos'
@@ -70,6 +73,22 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
   const comprasPrevias = useComprasPrevias(
     asistentes.estado === 'valido' ? cantidad : null,
     requerimientos.alimentos.map((a) => a.producto.id),
+  )
+
+  // HU-45: botellas de licor a comprar de los cócteles elegidos, antes de guardar
+  const coctelesItems = useMemo(
+    () =>
+      requerimientos.bebidas
+        .filter((b) => b.producto.clasificacion === 'bar_cocteleria')
+        .map((b) => ({
+          producto_id: b.producto.id,
+          porcion_por_persona: b.porcion,
+        })),
+    [requerimientos.bebidas]
+  )
+  const comprasCoctelesPrevias = useComprasCoctelesPrevias(
+    asistentes.estado === 'valido' ? cantidad : null,
+    coctelesItems
   )
   const repartos = requerimientos.mobiliario.map((m) => repartirMobiliario(m.cantidad, m.disponible))
 
@@ -264,6 +283,21 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
             <p className="text-[13.5px] text-subtle">Calculando los ingredientes a comprar…</p>
           )}
         </Card>
+
+        {coctelesItems.length > 0 && (
+          <Card className="flex flex-col gap-4 p-6">
+            {comprasCoctelesPrevias.compras ? (
+              <ComprasCocteles
+                compras={comprasCoctelesPrevias.compras}
+                sinCocteles="Aún no agregaste bebidas de coctelería: cuando las agregues, aquí verás las botellas de licor a comprar."
+              />
+            ) : comprasCoctelesPrevias.error ? (
+              <p className="text-[13.5px] text-destructive">{comprasCoctelesPrevias.error}</p>
+            ) : (
+              <p className="text-[13.5px] text-subtle">Calculando las botellas de coctelería a comprar…</p>
+            )}
+          </Card>
+        )}
       </div>
 
       <Card className="flex flex-col gap-4 p-6 xl:sticky xl:top-0">
