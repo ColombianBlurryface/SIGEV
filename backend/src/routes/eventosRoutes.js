@@ -8,6 +8,7 @@ const { Router } = require('express');
 const { crearEvento, listarEventos, obtenerDetalleEvento } = require('../controllers/eventosController');
 const { validarCreacionEvento } = require('../middlewares/validarEvento');
 const { calcularComprasPrevio } = require('../controllers/comprasController');
+const { calcularComprasCoctelesPrevio } = require('../controllers/comprasCoctelesController');
 const { listarMeserosDelEvento, listarMeserosDisponibles, asignarMeseros } = require('../controllers/asignacionMeserosController');
 const { obtenerDesviacionesPersonal } = require('../controllers/desviacionesPersonalController');
 
@@ -18,6 +19,9 @@ router.post('/', validarCreacionEvento, crearEvento);
 
 // POST /api/eventos/calcular-compras -> ingredientes a comprar de unos platos y unos asistentes, antes de guardar (HU-47)
 router.post('/calcular-compras', calcularComprasPrevio);
+
+// POST /api/eventos/calcular-compras-cocteles -> botellas de licor a comprar de unos cócteles y unos asistentes, antes de guardar (HU-45)
+router.post('/calcular-compras-cocteles', calcularComprasCoctelesPrevio);
 
 // GET /api/eventos -> lista todos los eventos ordenados por fecha
 router.get('/', listarEventos);

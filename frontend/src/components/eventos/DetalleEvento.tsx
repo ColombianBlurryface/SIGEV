@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AsignacionMeseros, type MensajeAsignacion } from '@/components/eventos/AsignacionMeseros'
 import { ComprasIngredientes } from '@/components/eventos/ComprasIngredientes'
+import { ComprasCocteles } from '@/components/eventos/ComprasCocteles'
 import { useEventoDetalle } from '@/hooks/useEventoDetalle'
 import { describirReparto, type RepartoMobiliario } from '@/lib/alquiler'
 import {
@@ -156,6 +157,7 @@ function agruparRequerimientos(detalle: EventoDetalle) {
     unidadesAlquilar,
     unidadesPedidas,
     compras: detalle.compras_ingredientes,
+    comprasCocteles: detalle.compras_cocteles,
     asignacion: detalle.asignacion_meseros,
     desviaciones: detalle.desviaciones_personal,
     vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0,
@@ -330,6 +332,11 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
 
       {/* HU-47: lo que hay que comprar de cada ingrediente, según los asistentes y las recetas de los platos */}
       {requerimientos && <ComprasIngredientes compras={requerimientos.compras} />}
+
+      {/* HU-45: botellas de licor para coctelería a comprar, según los asistentes y recetas de cócteles */}
+      {requerimientos?.comprasCocteles && (
+        <ComprasCocteles compras={requerimientos.comprasCocteles} />
+      )}
 
       {requerimientos && !requerimientos.vacio && (
         <div className="flex items-baseline justify-between border-t border-border pt-3.5">

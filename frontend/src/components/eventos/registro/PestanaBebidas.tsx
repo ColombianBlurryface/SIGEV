@@ -390,9 +390,9 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
         </div>
       </Card>
 
-      {/* HU-45: Calculadora / Simulador de Licor por Cóctel */}
+      {/* HU-45: Botellas consolidadas a comprar para coctelería */}
       {tipo === 'bar_cocteleria' && (
-        <CalculadoraCocteles asistentesPorDefecto={asistentes} />
+        <CalculadoraCocteles asistentes={asistentes} bebidas={bebidas} />
       )}
     </div>
   )
