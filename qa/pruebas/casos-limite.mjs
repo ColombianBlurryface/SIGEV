@@ -144,10 +144,10 @@ await caso('4 de entretenimiento (máximo 3)', [400], async () => largo([srv({ t
 await caso('Tipo «otro» 3 + 3 (máximo 5)', [400], async () => largo([srv({ tipo: 'otro', cantidad: 3 }), srv({ tipo: 'otro', cantidad: 3, descripcion: 'Otro 2' })]))
 await caso('Un servicio de cada tipo en su tope', [201], async () => largo([srv({ cantidad: 3 }), srv({ tipo: 'musica_en_vivo', cantidad: 3 }), srv({ tipo: 'sonido', cantidad: 2 }), srv({ tipo: 'iluminacion', cantidad: 2 }), srv({ tipo: 'entretenimiento', cantidad: 3 }), srv({ tipo: 'otro', cantidad: 5 })]))
 await caso('Horas con cuarto de hora (3,25)', [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: [srv({ horas: 3.25 })] }))))
-await caso('Horas en 0, negativas o sin enviar', [400], async () => {
-  const r = [0, -2, undefined].map(async (h) => (await await_call_eventos(ev({ servicios_adicionales: [srv({ horas: h })] }))).s)
-  const s3 = await Promise.all(r)
-  return { s: s3.every((x) => x === 400) ? 400 : s3.join('/'), nota: s3.join('/') }
+await caso('Horas en 0 o negativas dan 400; sin enviar horas, con cobro por servicio (HU-48), entra', [400], async () => {
+  const malas = await Promise.all([0, -2].map(async (h) => (await await_call_eventos(ev({ servicios_adicionales: [srv({ horas: h })] }))).s))
+  const sinHoras = (await await_call_eventos(ev({ servicios_adicionales: [srv({ horas: undefined })] }))).s
+  return { s: malas.every((x) => x === 400) && sinHoras === 201 ? 400 : `${malas.join('/')}/${sinHoras}`, nota: `0 y -2: ${malas.join('/')}, sin horas: ${sinHoras}` }
 })
 await caso('Servicio sin unidades', [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: [{ tipo: 'dj', descripcion: 'DJ', horas: 2 }] }))))
 await caso('Servicio con descripción en blanco', [400], async () => m(await await_call_eventos(ev({ servicios_adicionales: [srv({ descripcion: '   ' })] }))))
