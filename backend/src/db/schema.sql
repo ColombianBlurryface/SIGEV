@@ -377,3 +377,13 @@ CREATE INDEX IF NOT EXISTS idx_evento_balance_categoria ON evento_balance_recurs
 CREATE UNIQUE INDEX IF NOT EXISTS uq_evento_recurso_origen 
     ON evento_balance_recursos (evento_id, origen_tipo, origen_id) 
     WHERE origen_tipo IS NOT NULL AND origen_id IS NOT NULL;
+
+
+-- =============================================================================
+-- HU-29 (RF-36): Estado de cada mesero asignado a un evento: por confirmar, confirmado o no puede. Toda asignación nueva
+-- nace «por_confirmar». Un mesero que «no_puede» NO cuenta para el estándar de personal (HU-25) ni bloquea su horario en
+-- otro evento. Solo agrega una columna con valor por defecto: las asignaciones que ya existen quedan «por_confirmar».
+-- =============================================================================
+ALTER TABLE evento_personal ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'por_confirmar';
+ALTER TABLE evento_personal DROP CONSTRAINT IF EXISTS chk_evento_personal_estado;
+ALTER TABLE evento_personal ADD CONSTRAINT chk_evento_personal_estado CHECK (estado IN ('por_confirmar', 'confirmado', 'no_puede'));

@@ -2,6 +2,9 @@
  * Meseros asignados a un evento (HU-28 · RF-35): cuántos hay frente a los que el evento requiere (1 por cada 20
  * asistentes, HU-21), quiénes son, y el selector para cambiar la asignación. Guardar sincroniza la lista completa:
  * los que se desmarcan se quitan y los marcados se agregan.
+ *
+ * HU-29 (RF-36): cada mesero asignado tiene un estado (por confirmar, confirmado o no puede) que se cambia aquí mismo.
+ * Quien «no puede» sigue en la lista pero no cuenta para el estándar: el «X de Y» y las alertas solo suman a los demás.
  */
 import { LoaderCircle, Search, UserCheck, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -13,7 +16,7 @@ import { formatearNumero, normalizar } from '@/lib/formato'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/services/api'
 import { eventosService } from '@/services/eventosService'
-import type { AsignacionMeseros as Asignacion, EstadoEvento, MeseroCandidato } from '@/types/evento'
+import type { AsignacionMeseros as Asignacion, EstadoEvento, EstadoMesero, MeseroCandidato } from '@/types/evento'
 
 // Lo que se le dice a la persona después de guardar. Vive en el componente padre porque al guardar el detalle se
 // vuelve a cargar y este componente se vuelve a montar: si el mensaje viviera aquí, se perdería.
@@ -31,6 +34,18 @@ interface AsignacionMeserosProps {
   onCambio: () => void
 }
 
+const ETIQUETA_ESTADO_MESERO: Record<EstadoMesero, string> = {
+  por_confirmar: 'Por confirmar',
+  confirmado: 'Confirmado',
+  no_puede: 'No puede',
+}
+
+const ESTILO_ESTADO_MESERO: Record<EstadoMesero, string> = {
+  por_confirmar: 'border-border bg-muted text-muted-foreground',
+  confirmado: 'border-transparent bg-success-soft text-success-foreground',
+  no_puede: 'border-transparent bg-warning-soft text-warning-foreground',
+}
+
 const ESTILO_ESTADO = {
   completo: 'bg-success-soft text-success-foreground',
   deficit: 'bg-warning-soft text-warning-foreground',
@@ -45,8 +60,26 @@ function etiquetaEstado(a: Asignacion) {
 
 export function AsignacionMeseros({ eventoId, estadoEvento, asignacion, mensaje, onMensaje, onCambio }: AsignacionMeserosProps) {
   const [editando, setEditando] = useState(false)
+  // HU-29: el mesero cuyo estado se está guardando, y el error del último intento
+  const [cambiandoId, setCambiandoId] = useState<number | null>(null)
+  const [errorEstado, setErrorEstado] = useState<string | null>(null)
   // A un evento realizado o cancelado ya no se le asigna personal
   const cerrado = estadoEvento === 'realizado' || estadoEvento === 'cancelado'
+
+  async function cambiarEstado(id: number, nombre: string, estado: EstadoMesero) {
+    setCambiandoId(id)
+    setErrorEstado(null)
+    onMensaje(null)
+    try {
+      await eventosService.cambiarEstadoMesero(eventoId, id, estado)
+      onMensaje({ exito: `${nombre} quedó como «${ETIQUETA_ESTADO_MESERO[estado]}».` })
+      onCambio()
+    } catch (err) {
+      setErrorEstado(err instanceof ApiError ? err.message : 'No fue posible cambiar el estado.')
+    } finally {
+      setCambiandoId(null)
+    }
+  }
 
   return (
     <section aria-label="Meseros asignados" className="flex flex-col gap-3">
@@ -56,7 +89,7 @@ export function AsignacionMeseros({ eventoId, estadoEvento, asignacion, mensaje,
         </span>
         <span className="text-[13.5px] font-bold">Meseros asignados</span>
         <span aria-label="Meseros asignados frente a los requeridos" className="ml-auto text-[13px] font-bold">
-          {formatearNumero(asignacion.total_asignados)} de {formatearNumero(asignacion.meseros_requeridos)}
+          {formatearNumero(asignacion.total_utiles)} de {formatearNumero(asignacion.meseros_requeridos)}
         </span>
         <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-bold', ESTILO_ESTADO[asignacion.estado])}>{etiquetaEstado(asignacion)}</span>
       </div>
@@ -91,19 +124,44 @@ export function AsignacionMeseros({ eventoId, estadoEvento, asignacion, mensaje,
       {asignacion.meseros_asignados.length === 0 ? (
         <p className="rounded-[10px] bg-background px-3 py-3 text-[13.5px] text-subtle">Todavía no hay meseros asignados a este evento.</p>
       ) : (
-        <ul aria-label="Meseros asignados al evento" className="flex flex-col gap-1">
-          {asignacion.meseros_asignados.map((m) => (
-            <li key={m.id} className="flex min-w-0 items-center gap-2 text-[13px]">
-              <UserRound aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate font-semibold" title={m.nombre_completo}>
-                {m.nombre_completo}
-              </span>
-              <span className="truncate text-xs text-muted-foreground" title={m.contacto}>
-                {m.contacto}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="text-xs text-muted-foreground" aria-label="Resumen de estados">
+            {formatearNumero(asignacion.confirmados)} {asignacion.confirmados === 1 ? 'confirmado' : 'confirmados'} ·{' '}
+            {formatearNumero(asignacion.por_confirmar)} por confirmar · {formatearNumero(asignacion.no_pueden)} {asignacion.no_pueden === 1 ? 'no puede' : 'no pueden'}
+          </p>
+          <ul aria-label="Meseros asignados al evento" className="flex flex-col gap-1.5">
+            {asignacion.meseros_asignados.map((m) => (
+              <li key={m.id} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
+                <UserRound aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className={cn('truncate font-semibold', m.estado === 'no_puede' && 'line-through opacity-70')} title={m.nombre_completo}>
+                  {m.nombre_completo}
+                </span>
+                <span className="truncate text-xs text-muted-foreground" title={m.contacto}>
+                  {m.contacto}
+                </span>
+                <span className="ml-auto flex items-center gap-2">
+                  <span className={cn('rounded-full border px-2 py-0.5 text-xs font-bold', ESTILO_ESTADO_MESERO[m.estado])}>{ETIQUETA_ESTADO_MESERO[m.estado]}</span>
+                  {!cerrado && (
+                    <select
+                      aria-label={`Estado de ${m.nombre_completo}`}
+                      value={m.estado}
+                      disabled={cambiandoId === m.id}
+                      onChange={(e) => cambiarEstado(m.id, m.nombre_completo, e.target.value as EstadoMesero)}
+                      className="h-8 rounded-[8px] border border-border bg-card px-2 text-xs"
+                    >
+                      {(Object.keys(ETIQUETA_ESTADO_MESERO) as EstadoMesero[]).map((estado) => (
+                        <option key={estado} value={estado}>
+                          {ETIQUETA_ESTADO_MESERO[estado]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {errorEstado && <Alert variant="error">{errorEstado}</Alert>}
+        </>
       )}
 
       {cerrado ? (
@@ -117,7 +175,7 @@ export function AsignacionMeseros({ eventoId, estadoEvento, asignacion, mensaje,
           onGuardado={(resultado) => {
             setEditando(false)
             onMensaje({
-              exito: `Asignación guardada: ${formatearNumero(resultado.total_asignados)} de ${formatearNumero(resultado.meseros_requeridos)} meseros.`,
+              exito: `Asignación guardada: ${formatearNumero(resultado.total_utiles)} de ${formatearNumero(resultado.meseros_requeridos)} meseros.`,
             })
             onCambio()
           }}
@@ -187,7 +245,8 @@ function EditorAsignacion({ eventoId, requeridos, inicial, onCancelar, onGuardad
 
   const termino = normalizar(busqueda.trim())
   const visibles = candidatos.filter((p) => termino === '' || normalizar(`${p.nombre_completo} ${p.contacto}`).includes(termino))
-  const seleccionados = candidatos.filter((p) => marcados.has(p.id)).length
+  // Quien está asignado como «no puede» no cuenta para el tope ni para el estándar (HU-29)
+  const seleccionados = candidatos.filter((p) => marcados.has(p.id) && p.estado !== 'no_puede').length
   const topeAlcanzado = seleccionados >= requeridos
 
   function alternar(id: number) {
@@ -229,6 +288,7 @@ function EditorAsignacion({ eventoId, requeridos, inicial, onCancelar, onGuardad
           const marcado = marcados.has(p.id)
           const ocupado = !marcado && p.ocupado_en.length > 0
           const sinCupo = !marcado && topeAlcanzado
+          const noPuede = marcado && p.estado === 'no_puede'
           const bloqueado = ocupado || sinCupo
           return (
             <li key={p.id}>
@@ -243,6 +303,7 @@ function EditorAsignacion({ eventoId, requeridos, inicial, onCancelar, onGuardad
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-[13.5px] font-semibold">{p.nombre_completo}</span>
                   <span className="truncate text-xs text-muted-foreground">{p.contacto}</span>
+                  {noPuede && <span className="text-xs font-semibold text-warning-foreground">Marcado como «No puede»: no cuenta para el estándar</span>}
                   {ocupado && (
                     <span className="text-xs font-semibold text-warning-foreground">
                       Ocupado en {p.ocupado_en.map((o) => `«${o.nombre_evento}» (${o.horario})`).join(', ')}

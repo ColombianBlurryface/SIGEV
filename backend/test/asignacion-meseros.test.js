@@ -63,3 +63,39 @@ test('cruces de horario: se cruzan si cada uno empieza antes de que el otro term
   assert.equal(seCruzan(1080, 1320, 1321, 1500), false, 'B empieza después');
   assert.equal(seCruzan(1080, 1320, 0, 600), false, 'B en la mañana');
 });
+
+// ---- HU-29 · Estado de la asignación ---------------------------------------------------------------------------
+const { validarEstado, normalizarEstado, contarUtiles, ESTADOS_ASIGNACION, ESTADO_POR_DEFECTO } = require('../src/config/reglasAsignacionPersonal');
+
+test('HU-29: hay tres estados y toda asignación nueva nace «por_confirmar»', () => {
+  assert.deepEqual(ESTADOS_ASIGNACION, ['por_confirmar', 'confirmado', 'no_puede']);
+  assert.equal(ESTADO_POR_DEFECTO, 'por_confirmar');
+});
+
+test('HU-29: los códigos de la historia (PENDING, CONFIRMED, UNAVAILABLE) y el texto en español se entienden', () => {
+  assert.equal(normalizarEstado('PENDING'), 'por_confirmar');
+  assert.equal(normalizarEstado('CONFIRMED'), 'confirmado');
+  assert.equal(normalizarEstado('UNAVAILABLE'), 'no_puede');
+  assert.equal(normalizarEstado(' No puede '), 'no_puede');
+  assert.equal(normalizarEstado('confirmado'), 'confirmado');
+});
+
+test('HU-29: un estado desconocido, vacío o que no es texto se rechaza', () => {
+  for (const malo of ['', 'xx', 'CANCELLED', 7, null, undefined, [], {}, true]) assert.equal(normalizarEstado(malo), null, String(malo));
+  assert.ok(validarEstado({}).error);
+  assert.ok(validarEstado({ estado: 'xx' }).error);
+  assert.ok(validarEstado(null).error);
+  assert.ok(validarEstado([]).error);
+});
+
+test('HU-29: validarEstado acepta { estado } o { status }', () => {
+  assert.deepEqual(validarEstado({ estado: 'confirmado' }), { estado: 'confirmado' });
+  assert.deepEqual(validarEstado({ status: 'UNAVAILABLE' }), { estado: 'no_puede' });
+});
+
+test('HU-29: quien «no puede» no cuenta (5 asignados con uno que no puede = 4 útiles → déficit de 1)', () => {
+  const utiles = contarUtiles(['por_confirmar', 'por_confirmar', 'confirmado', 'por_confirmar', 'no_puede']);
+  assert.equal(utiles, 4);
+  assert.equal(compararConRequeridos(utiles, 5).deficit, 1);
+  assert.equal(contarUtiles([]), 0);
+});

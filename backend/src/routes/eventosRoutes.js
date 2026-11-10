@@ -8,8 +8,7 @@ const { Router } = require('express');
 const { crearEvento, listarEventos, obtenerDetalleEvento } = require('../controllers/eventosController');
 const { validarCreacionEvento } = require('../middlewares/validarEvento');
 const { calcularComprasPrevio } = require('../controllers/comprasController');
-const { calcularComprasCoctelesPrevio } = require('../controllers/comprasCoctelesController');
-const { listarMeserosDelEvento, listarMeserosDisponibles, asignarMeseros } = require('../controllers/asignacionMeserosController');
+const { listarMeserosDelEvento, listarMeserosDisponibles, asignarMeseros, cambiarEstadoAsignacion } = require('../controllers/asignacionMeserosController');
 const { obtenerDesviacionesPersonal } = require('../controllers/desviacionesPersonalController');
 
 const router = Router();
@@ -31,6 +30,9 @@ router.get('/:id/meseros', listarMeserosDelEvento);
 router.get('/:id/meseros/disponibles', listarMeserosDisponibles);
 router.put('/:id/meseros', asignarMeseros);
 router.post('/:id/meseros', asignarMeseros);
+// Estado de una asignación (HU-29 · RF-36): por_confirmar | confirmado | no_puede (también PENDING | CONFIRMED | UNAVAILABLE)
+router.patch('/:id/meseros/:personalId/estado', cambiarEstadoAsignacion);
+router.patch('/:id/staff/:personalId/status', cambiarEstadoAsignacion);
 
 // Desviaciones y alertas de personal (HU-25 · RF-32)
 router.get('/:id/desviaciones-personal', obtenerDesviacionesPersonal);

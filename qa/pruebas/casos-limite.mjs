@@ -510,6 +510,73 @@ await caso('Candidatos: GET /eventos/:id/meseros/disponibles con id inválido, i
   return { s: a === 400 && b === 404 && c.s === 200 && Array.isArray(c.c.meseros) ? 200 : `${a}/${b}/${c.s}`, nota: `${a}/${b}/${c.s}` }
 })
 
+console.log('\n== HU-29: estado de la asignación (RF-36)')
+const estadoDe = (eId, pId, body) => call(`/eventos/${eId}/meseros/${pId}/estado`, { method: 'PATCH', body })
+const mesN = async (n) => { const r = []; for (let i = 0; i < n; i++) r.push((await call('/personal', { method: 'POST', body: { nombre_completo: `Estado Límite ${LETRAS_C}`, contacto: telC() } })).c); return r }
+await caso('Toda asignación nueva nace «por_confirmar»', ['por_confirmar'], async () => {
+  const e = await evAsig(); const [a] = await mesN(1); const r = await put(e.id, { personal_ids: [a.id] })
+  return { s: r.c?.meseros_asignados?.[0]?.estado }
+})
+await caso('Cambiar a cada uno de los tres estados (en español, PENDING/CONFIRMED/UNAVAILABLE y con status) da 200', [200], async () => {
+  const e = await evAsig(); const [a] = await mesN(1); await put(e.id, { personal_ids: [a.id] })
+  const r = []; for (const b of [{ estado: 'confirmado' }, { estado: 'no_puede' }, { estado: 'por_confirmar' }, { status: 'CONFIRMED' }, { status: 'UNAVAILABLE' }, { status: 'PENDING' }, { estado: ' No puede ' }]) r.push((await estadoDe(e.id, a.id, b)).s)
+  return { s: r.every((x) => x === 200) ? 200 : r.join('/'), nota: r.join('/') }
+})
+await caso('Estados raros (vacío, número, lista, objeto, inyección SQL, nulos) dan 400 y no cambian nada', [400], async () => {
+  const e = await evAsig(); const [a] = await mesN(1); await put(e.id, { personal_ids: [a.id] })
+  const r = []; for (const b of [{}, { estado: '' }, { estado: 7 }, { estado: [] }, { estado: {} }, { estado: null }, { estado: "x'; DROP TABLE evento_personal;--" }, { estado: 'cancelado' }, [], 'hola', null]) r.push((await estadoDe(e.id, a.id, b)).s)
+  const intacto = (await call(`/eventos/${e.id}/meseros`)).c?.meseros_asignados?.[0]?.estado === 'por_confirmar'
+  return { s: r.every((x) => x === 400) && intacto ? 400 : r.join('/') + (intacto ? '' : ' cambió'), nota: r.join('/') }
+})
+await caso('Mesero no asignado a ese evento o evento inexistente da 404; ids inválidos dan 400', [404], async () => {
+  const e = await evAsig(); const [a] = await mesN(1)
+  const noAsig = (await estadoDe(e.id, a.id, { estado: 'confirmado' })).s; const sinEvento = (await estadoDe(2147483647, a.id, { estado: 'confirmado' })).s
+  const malos = [(await call(`/eventos/abc/meseros/${a.id}/estado`, { method: 'PATCH', body: { estado: 'confirmado' } })).s, (await call(`/eventos/${e.id}/meseros/abc/estado`, { method: 'PATCH', body: { estado: 'confirmado' } })).s, (await call(`/eventos/${e.id}/meseros/0/estado`, { method: 'PATCH', body: { estado: 'confirmado' } })).s]
+  return { s: noAsig === 404 && sinEvento === 404 && malos.every((x) => x === 400) ? 404 : `${noAsig}/${sinEvento}/${malos.join(',')}`, nota: `${noAsig}/${sinEvento}/${malos.join(',')}` }
+})
+await caso('Pasar al mismo estado dos veces es idempotente (200 y 200)', [200], async () => {
+  const e = await evAsig(); const [a] = await mesN(1); await put(e.id, { personal_ids: [a.id] })
+  const x = (await estadoDe(e.id, a.id, { estado: 'confirmado' })).s; const y = (await estadoDe(e.id, a.id, { estado: 'confirmado' })).s
+  return { s: x === 200 && y === 200 ? 200 : `${x}/${y}` }
+})
+await caso('Escenario HU-29: 5 requeridos, 5 asignados y uno «no puede» → HU-25 muestra 4 asignados y diferencia -1', [-1], async () => {
+  const e = await evAsig(); const ms = await mesN(5); await put(e.id, { personal_ids: ms.map((x) => x.id) })
+  const r = await estadoDe(e.id, ms[0].id, { estado: 'UNAVAILABLE' })
+  const d = (await call(`/eventos/${e.id}/desviaciones-personal`)).c?.roles_breakdown?.find((x) => x.rol === 'mesero')
+  const ok = r.c?.assignment_status === 'UNAVAILABLE' && r.c?.event_id === e.id && r.c?.staff_id === ms[0].id && d?.assigned_count === 4
+  return { s: ok ? d.difference : `resp ${JSON.stringify(r.c?.assignment_status)} / asignados ${d?.assigned_count}`, nota: `asignados HU-25: ${d?.assigned_count}` }
+})
+await caso('Sincronizar la lista conserva el estado de los que ya estaban, agrega los nuevos «por_confirmar» y quita solo los que salen', [true], async () => {
+  const e = await evAsig(); const [a, b, c] = await mesN(3); await put(e.id, { personal_ids: [a.id, b.id] })
+  await estadoDe(e.id, a.id, { estado: 'confirmado' }); await estadoDe(e.id, b.id, { estado: 'no_puede' })
+  const r = (await put(e.id, { personal_ids: [a.id, b.id, c.id] })).c.meseros_asignados
+  const es = (id) => r.find((x) => x.id === id)?.estado
+  const r2 = (await put(e.id, { personal_ids: [a.id, c.id] })).c.meseros_asignados
+  return { s: es(a.id) === 'confirmado' && es(b.id) === 'no_puede' && es(c.id) === 'por_confirmar' && r2.length === 2 && !r2.some((x) => x.id === b.id), nota: r.map((x) => x.estado).join(',') }
+})
+await caso('Quien «no puede» libera un lugar: con 5 requeridos y uno «no puede», se pueden sumar un sexto; volver a contar al primero con el cupo lleno da 400', [400], async () => {
+  const e = await evAsig(); const ms = await mesN(6); await put(e.id, { personal_ids: ms.slice(0, 5).map((x) => x.id) })
+  await estadoDe(e.id, ms[0].id, { estado: 'no_puede' })
+  const seis = await put(e.id, { personal_ids: ms.map((x) => x.id) })
+  const vuelve = await estadoDe(e.id, ms[0].id, { estado: 'confirmado' })
+  return { s: seis.s === 200 && seis.c?.total_utiles === 5 && vuelve.s === 400 ? 400 : `${seis.s}/${vuelve.s}`, nota: `seis ${seis.s}, vuelve ${vuelve.s}` }
+})
+await caso('Un mesero «no puede» en un evento no bloquea ese horario en otro evento que se cruza; al volver a contar sí da 409', [409], async () => {
+  const dia = (await evH('18:00')).c.evento.fecha_evento.slice(0, 10)
+  const e1 = (await evH('18:00', { fecha_evento: dia, duracion_horas: 4 })).c, e2 = (await evH('19:00', { fecha_evento: dia, duracion_horas: 3 })).c
+  if (!e1.evento || !e2.evento) return { s: 'SIN EVENTOS', nota: `${e1.error} / ${e2.error}` }
+  const [a] = await mesN(1)
+  await put(e1.evento.id, { personal_ids: [a.id] }); await estadoDe(e1.evento.id, a.id, { estado: 'no_puede' })
+  const libre = await put(e2.evento.id, { personal_ids: [a.id] })
+  const vuelve = await estadoDe(e1.evento.id, a.id, { estado: 'por_confirmar' })
+  return { s: libre.s === 200 && vuelve.s === 409 ? 409 : `${libre.s}/${vuelve.s}`, nota: `otro evento ${libre.s}, volver a contar ${vuelve.s}` }
+})
+await caso('Eliminar a un mesero (HU-27) lo saca del conteo del evento, tenga el estado que tenga', [0], async () => {
+  const e = await evAsig(); const [a] = await mesN(1); await put(e.id, { personal_ids: [a.id] }); await estadoDe(e.id, a.id, { estado: 'confirmado' })
+  await call(`/personal/${a.id}`, { method: 'DELETE' })
+  return { s: (await call(`/eventos/${e.id}/meseros`)).c?.total_utiles }
+})
+
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)
 const conocidos = filas.filter((x) => x.conocido)
 const bien = filas.filter((x) => x.ok).length
