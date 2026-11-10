@@ -321,7 +321,7 @@ Respuesta `200` (la misma de `GET`):
 Personal de servicio, hoy solo **meseros**. Una sola tabla `personal` con un `rol` (`mesero` hoy; cocineros u otros perfiles después, sin tablas nuevas) y `activo`, que permite el borrado lógico de la HU-27.
 
 ```json
-{ "nombre_completo": "Carlos Rodríguez", "contacto": "carlos.r@email.com / +57 300 123 4567", "rol": "mesero" }
+{ "nombre_completo": "Carlos Rodríguez", "contacto": "3001234567", "rol": "mesero" }
 ```
 
 `POST` responde `201` con `{ id, nombre_completo, contacto, rol, activo: true, creado_en }`. `GET` devuelve un arreglo con el personal **activo** (`?rol=mesero` o `WAITER` filtra; otro valor da `400`).
@@ -329,7 +329,7 @@ Personal de servicio, hoy solo **meseros**. Una sola tabla `personal` con un `ro
 | Regla | Detalle |
 | --- | --- |
 | `nombre_completo` | Obligatorio, de 2 a 150 caracteres, solo letras (tildes, ñ, otros alfabetos), espacios, apóstrofo, punto y guion: sin números, símbolos ni emoji. Los espacios de más se limpian |
-| `contacto` | Obligatorio («El contacto es obligatorio», `400`), máximo 150 caracteres, texto libre con un **teléfono (mínimo 7 dígitos) o un correo válido**, o ambos; sin símbolos raros |
+| `contacto` | Obligatorio («El contacto es obligatorio», `400`), **máximo 15 caracteres** (decisión del PO: `3001234567`, `+573001234567`, `ana@correo.com`; «El contacto admite máximo 15 caracteres» si se pasa), con un **teléfono (mínimo 7 dígitos) o un correo válido**; sin símbolos raros. La columna de la base sigue siendo de 150: los contactos ya guardados con más caracteres se siguen viendo |
 | `rol` | Opcional, `mesero` por defecto (`WAITER` también se entiende); cualquier otro da `400` |
 | Repetidos | No puede haber dos personas **activas** con el mismo rol, nombre y contacto (sin importar mayúsculas): `409`. Con otro contacto sí se puede |
 | Otros campos | `id`, `activo`, `creado_en` enviados por el cliente se ignoran |
