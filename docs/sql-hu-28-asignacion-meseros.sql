@@ -16,8 +16,8 @@ ALTER TABLE eventos ADD COLUMN IF NOT EXISTS hora_inicio TIME;
 
 -- =============================================================================
 -- HU-28 (RF-35): Meseros asignados a un evento. Relación muchos a muchos entre eventos y personal. Un mesero no se
--- puede asignar dos veces al mismo evento. Si un mesero se elimina después (borrado lógico, HU-27) la asignación queda
--- como historial pero ya no cuenta ni se muestra. Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
+-- puede asignar dos veces al mismo evento. Si un mesero se elimina después (borrado lógico, HU-27) sus asignaciones se borran
+-- (RF-38: la tabla no guarda historial, es la «foto» actual). Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS evento_personal (
     id SERIAL PRIMARY KEY,

@@ -57,24 +57,33 @@ const listarPersonal = async (req, res) => {
 };
 
 // DELETE /api/personal/:id (HU-27 · RF-34)
-// Borrado LÓGICO: el mesero pasa a inactivo y deja de listarse, pero no se pierde el historial de los eventos donde
-// participe (HU-28). Se puede volver a registrar con los mismos datos.
+// Borrado LÓGICO del mesero: pasa a inactivo y deja de listarse; se puede volver a registrar con los mismos datos. Sus
+// asignaciones a eventos SÍ se borran (RF-38: no se guarda historial de asignaciones, HU-30).
+// Una transacción: se desactiva (eso bloquea la fila del mesero, igual que al asignarlo) y se borran sus asignaciones.
 const eliminarPersonal = async (req, res) => {
   const id = idDeRuta(req.params.id);
   if (id === null) return datosInvalidos(res, 'El id del mesero debe ser un número entero positivo.');
+  const cliente = await pool.connect();
   try {
-    // Una sola sentencia: solo toca un mesero ACTIVO, así dos eliminaciones simultáneas no pasan las dos
-    const { rowCount } = await pool.query(
+    await cliente.query('BEGIN');
+    // Solo toca un mesero ACTIVO, así dos eliminaciones simultáneas no pasan las dos
+    const { rowCount } = await cliente.query(
       `UPDATE personal SET activo = false WHERE id = $1 AND rol = 'mesero' AND activo = true`,
       [id]
     );
     if (rowCount === 0) {
+      await cliente.query('ROLLBACK');
       return res.status(404).json({ error: 'No encontrado', detalle: `El mesero con ID ${id} no existe o ya fue eliminado.` });
     }
+    await cliente.query('DELETE FROM evento_personal WHERE personal_id = $1', [id]);
+    await cliente.query('COMMIT');
     res.status(204).end();
   } catch (error) {
+    await cliente.query('ROLLBACK').catch(() => {});
     console.error('Error al eliminar un mesero (HU-27):', error);
     res.status(500).json({ error: 'Error al eliminar el mesero' });
+  } finally {
+    cliente.release();
   }
 };
 

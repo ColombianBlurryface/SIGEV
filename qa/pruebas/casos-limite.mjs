@@ -568,6 +568,32 @@ await caso('Eliminar a un mesero (HU-27) lo saca del conteo del evento, tenga el
   return { s: (await call(`/eventos/${e.id}/meseros`)).c?.total_utiles }
 })
 
+console.log('\n== HU-30: lista de meseros programados (RF-37 / RF-38)')
+const lista30 = (eId) => call(`/eventos/${eId}/staff/waiters`)
+await caso('Evento sin meseros: 200, total_assigned 0 y staff_checklist []', [0], async () => {
+  const e = await evAsig(); const r = await lista30(e.id)
+  return { s: r.s === 200 && Array.isArray(r.c?.staff_checklist) && r.c.staff_checklist.length === 0 ? r.c.total_assigned : `${r.s}`, nota: `estado ${r.s}` }
+})
+await caso('Ids del evento raros: inexistente 404; texto, 0, negativo, decimal, inyección SQL y fuera de rango 400', [404], async () => {
+  const a = (await lista30(2147483647)).s; const b = await Promise.all(['abc', '0', '-1', '1.5', "1;DROP TABLE evento_personal;--", '2147483648'].map(async (x) => (await lista30(encodeURIComponent(x))).s))
+  const sigue = (await call('/personal')).s === 200
+  return { s: a === 404 && b.every((x) => x === 400) && sigue ? 404 : `${a}/${b.join(',')}`, nota: `${a}/${b.join(',')}` }
+})
+await caso('El checklist devuelve cada mesero con staff_id, full_name, contact_info y assignment_status (PENDING, CONFIRMED, UNAVAILABLE)', [true], async () => {
+  const e = await evAsig(); const ms = await mesN(3); await put(e.id, { personal_ids: ms.map((x) => x.id) })
+  await estadoDe(e.id, ms[0].id, { estado: 'confirmado' }); await estadoDe(e.id, ms[1].id, { estado: 'no_puede' })
+  const l = (await lista30(e.id)).c?.staff_checklist ?? []
+  const de = (id) => l.find((x) => x.staff_id === id)
+  return { s: l.length === 3 && de(ms[0].id)?.assignment_status === 'CONFIRMED' && de(ms[1].id)?.assignment_status === 'UNAVAILABLE' && de(ms[2].id)?.assignment_status === 'PENDING' && de(ms[2].id)?.full_name === ms[2].nombre_completo && de(ms[2].id)?.contact_info === ms[2].contacto, nota: l.map((x) => x.assignment_status).join(',') }
+})
+await caso('Sin historial (RF-38): quitar y volver a asignar a un mesero lo deja como «por confirmar» (no recuerda el estado anterior)', ['PENDING'], async () => {
+  const e = await evAsig(); const [a] = await mesN(1)
+  await put(e.id, { personal_ids: [a.id] }); await estadoDe(e.id, a.id, { estado: 'confirmado' }); await put(e.id, { personal_ids: [] })
+  const vacia = (await lista30(e.id)).c?.total_assigned; await put(e.id, { personal_ids: [a.id] })
+  const de = (await lista30(e.id)).c?.staff_checklist?.[0]?.assignment_status
+  return { s: vacia === 0 ? de : `lista tras quitar: ${vacia}` }
+})
+
 const inesperados = filas.filter((x) => !x.ok && !x.conocido)
 const conocidos = filas.filter((x) => x.conocido)
 const bien = filas.filter((x) => x.ok).length

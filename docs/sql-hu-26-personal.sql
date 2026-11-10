@@ -10,7 +10,7 @@
 -- =============================================================================
 -- HU-26 (RF-33): Personal de servicio. Una sola tabla genérica con un rol (hoy solo «mesero»; mañana cocineros u
 -- otros perfiles sin crear tablas nuevas). `activo` permite el borrado lógico de la HU-27 (RF-34): un mesero
--- eliminado se marca inactivo y deja de listarse, pero no se pierde el historial de los eventos donde participó.
+-- eliminado se marca inactivo y deja de listarse y se borran sus asignaciones a eventos (RF-38: sin historial de asignaciones).
 -- Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS personal (

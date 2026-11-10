@@ -253,6 +253,15 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖 **Volver a contar:** pasar de «No puede» a «Por confirmar»/«Confirmado» da **400** si el cupo ya está lleno y **409** si el mesero se cruza con otro evento; un mesero «No puede» no bloquea su horario en otro evento.
 - [ ] 🤖 **Validaciones:** estado inválido, vacío o que no es texto → 400; mesero que no está asignado a ese evento o evento inexistente → 404; ids inválidos → 400; evento realizado o cancelado → 409; sin sesión → 401.
 
+### HU-30 · Consultar lista de meseros programados (RF-37 / RF-38)
+
+> No requiere SQL nuevo (usa la columna de la HU-29).
+
+- [ ] 🤖👀 **Escenario 1:** un evento con 2 meseros (uno confirmado y otro por confirmar) muestra en «Meseros asignados» el nombre, el contacto y el estado de cada uno. Por la API, `GET /api/eventos/:id/staff/waiters` da 200 con `event_id`, `total_assigned: 2` y `staff_checklist` con `staff_id`, `full_name`, `contact_info` y `assignment_status` (`CONFIRMED` / `PENDING`).
+- [ ] 🤖👀 **Escenario 2:** un evento recién creado, sin meseros, da **200** con `staff_checklist: []` y `total_assigned: 0` (en pantalla: «Todavía no hay meseros asignados a este evento»). Un evento que no existe da **404** y un id inválido **400**.
+- [ ] 🤖 **Escenario 3 (RF-38, sin historial):** un mesero que se quita de la lista del evento ya no aparece en la respuesta y **no queda ninguna fila** en `evento_personal` (se verifica en la base). Lo mismo pasa al eliminar al mesero del personal: sus asignaciones se borran de todos los eventos.
+- [ ] 🤖 **Una sola consulta:** la lista se arma con un JOIN; con 5 meseros o con 100 la API hace la misma cantidad de consultas.
+
 ---
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)
