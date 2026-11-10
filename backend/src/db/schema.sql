@@ -281,7 +281,7 @@ CREATE INDEX IF NOT EXISTS idx_plato_ingredientes_plato ON plato_ingredientes(pl
 -- =============================================================================
 -- HU-26 (RF-33): Personal de servicio. Una sola tabla genérica con un rol (hoy solo «mesero»; mañana cocineros u
 -- otros perfiles sin crear tablas nuevas). `activo` permite el borrado lógico de la HU-27 (RF-34): un mesero
--- eliminado se marca inactivo y deja de listarse, pero no se pierde el historial de los eventos donde participó.
+-- eliminado se marca inactivo y deja de listarse y se borran sus asignaciones a eventos (RF-38: sin historial de asignaciones).
 -- Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS personal (
@@ -308,8 +308,8 @@ ALTER TABLE eventos ADD COLUMN IF NOT EXISTS hora_inicio TIME;
 
 -- =============================================================================
 -- HU-28 (RF-35): Meseros asignados a un evento. Relación muchos a muchos entre eventos y personal. Un mesero no se
--- puede asignar dos veces al mismo evento. Si un mesero se elimina después (borrado lógico, HU-27) la asignación queda
--- como historial pero ya no cuenta ni se muestra. Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
+-- puede asignar dos veces al mismo evento. Si un mesero se elimina después (borrado lógico, HU-27) sus asignaciones se borran
+-- (RF-38: la tabla no guarda historial, es la «foto» actual). Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS evento_personal (
     id SERIAL PRIMARY KEY,

@@ -6,15 +6,19 @@
  *   PUT /api/eventos/:id/meseros              sincroniza la lista: { personal_ids: [..] } reemplaza la anterior
  *   POST /api/eventos/:id/meseros             igual que PUT (la historia lo define como POST)
  *   PATCH /api/eventos/:id/meseros/:personalId/estado   cambia el estado de UNA asignación (HU-29 · RF-36)
+ *   GET /api/eventos/:id/staff/waiters        lista de meseros programados del evento, para el checklist (HU-30 · RF-37)
  *
  * Estado de cada asignación (HU-29): por_confirmar (al asignar), confirmado o no_puede. Quien «no puede» sigue en la lista
  * pero NO cuenta para el estándar de personal (HU-25) ni para el tope, ni bloquea su horario en otro evento. Sincronizar la
  * lista (PUT/POST) conserva el estado de los que ya estaban, agrega los nuevos «por_confirmar» y borra solo los que salen.
  *
+ * Sin historial (RF-38): quitar a un mesero de un evento BORRA la fila de evento_personal (no hay borrado lógico ahí), y
+ * eliminar un mesero (HU-27) borra también todas sus asignaciones. Lo que hay en la tabla es la «foto» actual.
+ *
  * Reglas (ver config/reglasAsignacionPersonal.js): no se asignan más meseros que los requeridos (1 por cada 20
  * asistentes) y un mesero no puede estar en dos eventos que se cruzan en el tiempo (si uno termina justo cuando empieza
  * el otro, sí se puede). El detalle del evento (GET /api/eventos/:id) trae el mismo resumen en `asignacion_meseros`. Un
- * mesero eliminado (borrado lógico, HU-27) conserva su asignación como historial pero ya no cuenta ni se muestra.
+ * mesero eliminado (borrado lógico, HU-27) pierde sus asignaciones (RF-38).
  */
 const pool = require('../config/db');
 const { calcularMeseros } = require('../config/reglasPersonal');
@@ -39,9 +43,9 @@ const describirHorario = (c) => {
   return `${c.hora_inicio} – ${c.fin_hora}${c.fin_fecha !== c.fecha ? ' (día siguiente)' : ''}`;
 };
 
-// Los meseros asignados y ACTIVOS de un evento, con la comparación frente a los requeridos (HU-21: 1 por cada 20).
-// Solo cuentan para el estándar los que no están en «no_puede» (HU-29).
-const armarAsignacion = async (cliente, eventoId, asistentes) => {
+// Los meseros programados (asignados y activos) de un evento con su estado: UNA sola consulta con JOIN entre la tabla
+// intermedia y la de personal (sin consultar mesero por mesero). Es la «foto» actual: solo lo que hay en la tabla.
+const consultarChecklist = async (cliente, eventoId) => {
   const { rows } = await cliente.query(
     `SELECT p.id, p.nombre_completo, p.contacto, ep.estado
      FROM evento_personal ep JOIN personal p ON p.id = ep.personal_id
@@ -49,6 +53,13 @@ const armarAsignacion = async (cliente, eventoId, asistentes) => {
      ORDER BY lower(p.nombre_completo), p.id`,
     [eventoId]
   );
+  return rows;
+};
+
+// Los meseros asignados y ACTIVOS de un evento, con la comparación frente a los requeridos (HU-21: 1 por cada 20).
+// Solo cuentan para el estándar los que no están en «no_puede» (HU-29).
+const armarAsignacion = async (cliente, eventoId, asistentes) => {
+  const rows = await consultarChecklist(cliente, eventoId);
   const requeridos = calcularMeseros(asistentes);
   const utiles = contarUtiles(rows.map((r) => r.estado));
   const comparacion = compararConRequeridos(utiles, requeridos);
@@ -116,6 +127,37 @@ const listarMeserosDelEvento = async (req, res) => {
   } catch (error) {
     console.error('Error al consultar los meseros de un evento (HU-28):', error);
     res.status(500).json({ error: 'Error al consultar los meseros del evento' });
+  }
+};
+
+// GET /api/eventos/:id/staff/waiters (HU-30 · RF-37) — checklist de los meseros programados del evento.
+// Un evento sin meseros asignados responde 200 con la lista vacía; solo un evento que no existe da 404.
+const listarChecklistMeseros = async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  if (id === null) return datosInvalidos(res, 'El identificador del evento no es válido.');
+  try {
+    const evento = await cargarEvento(pool, id);
+    if (!evento) return res.status(404).json({ error: 'Evento no encontrado' });
+    const filas = await consultarChecklist(pool, id);
+    res.json({
+      event_id: id,
+      evento_id: id,
+      total_assigned: filas.length,
+      total_asignados: filas.length,
+      staff_checklist: filas.map((f) => ({
+        staff_id: f.id,
+        full_name: f.nombre_completo,
+        contact_info: f.contacto,
+        assignment_status: CODIGO_INGLES[f.estado],
+        personal_id: f.id,
+        nombre_completo: f.nombre_completo,
+        contacto: f.contacto,
+        estado: f.estado
+      }))
+    });
+  } catch (error) {
+    console.error('Error al consultar la lista de meseros programados (HU-30):', error);
+    res.status(500).json({ error: 'Error al consultar la lista de meseros programados' });
   }
 };
 
@@ -312,4 +354,4 @@ const cambiarEstadoAsignacion = async (req, res) => {
   }
 };
 
-module.exports = { armarAsignacion, listarMeserosDelEvento, listarMeserosDisponibles, asignarMeseros, cambiarEstadoAsignacion };
+module.exports = { armarAsignacion, listarMeserosDelEvento, listarMeserosDisponibles, asignarMeseros, cambiarEstadoAsignacion, listarChecklistMeseros };

@@ -2133,6 +2133,44 @@ await t('Pantalla HU-29: el editor de asignación no cuenta a quien «no puede»
   igual((await estadosDe(ev.id))[ms[0].id], 'no_puede', 'se perdió el estado al guardar:')
 })
 
+// ============ HU-30 · Consultar lista de meseros programados (RF-37 / RF-38) ============
+grupo = 'HU-30 Lista de meseros programados (RF-37 / RF-38)'
+const checklist = (eventoId) => api(`/eventos/${eventoId}/staff/waiters`)
+
+await t('HU-30 escenario 1: un evento con un mesero confirmado y otro por confirmar da 200 con nombre, contacto y estado de cada uno', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a, b] = await crearMeseros(2, 'Lista'); await asignar(ev.id, [a.id, b.id]); await cambiarEstado(ev.id, a.id, { estado: 'CONFIRMED' })
+  const r = await checklist(ev.id); igual(r.estado, 200, 'estado:'); igual(r.cuerpo.event_id, ev.id); igual(r.cuerpo.total_assigned, 2, 'total_assigned:'); igual(r.cuerpo.staff_checklist.length, 2)
+  const fa = r.cuerpo.staff_checklist.find((x) => x.staff_id === a.id), fb = r.cuerpo.staff_checklist.find((x) => x.staff_id === b.id)
+  igual(fa.full_name, a.nombre_completo); igual(fa.contact_info, a.contacto); igual(fa.assignment_status, 'CONFIRMED'); igual(fb.full_name, b.nombre_completo); igual(fb.contact_info, b.contacto); igual(fb.assignment_status, 'PENDING')
+  igual(JSON.stringify(Object.keys(fa).slice(0, 4)), JSON.stringify(['staff_id', 'full_name', 'contact_info', 'assignment_status']), 'forma del DTO:')
+})
+await t('HU-30 escenario 2: un evento sin meseros da 200 con staff_checklist [] y total_assigned 0; evento inexistente 404; id inválido 400; sin sesión 401', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const r = await checklist(ev.id)
+  igual(r.estado, 200, 'vacío:'); igual(r.cuerpo.total_assigned, 0); igual(JSON.stringify(r.cuerpo.staff_checklist), '[]', 'lista:')
+  igual((await checklist(999999999)).estado, 404, 'inexistente:')
+  for (const id of ['abc', '0', '-1', '1.5', '99999999999']) igual((await checklist(id)).estado, 400, `id ${id}:`)
+  igual((await fetch(`${API}/eventos/${ev.id}/staff/waiters`)).status, 401, 'sin sesión:')
+})
+await t('HU-30 escenario 3 (RF-38): un mesero quitado del evento ya no aparece, y al eliminar a un mesero desaparece de TODOS sus eventos', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const otro = (await eventoMeseros(100)).cuerpo.evento; const [a, b] = await crearMeseros(2, 'Rastro')
+  await asignar(ev.id, [a.id, b.id]); await asignar(otro.id, [b.id])
+  await asignar(ev.id, [b.id]); let r = (await checklist(ev.id)).cuerpo; igual(r.total_assigned, 1, 'tras quitar a uno:'); cierto(!r.staff_checklist.some((x) => x.staff_id === a.id), 'sigue apareciendo el quitado')
+  igual((await eliminarMesero(b.id)).status, 204)
+  for (const e of [ev, otro]) { r = (await checklist(e.id)).cuerpo; igual(r.total_assigned, 0, `evento ${e.id} tras eliminar:`) }
+})
+await t('HU-30: la lista sale ordenada por nombre y solo trae meseros activos', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(4, 'Orden'); await asignar(ev.id, ms.map((m) => m.id))
+  await eliminarMesero(ms[2].id); const r = (await checklist(ev.id)).cuerpo
+  igual(r.total_assigned, 3, 'sin el eliminado:'); const nombres = r.staff_checklist.map((x) => x.full_name); igual(JSON.stringify(nombres), JSON.stringify([...nombres].sort((x, y) => x.toLowerCase().localeCompare(y.toLowerCase()))), 'orden:')
+})
+await t('Pantalla HU-30: el detalle muestra nombre, contacto y estado de cada mesero programado, y el evento sin meseros lo dice', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const vacio = (await eventoMeseros(100)).cuerpo.evento; const [a, b] = await crearMeseros(2, 'Checklist'); await asignar(ev.id, [a.id, b.id]); await cambiarEstado(ev.id, b.id, { estado: 'confirmado' })
+  await abrirDetalleEvento(ev.id); const lista = seccionAsignados().getByRole('list', { name: 'Meseros asignados al evento' }); const texto = (await lista.innerText()).replace(/\s+/g, ' ')
+  for (const m of [a, b]) cierto(texto.includes(m.nombre_completo) && texto.includes(m.contacto), `falta ${m.nombre_completo} o su contacto`)
+  await lista.getByLabel(`Estado de ${b.nombre_completo}`).waitFor(); igual(await lista.getByLabel(`Estado de ${b.nombre_completo}`).inputValue(), 'confirmado', 'estado de b:'); igual(await lista.getByLabel(`Estado de ${a.nombre_completo}`).inputValue(), 'por_confirmar', 'estado de a:')
+  await abrirDetalleEvento(vacio.id); await seccionAsignados().getByText('Todavía no hay meseros asignados a este evento').waitFor()
+})
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {
