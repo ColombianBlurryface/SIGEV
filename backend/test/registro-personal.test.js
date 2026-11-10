@@ -14,8 +14,8 @@ test('escenario 1: «Carlos Rodríguez» con contacto «3001234567» es válido 
   assert.deepEqual(r, { nombre_completo: 'Carlos Rodríguez', contacto: '3001234567', rol: 'mesero' });
 });
 
-test('el contacto puede ser un teléfono, un correo o ambos con separadores', () => {
-  for (const bueno of ['3001234567', '+57 300 123 4567', '(601) 555-1234', 'carlos.r@email.com', 'carlos.r@email.com / +57 300 123 4567', '300 123 4567 / 315 987 6543', 'Llamar al 3001234567', 'a@b.co']) {
+test('el contacto puede ser un teléfono o un correo de hasta 15 caracteres, con separadores', () => {
+  for (const bueno of ['3001234567', '+573001234567', '300 123 4567', '(601) 555-1234', 'ana@correo.com', 'a@b.co', '1234567']) {
     assert.equal(validarPersonal(mesero({ contacto: bueno })).error, undefined, bueno);
   }
 });
@@ -34,9 +34,15 @@ test('un contacto que no es un teléfono ni un correo se rechaza (texto libre, p
   assert.match(validarPersonal(mesero({ contacto: 'hola' })).error, /teléfono \(mínimo 7 dígitos\) o un correo válido/);
 });
 
-test('el contacto admite máximo 150 caracteres', () => {
-  assert.equal(validarPersonal(mesero({ contacto: '3'.repeat(CONTACTO_MAX) })).error, undefined);
-  assert.match(validarPersonal(mesero({ contacto: '3'.repeat(CONTACTO_MAX + 1) })).error, /máximo 150/);
+test('el contacto admite máximo 15 caracteres (decisión del PO): un correo largo o un teléfono con espacios de más ya no caben', () => {
+  assert.equal(CONTACTO_MAX, 15);
+  assert.equal(validarPersonal(mesero({ contacto: '3'.repeat(CONTACTO_MAX) })).error, undefined, '15 caracteres exactos');
+  assert.match(validarPersonal(mesero({ contacto: '3'.repeat(CONTACTO_MAX + 1) })).error, /máximo 15 caracteres/);
+  for (const largo of ['carlos.r@email.com', '+57 300 123 4567', 'carlos.r@email.com / +57 300 123 4567', 'ana.maria@correo.com']) {
+    assert.match(validarPersonal(mesero({ contacto: largo })).error, /máximo 15 caracteres/, largo);
+  }
+  // el límite se cuenta después de limpiar los espacios repetidos
+  assert.equal(validarPersonal(mesero({ contacto: '  +57   300 1234567  ' })).contacto, '+57 300 1234567');
 });
 
 test('el nombre es obligatorio y solo letras: con números, símbolos, emoji o de un carácter se rechaza', () => {
@@ -51,7 +57,7 @@ test('nombres reales con tildes, ñ, apóstrofos, puntos y guiones se aceptan, y
     assert.equal(validarPersonal(mesero({ nombre_completo: bueno })).error, undefined, bueno);
   }
   assert.equal(validarPersonal(mesero({ nombre_completo: '   Ana   María    López  ', contacto: '  3001234567   ' })).nombre_completo, 'Ana María López');
-  assert.equal(validarPersonal(mesero({ contacto: '  +57   300  123 4567 ' })).contacto, '+57 300 123 4567');
+  assert.equal(validarPersonal(mesero({ contacto: '  +57   300  1234567 ' })).contacto, '+57 300 1234567');
 });
 
 test('el nombre admite máximo 150 caracteres', () => {

@@ -1638,11 +1638,11 @@ await t('Escenario 1: registrar un mesero con nombre y contacto da 201, con id, 
   igual(r.cuerpo.nombre_completo, MESERO_A); igual(r.cuerpo.contacto, '3001234567'); igual(r.cuerpo.rol, 'mesero'); igual(r.cuerpo.activo, true)
 })
 await t('Escenario 2: el listado devuelve un arreglo con los meseros registrados (nombre y contacto), solo activos', async () => {
-  await nuevoMesero(MESERO_B, '+57 315 987 6543')
+  await nuevoMesero(MESERO_B, '+57 3159876543')
   const r = await api('/personal'); igual(r.estado, 200, 'estado:'); cierto(Array.isArray(r.cuerpo), 'no es un arreglo')
   const a = r.cuerpo.find((m) => m.nombre_completo === MESERO_A), b = r.cuerpo.find((m) => m.nombre_completo === MESERO_B)
   cierto(a && b, 'faltan meseros en el listado')
-  igual(b.contacto, '+57 315 987 6543'); cierto(r.cuerpo.every((m) => m.activo === true && m.rol === 'mesero'), 'hay un inactivo o con otro rol')
+  igual(b.contacto, '+57 3159876543'); cierto(r.cuerpo.every((m) => m.activo === true && m.rol === 'mesero'), 'hay un inactivo o con otro rol')
   const orden = r.cuerpo.map((m) => m.nombre_completo.toLowerCase()); cierto(JSON.stringify(orden) === JSON.stringify([...orden].sort((x, y) => x.localeCompare(y, 'es'))) || orden.length > 1, 'sin orden por nombre')
 })
 await t('Escenario 3: sin contacto da 400 diciendo que el contacto es obligatorio (también con espacios o null)', async () => {
@@ -1660,11 +1660,17 @@ await t('El nombre es obligatorio y solo letras: vacío, con números, símbolos
   }
   igual((await nuevoMesero(`María-José O'Brien Jr. ${LETRAS}`)).estado, 201, 'nombre con guion, apóstrofo y punto:')
 })
-await t('El contacto debe traer un teléfono (7 dígitos o más) o un correo: «hola», «12345», símbolos raros o más de 150 caracteres dan 400', async () => {
-  for (const contacto of ['hola', '12345', 'ana@', 'ana@correo', '<script>alert(1)</script>', '3'.repeat(151), 5, {}]) {
+await t('El contacto debe traer un teléfono (7 dígitos o más) o un correo: «hola», «12345», símbolos raros o más de 15 caracteres dan 400', async () => {
+  for (const contacto of ['hola', '12345', 'ana@', 'ana@correo', '<script>alert(1)</script>', '3'.repeat(16), '3'.repeat(151), 5, {}]) {
     igual((await nuevoMesero(`Contacto malo ${LETRAS}`, contacto)).estado, 400, `contacto ${JSON.stringify(contacto)}`.slice(0, 50) + ':')
   }
-  for (const contacto of ['carlos.r@email.com', 'carlos.r@email.com / +57 300 123 4567', '(601) 555-1234']) igual((await nuevoMesero(`Contacto bueno ${LETRAS}`, contacto)).estado, 201, contacto + ':')
+  for (const contacto of ['ana@correo.com', '+573001234567', '(601) 555-1234']) igual((await nuevoMesero(`Contacto bueno ${LETRAS}`, contacto)).estado, 201, contacto + ':')
+})
+await t('El contacto admite máximo 15 caracteres (decisión del PO): 15 exactos entran; 16, un correo largo o teléfono con correo dan 400 «máximo 15 caracteres»', async () => {
+  igual((await nuevoMesero(`Quince Exactos ${LETRAS}`, '3'.repeat(15))).estado, 201, '15 caracteres:')
+  for (const contacto of ['3'.repeat(16), 'carlos.r@email.com', '+57 300 123 4567', 'carlos.r@email.com / +57 300 123 4567']) {
+    const r = await nuevoMesero(`Quince Largo ${LETRAS}`, contacto); igual(r.estado, 400, contacto + ':'); cierto(/máximo 15 caracteres/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+  }
 })
 await t('Los espacios de más se limpian y WAITER se entiende como mesero; id, activo y otros campos enviados se ignoran', async () => {
   const r = await nuevoMesero(`  Luis    Fernando   ${LETRAS}  `, `  +57   300 ${Math.floor(1000000 + Math.random() * 8999999)} `, { rol: 'WAITER', id: 1, activo: false, creado_en: '2000-01-01' })
@@ -1708,6 +1714,12 @@ await t('Pantalla: registrar un mesero con nombre y contacto lo muestra en el li
   cierto((await fila.innerText()).includes(contacto), 'el listado no muestra el contacto')
   igual(await page.getByLabel('Nombre completo').inputValue(), '', 'el formulario no se limpió:')
   cierto((await listaMeseros()).some((m) => m.nombre_completo === nombre && m.contacto === contacto), 'no quedó guardado')
+})
+await t('Pantalla: el campo de contacto no deja escribir más de 15 caracteres y lo dice en la ayuda', async () => {
+  await abrirPersonal()
+  const campo = page.getByLabel('Datos de contacto'); await campo.click(); await campo.pressSequentially('1234567890123456789')
+  igual((await campo.inputValue()).length, 15, 'caracteres que quedaron:'); await page.waitForSelector('text=máximo 15 caracteres')
+  await campo.fill('')
 })
 await t('Pantalla: nombre con números, contacto sin teléfono ni correo y campos vacíos se avisan junto al campo y no se guarda', async () => {
   await abrirPersonal()

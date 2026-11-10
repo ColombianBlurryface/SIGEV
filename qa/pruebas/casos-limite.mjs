@@ -385,6 +385,15 @@ await caso('Mesero: cuerpo que no es un objeto (lista, texto, número, null)', [
   const r = await Promise.all([[], 'hola', 5, null].map(async (b) => (await call('/personal', { method: 'POST', body: b })).s))
   return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
 })
+await caso('Mesero: contacto de 15 caracteres (límite exacto) y de 16', [201], async () => {
+  const a = await call('/personal', { method: 'POST', body: { nombre_completo: `Quince Límite ${LETRAS_C}`, contacto: '3'.repeat(15) } })
+  const b = await call('/personal', { method: 'POST', body: { nombre_completo: `Dieciseis Límite ${LETRAS_C}`, contacto: '3'.repeat(16) } })
+  return { s: a.s === 201 && b.s === 400 ? 201 : `${a.s}/${b.s}`, nota: `15 → ${a.s}, 16 → ${b.s}` }
+})
+await caso('Mesero: correo de 18 caracteres o teléfono con correo (no caben en 15)', [400], async () => {
+  const r = await Promise.all(['carlos.r@email.com', 'carlos.r@email.com / +57 300 123 4567', 'ana.maria@correo.com'].map(async (contacto) => (await call('/personal', { method: 'POST', body: { nombre_completo: `Largo Límite ${LETRAS_C}`, contacto } })).s))
+  return { s: r.every((x) => x === 400) ? 400 : r.join('/'), nota: r.join('/') }
+})
 await caso('Mesero: nombre de 150 caracteres (límite exacto)', [201], async () => mesero({ nombre_completo: 'a'.repeat(150) }))
 await caso('Mesero: nombre de 151 caracteres', [400], async () => mesero({ nombre_completo: 'a'.repeat(151) }))
 await caso('Mesero: nombre con HTML, emoji, números o solo símbolos', [400], async () => {
