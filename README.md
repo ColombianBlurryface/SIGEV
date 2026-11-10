@@ -125,7 +125,7 @@ Aquí se mantienen los productos que se ofrecen al registrar un evento. Cada uno
 
 ### Personal (HU-26)
 
-En **Personal** se registran los meseros con su nombre completo y sus datos de contacto, y se ven en un listado con buscador. El nombre solo admite letras (con tildes, ñ, apóstrofos, puntos y guiones); el contacto es de texto libre pero debe incluir un teléfono (mínimo 7 dígitos) o un correo, o ambos («carlos.r@email.com / +57 300 123 4567»). Los errores se avisan junto al campo mientras se escribe, y no se puede registrar dos veces el mismo mesero activo.
+En **Personal** se registran los meseros con su nombre completo y sus datos de contacto, y se ven en un listado con buscador. El nombre solo admite letras (con tildes, ñ, apóstrofos, puntos y guiones); el contacto es **un teléfono o un correo de máximo 15 caracteres** («3001234567», «+573001234567», «ana@correo.com»; un correo de más de 15 caracteres o un teléfono junto con un correo no caben) y debe traer de verdad un teléfono (mínimo 7 dígitos) o un correo. Los errores se avisan junto al campo mientras se escribe, y no se puede registrar dos veces el mismo mesero activo.
 
 **Eliminar meseros (HU-27).** Cada mesero tiene un botón de papelera que pide confirmación («¿Eliminar a Ana María López?») antes de quitarlo del listado. Es un borrado **lógico**: el registro pasa a inactivo y sus asignaciones a eventos se borran (no se guarda historial de asignaciones), y se puede volver a registrar con los mismos datos. Los datos de un mesero **no se modifican** (no hay «editar»): si hubo un error, se elimina y se registra de nuevo.
 

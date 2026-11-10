@@ -1,11 +1,11 @@
 /**
  * Reglas del registro de meseros (HU-26 · RF-33). Deben coincidir con backend/src/config/reglasRegistroPersonal.js.
- * Un mesero lleva su nombre completo (solo letras) y un contacto de texto libre que traiga de verdad un teléfono
- * (mínimo 7 dígitos) o un correo, o ambos.
+ * Un mesero lleva su nombre completo (solo letras) y UN contacto de máximo 15 caracteres que traiga de verdad un
+ * teléfono (mínimo 7 dígitos) o un correo.
  */
 export const NOMBRE_MIN = 2
 export const NOMBRE_MAX = 150
-export const CONTACTO_MAX = 150
+export const CONTACTO_MAX = 15 // un teléfono o un correo corto (decisión del PO)
 export const DIGITOS_TELEFONO_MIN = 7
 
 export const limpiarEspacios = (texto: string) => texto.replace(/\s+/g, ' ').trim()

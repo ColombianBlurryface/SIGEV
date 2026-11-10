@@ -215,7 +215,7 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **Escenario 1:** «Carlos Rodríguez» con contacto «3001234567» queda registrado («quedó registrado como mesero»), aparece en el listado con su contacto y el formulario se limpia. La API responde 201 con el id, rol `mesero` y activo.
 - [ ] 🤖 **Escenario 2:** el listado (`GET /api/personal`) devuelve un arreglo con nombre y contacto de los meseros registrados, solo los activos y ordenados por nombre.
 - [ ] 🤖👀 **Escenario 3:** sin contacto no se registra: en pantalla «El contacto es obligatorio» junto al campo; por la API, 400 diciendo que el contacto es obligatorio.
-- [ ] 🤖👀 **Nombre:** obligatorio y solo letras («Carlos 123», «Carlos_R» o emoji se rechazan con aviso); se aceptan tildes, ñ, guiones, apóstrofos y puntos. **Contacto:** debe traer un teléfono (7 dígitos o más) o un correo válido, o ambos; «hola» o «12345» se rechazan.
+- [ ] 🤖👀 **Nombre:** obligatorio y solo letras («Carlos 123», «Carlos_R» o emoji se rechazan con aviso); se aceptan tildes, ñ, guiones, apóstrofos y puntos. **Contacto:** un teléfono (7 dígitos o más) o un correo válido, de **máximo 15 caracteres** (el campo no deja escribir más; «carlos.r@email.com» (18) o un teléfono con correo no caben); «hola» o «12345» se rechazan.
 - [ ] 🤖👀 **Repetidos:** el mismo mesero activo (mismo nombre y contacto, sin importar mayúsculas) se rechaza con «Ya hay un mesero activo con ese nombre y ese contacto»; el mismo nombre con otro contacto sí se puede.
 - [ ] 🤖👀 El **buscador** filtra por nombre o contacto y avisa cuando ninguno coincide. Sin sesión, la API responde 401.
 

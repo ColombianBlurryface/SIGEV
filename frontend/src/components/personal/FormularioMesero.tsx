@@ -71,7 +71,7 @@ export function FormularioMesero({ onRegistrado }: FormularioMeseroProps) {
         id="mesero-contacto"
         label="Datos de contacto"
         error={errores.contacto}
-        hint="Un teléfono, un correo o ambos. Ej. 3001234567 o carlos.r@email.com"
+        hint={`Un teléfono o un correo, máximo ${CONTACTO_MAX} caracteres. Ej. 3001234567 o ana@correo.com`}
       >
         <Input
           id="mesero-contacto"

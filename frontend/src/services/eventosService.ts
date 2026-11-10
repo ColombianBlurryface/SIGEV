@@ -18,6 +18,11 @@ export const eventosService = {
     return apiRequest<ComprasIngredientes>('/eventos/calcular-compras', { method: 'POST', body: { asistentes, productos } })
   },
 
+  // HU-45: botellas de licor para coctelería a comprar de unos cócteles y unos asistentes, antes de guardar el evento
+  calcularComprasCocteles(asistentes: number, productos: { producto_id?: number; coctel_id?: number; porcion_por_persona?: number }[]) {
+    return apiRequest<ComprasCocteles>('/eventos/calcular-compras-cocteles', { method: 'POST', body: { asistentes, productos } })
+  },
+
   // HU-28: los meseros registrados frente a un evento (cuáles ya están asignados y cuáles están ocupados en otro evento)
   meserosDisponibles(eventoId: number) {
     return apiRequest<MeserosDisponibles>(`/eventos/${eventoId}/meseros/disponibles`)
