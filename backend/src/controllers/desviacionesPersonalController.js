@@ -19,10 +19,11 @@ const { calcularDesviacionesPersonal } = require('../config/reglasDesviacionesPe
  */
 const armarDesviacionesPersonal = async (cliente, eventoId, asistentes) => {
   const { rows } = await cliente.query(
+    // Quien está «no_puede» (HU-29) no cuenta como personal asignado
     `SELECT p.rol, COUNT(*)::int AS total
      FROM evento_personal ep
      JOIN personal p ON p.id = ep.personal_id
-     WHERE ep.evento_id = $1 AND p.activo = true
+     WHERE ep.evento_id = $1 AND p.activo = true AND ep.estado <> 'no_puede'
      GROUP BY p.rol`,
     [eventoId]
   );

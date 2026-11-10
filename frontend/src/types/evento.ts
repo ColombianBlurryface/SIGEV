@@ -157,7 +157,11 @@ export interface MeseroAsignado {
   id: number
   nombre_completo: string
   contacto: string
+  // HU-29 (RF-36): estado de la asignación de este mesero al evento
+  estado: EstadoMesero
 }
+
+export type EstadoMesero = 'por_confirmar' | 'confirmado' | 'no_puede'
 
 export type EstadoAsignacion = 'completo' | 'deficit' | 'excedente'
 
@@ -204,7 +208,12 @@ export interface EventStaffDeviationResponse {
 
 export interface AsignacionMeseros {
   evento_id: number
+  // Todos los asignados (incluye a quienes «no pueden»); total_utiles es el que cuenta para el estándar (HU-25)
   total_asignados: number
+  total_utiles: number
+  por_confirmar: number
+  confirmados: number
+  no_pueden: number
   meseros_requeridos: number
   diferencia: number
   deficit: number
@@ -216,9 +225,19 @@ export interface AsignacionMeseros {
 }
 
 // Un mesero registrado frente a UN evento: si ya está asignado y si está ocupado en otro evento que se cruza (HU-28)
-export interface MeseroCandidato extends MeseroAsignado {
+export interface MeseroCandidato extends Omit<MeseroAsignado, 'estado'> {
   asignado: boolean
+  estado: EstadoMesero | null
   ocupado_en: { evento_id: number; nombre_evento: string; fecha: string; horario: string }[]
+}
+
+// HU-29: respuesta de cambiar el estado de una asignación
+export interface CambioEstadoMesero {
+  evento_id: number
+  personal_id: number
+  nombre_completo: string
+  estado: EstadoMesero
+  asignacion: AsignacionMeseros
 }
 
 export interface MeserosDisponibles {

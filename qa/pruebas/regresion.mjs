@@ -2048,6 +2048,79 @@ await t('Pantalla: un mesero eliminado ya no aparece en el selector de asignaci�
 })
 
 
+// ============ HU-29 · Estado de la asignación (RF-36) ============
+grupo = 'HU-29 Estado de la asignación de meseros (RF-36)'
+const cambiarEstado = (eventoId, personalId, body) => api(`/eventos/${eventoId}/meseros/${personalId}/estado`, { method: 'PATCH', body })
+const estadosDe = async (eventoId) => Object.fromEntries((await meserosDe(eventoId)).meseros_asignados.map((m) => [m.id, m.estado]))
+
+await t('HU-29: toda asignación nueva nace «por_confirmar» y el contador de estados lo refleja', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(3, 'Nace')
+  const r = (await asignar(ev.id, ms.map((m) => m.id))).cuerpo
+  cierto(r.meseros_asignados.every((m) => m.estado === 'por_confirmar'), 'alguno no nació por confirmar')
+  igual(r.por_confirmar, 3, 'por_confirmar:'); igual(r.confirmados, 0, 'confirmados:'); igual(r.no_pueden, 0, 'no_pueden:'); igual(r.total_utiles, 3, 'útiles:')
+})
+await t('HU-29: PATCH …/meseros/:id/estado cambia el estado y responde {event_id, staff_id, full_name, assignment_status}; se entienden PENDING, CONFIRMED y UNAVAILABLE', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a] = await crearMeseros(1, 'Cambia'); await asignar(ev.id, [a.id])
+  let r = await cambiarEstado(ev.id, a.id, { estado: 'confirmado' }); igual(r.estado, 200, 'estado:')
+  igual(r.cuerpo.estado, 'confirmado'); igual(r.cuerpo.assignment_status, 'CONFIRMED'); igual(r.cuerpo.event_id, ev.id); igual(r.cuerpo.staff_id, a.id); igual(r.cuerpo.full_name, a.nombre_completo)
+  r = await cambiarEstado(ev.id, a.id, { status: 'UNAVAILABLE' }); igual(r.cuerpo.estado, 'no_puede'); igual(r.cuerpo.assignment_status, 'UNAVAILABLE')
+  r = await cambiarEstado(ev.id, a.id, { status: 'PENDING' }); igual(r.cuerpo.estado, 'por_confirmar')
+  const alias = await api(`/eventos/${ev.id}/staff/${a.id}/status`, { method: 'PATCH', body: { status: 'CONFIRMED' } }); igual(alias.estado, 200, 'ruta /staff/:id/status:'); igual((await estadosDe(ev.id))[a.id], 'confirmado', 'estado guardado:')
+})
+await t('HU-29: un estado inválido da 400; mesero no asignado o evento inexistente dan 404; ids inválidos dan 400; sin sesión da 401', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a, b] = await crearMeseros(2, 'Raro'); await asignar(ev.id, [a.id])
+  for (const body of [{}, { estado: '' }, { estado: 'cancelado' }, { estado: 3 }, { estado: null }, [], 'x']) igual((await cambiarEstado(ev.id, a.id, body)).estado, 400, JSON.stringify(body) + ':')
+  igual((await cambiarEstado(ev.id, b.id, { estado: 'confirmado' })).estado, 404, 'no asignado:'); igual((await cambiarEstado(999999999, a.id, { estado: 'confirmado' })).estado, 404, 'evento inexistente:')
+  for (const id of ['abc', '0', '-1', '1.5']) igual((await cambiarEstado(ev.id, id, { estado: 'confirmado' })).estado, 400, `mesero ${id}:`)
+  igual((await estadosDe(ev.id))[a.id], 'por_confirmar', 'un intento rechazado cambió el estado:')
+  const sin = await fetch(`${API}/eventos/${ev.id}/meseros/${a.id}/estado`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'confirmado' }) }); igual(sin.status, 401)
+})
+await t('HU-29 escenario: 5 requeridos, 5 asignados y uno «no puede» → HU-25 cuenta 4 y la diferencia es -1; el detalle del evento también', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(5, 'Util'); await asignar(ev.id, ms.map((m) => m.id))
+  let d = (await api(`/eventos/${ev.id}/desviaciones-personal`)).cuerpo.roles_breakdown.find((x) => x.rol === 'mesero'); igual(d.assigned_count, 5, 'antes:'); igual(d.difference, 0)
+  await cambiarEstado(ev.id, ms[0].id, { estado: 'no_puede' })
+  d = (await api(`/eventos/${ev.id}/desviaciones-personal`)).cuerpo.roles_breakdown.find((x) => x.rol === 'mesero'); igual(d.assigned_count, 4, 'asignados HU-25:'); igual(d.difference, -1, 'diferencia:')
+  const g = await meserosDe(ev.id); igual(g.total_asignados, 5, 'siguen en la lista:'); igual(g.total_utiles, 4, 'útiles:'); igual(g.no_pueden, 1); igual(g.deficit, 1); igual(g.estado, 'deficit')
+  igual((await api(`/eventos/${ev.id}`)).cuerpo.asignacion_meseros.total_utiles, 4, 'detalle del evento:')
+  await cambiarEstado(ev.id, ms[0].id, { estado: 'confirmado' }); igual((await meserosDe(ev.id)).total_utiles, 5, 'al volver a contar:')
+})
+await t('HU-29: sincronizar la lista conserva el estado de los que se quedan, agrega los nuevos «por_confirmar» y borra solo los que salen', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const [a, b, c] = await crearMeseros(3, 'Sync'); await asignar(ev.id, [a.id, b.id])
+  await cambiarEstado(ev.id, a.id, { estado: 'confirmado' }); await cambiarEstado(ev.id, b.id, { estado: 'no_puede' })
+  let e = (await asignar(ev.id, [a.id, b.id, c.id])).cuerpo.meseros_asignados; const de = (id) => e.find((m) => m.id === id)?.estado
+  igual(de(a.id), 'confirmado'); igual(de(b.id), 'no_puede'); igual(de(c.id), 'por_confirmar')
+  e = (await asignar(ev.id, [a.id, c.id])).cuerpo.meseros_asignados; igual(e.length, 2, 'los que salen se quitan:'); cierto(!e.some((m) => m.id === b.id), 'siguió b')
+})
+await t('HU-29: «no puede» libera un lugar del tope (un sexto entra) y no bloquea el horario en otro evento; volver a contar con el cupo lleno da 400 y con cruce da 409', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(6, 'Cupo Estado'); await asignar(ev.id, ms.slice(0, 5).map((m) => m.id))
+  await cambiarEstado(ev.id, ms[0].id, { estado: 'no_puede' })
+  igual((await asignar(ev.id, ms.map((m) => m.id))).estado, 200, 'un sexto con uno que no puede:')
+  const lleno = await cambiarEstado(ev.id, ms[0].id, { estado: 'confirmado' }); igual(lleno.estado, 400, 'cupo lleno:'); cierto(/no puede volver a contar/.test(lleno.cuerpo.detalle), lleno.cuerpo.detalle)
+  const dia = fechaLibre(); const [x] = await crearMeseros(1, 'Cruce Estado'); const uno = await eventoA('Uno29', dia, '18:00'), dos = await eventoA('Dos29', dia, '19:00')
+  await asignar(uno.id, [x.id]); await cambiarEstado(uno.id, x.id, { estado: 'no_puede' })
+  igual((await asignar(dos.id, [x.id])).estado, 200, 'otro evento que se cruza:')
+  const cruce = await cambiarEstado(uno.id, x.id, { estado: 'por_confirmar' }); igual(cruce.estado, 409, 'volver a contar con cruce:')
+})
+await t('Pantalla HU-29: cada mesero muestra su estado y se cambia desde el selector; «no puede» baja el «X de Y» y avisa el déficit', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(5, 'Pantalla Estado'); await asignar(ev.id, ms.map((m) => m.id)); await abrirDetalleEvento(ev.id)
+  const cuenta = async () => (await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' ')
+  igual(await cuenta(), '5 de 5'); await seccionAsignados().getByLabel('Resumen de estados').getByText('0 confirmados · 5 por confirmar · 0 no pueden').waitFor()
+  await seccionAsignados().getByLabel(`Estado de ${ms[0].nombre_completo}`).first().selectOption('no_puede')
+  await page.waitForSelector('text=/quedó como «No puede»/'); await seccionAsignados().getByText('Faltan 1', { exact: true }).waitFor(); igual(await cuenta(), '4 de 5')
+  await seccionAsignados().getByLabel('Resumen de estados').getByText('0 confirmados · 4 por confirmar · 1 no puede').waitFor()
+  igual((await estadosDe(ev.id))[ms[0].id], 'no_puede', 'guardado en el servidor:')
+  await seccionAsignados().getByLabel(`Estado de ${ms[1].nombre_completo}`).first().selectOption('confirmado'); await seccionAsignados().getByLabel('Resumen de estados').getByText('1 confirmado · 3 por confirmar · 1 no puede').waitFor()
+})
+await t('Pantalla HU-29: el editor de asignación no cuenta a quien «no puede» para el tope (se puede marcar un sexto con 5 requeridos)', async () => {
+  const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(6, 'Editor Estado'); await asignar(ev.id, ms.slice(0, 5).map((m) => m.id)); await cambiarEstado(ev.id, ms[0].id, { estado: 'no_puede' })
+  await abrirDetalleEvento(ev.id); await seccionAsignados().getByRole('button', { name: 'Cambiar asignación' }).click(); await page.fill('#buscar-asignacion', 'Editor Estado')
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor()
+  const sexto = lista.locator('label', { hasText: ms[5].nombre_completo }); await sexto.waitFor(); igual(await sexto.locator('input[type=checkbox]').isDisabled(), false, 'el sexto está bloqueado:')
+  cierto((await lista.locator('label', { hasText: ms[0].nombre_completo }).innerText()).includes('No puede'), 'no se avisa que «no puede»')
+  await sexto.locator('input[type=checkbox]').check(); await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click(); await page.waitForSelector('text=Asignación guardada: 5 de 5 meseros')
+  igual((await estadosDe(ev.id))[ms[0].id], 'no_puede', 'se perdió el estado al guardar:')
+})
+
 // ============ L. Catálogo ============
 grupo = 'Catálogo'
 await t('«Catálogo» es una opción del menú y abre su pantalla', async () => {

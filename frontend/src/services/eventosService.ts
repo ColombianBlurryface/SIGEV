@@ -1,7 +1,7 @@
 /**
  * Llamadas a la API de eventos: listar, ver el detalle y registrar.
  */
-import type { AsignacionMeseros, ComprasIngredientes, CrearEventoResponse, EventStaffDeviationResponse, MeserosDisponibles, EventoDetalle, EventoListado, NuevoEvento } from '@/types/evento'
+import type { AsignacionMeseros, CambioEstadoMesero, ComprasIngredientes, EstadoMesero, CrearEventoResponse, EventStaffDeviationResponse, MeserosDisponibles, EventoDetalle, EventoListado, NuevoEvento } from '@/types/evento'
 import { apiRequest } from './api'
 
 export const eventosService = {
@@ -21,6 +21,11 @@ export const eventosService = {
   // HU-28: los meseros registrados frente a un evento (cuáles ya están asignados y cuáles están ocupados en otro evento)
   meserosDisponibles(eventoId: number) {
     return apiRequest<MeserosDisponibles>(`/eventos/${eventoId}/meseros/disponibles`)
+  },
+
+  // HU-29: cambia el estado de UNA asignación (por confirmar, confirmado o no puede)
+  cambiarEstadoMesero(eventoId: number, personalId: number, estado: EstadoMesero) {
+    return apiRequest<CambioEstadoMesero>(`/eventos/${eventoId}/meseros/${personalId}/estado`, { method: 'PATCH', body: { estado } })
   },
 
   // HU-28: sincroniza los meseros del evento con la lista enviada (quita a los que no vienen, agrega a los nuevos)

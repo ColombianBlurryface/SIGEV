@@ -242,6 +242,17 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖 **Dos asignaciones a la vez** del mismo mesero a eventos que se cruzan: entra una y la otra recibe 409.
 - [ ] 🤖 **Validaciones:** ids repetidos, de texto, 0, negativos o decimales dan 400; evento inexistente 404; id de evento inválido 400; sin sesión 401. Si se elimina un mesero ya asignado, deja de contar (el déficit sube). 10 asignaciones simultáneas sobre el mismo evento terminan con una lista completa, sin errores 500.
 
+### HU-29 · Estado de la asignación de meseros (RF-36)
+
+> Requiere la columna `evento_personal.estado` (SQL en `docs/sql-hu-29-estado-asignacion.sql` para QA y producción, después del de la HU-28).
+
+- [ ] 🤖👀 **Estado inicial:** al asignar un mesero a un evento queda «Por confirmar»; el resumen bajo «Meseros asignados» dice «0 confirmados · N por confirmar · 0 no pueden».
+- [ ] 🤖👀 **Cambiar el estado:** junto a cada mesero hay un selector (Por confirmar, Confirmado, No puede); al elegir uno aparece «… quedó como «No puede»» y el estado queda guardado (recargar la página lo conserva). Por la API: `PATCH /api/eventos/:id/meseros/:personalId/estado` con `{ "estado": "confirmado" }` (o `PENDING`, `CONFIRMED`, `UNAVAILABLE`) da 200 y `{ event_id, staff_id, full_name, assignment_status }`.
+- [ ] 🤖👀 **Escenario (HU-25):** evento de 100 asistentes (5 meseros requeridos) con 5 asignados «por confirmar»; marcar a uno como «No puede» → el detalle dice «4 de 5 · Faltan 1» y la alerta de personal (HU-25) muestra 4 asignados y diferencia −1. El mesero «No puede» sigue en la lista (tachado).
+- [ ] 🤖👀 **Cambiar la asignación conserva los estados:** en «Cambiar asignación», quien «No puede» aparece marcado con el aviso «no cuenta para el estándar» y no ocupa un lugar del tope (se puede marcar un sexto); al guardar, los que se quedan conservan su estado, los nuevos entran «por confirmar» y los desmarcados se quitan.
+- [ ] 🤖 **Volver a contar:** pasar de «No puede» a «Por confirmar»/«Confirmado» da **400** si el cupo ya está lleno y **409** si el mesero se cruza con otro evento; un mesero «No puede» no bloquea su horario en otro evento.
+- [ ] 🤖 **Validaciones:** estado inválido, vacío o que no es texto → 400; mesero que no está asignado a ese evento o evento inexistente → 404; ids inválidos → 400; evento realizado o cancelado → 409; sin sesión → 401.
+
 ---
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)

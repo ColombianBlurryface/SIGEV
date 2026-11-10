@@ -12,6 +12,16 @@
  *     Si uno termina justo cuando empieza el otro, sí se puede. Un evento SIN hora de inicio (anteriores a esta regla)
  *     ocupa todo el día. Un evento cancelado no cuenta.
  */
+// Estado de cada asignación (HU-29 · RF-36). Los códigos de la historia (PENDING, CONFIRMED, UNAVAILABLE) también se entienden.
+const ESTADOS_ASIGNACION = ['por_confirmar', 'confirmado', 'no_puede'];
+const ESTADO_POR_DEFECTO = 'por_confirmar';
+const ESTADO_NO_CUENTA = 'no_puede';   // un mesero que «no puede» no cuenta para el estándar ni bloquea su horario
+const ALIAS_ESTADO = {
+  por_confirmar: 'por_confirmar', 'por confirmar': 'por_confirmar', pending: 'por_confirmar',
+  confirmado: 'confirmado', confirmed: 'confirmado',
+  no_puede: 'no_puede', 'no puede': 'no_puede', unavailable: 'no_puede'
+};
+
 const MAX_ASIGNADOS = 100;       // tope de seguridad de la petición; el tope real es el número de meseros requeridos
 const ID_MAX = 2147483647;
 // Estados en los que ya no tiene sentido asignar personal
@@ -34,6 +44,22 @@ const compararConRequeridos = (asignados, requeridos) => {
   };
 };
 
+/** Texto de un estado (CONFIRMED, «No puede», por_confirmar…) → su código, o null si no es un estado permitido. */
+const normalizarEstado = (valor) => (typeof valor === 'string' ? ALIAS_ESTADO[valor.trim().toLowerCase()] || null : null);
+
+/** Revisa { estado } (también se entiende status) del cambio de estado de una asignación. */
+const validarEstado = (body) => {
+  if (!esObjeto(body)) return { error: 'El cuerpo de la petición debe ser un objeto JSON.' };
+  const bruto = body.estado !== undefined ? body.estado : body.status;
+  if (bruto === undefined || bruto === null || bruto === '') return { error: `El estado es obligatorio: ${ESTADOS_ASIGNACION.join(', ')}.` };
+  const estado = normalizarEstado(bruto);
+  if (!estado) return { error: `El estado debe ser uno de: ${ESTADOS_ASIGNACION.join(', ')} (por confirmar, confirmado o no puede).` };
+  return { estado };
+};
+
+/** Cuántas asignaciones CUENTAN para el estándar: todas menos las de quien «no puede». */
+const contarUtiles = (estados) => estados.filter((e) => e !== ESTADO_NO_CUENTA).length;
+
 /** Revisa { personal_ids: [..] } (también se entiende staff_ids). Devuelve { error } o { ids } sin repetidos. */
 const validarAsignacion = (body) => {
   if (!esObjeto(body)) return { error: 'El cuerpo de la petición debe ser un objeto JSON.' };
@@ -55,4 +81,6 @@ const validarAsignacion = (body) => {
  */
 const seCruzan = (iniA, finA, iniB, finB) => iniA < finB && iniB < finA;
 
-module.exports = { MAX_ASIGNADOS, ESTADOS_CERRADOS, esIdValido, idDeRuta, compararConRequeridos, validarAsignacion, seCruzan };
+module.exports = {
+  ESTADOS_ASIGNACION, ESTADO_POR_DEFECTO, ESTADO_NO_CUENTA, normalizarEstado, validarEstado, contarUtiles,
+  MAX_ASIGNADOS, ESTADOS_CERRADOS, esIdValido, idDeRuta, compararConRequeridos, validarAsignacion, seCruzan };
