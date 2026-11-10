@@ -2,8 +2,6 @@
  * Controlador para la gestión de recetas de cócteles (HU-44, RF-52)
  * y cálculo de botellas para eventos (HU-45, RF-53, RN-09, RN-15, RN-19).
  */
-const MAX_LICORES_POR_RECETA = 6;
-const ML_MAX_POR_LICOR = 250;
 const pool = require('../config/db');
 
 const { validarCoctel, validarCalculo, idDeRuta } = require('../config/reglasCoctel');
@@ -91,32 +89,10 @@ const obtenerCoctelPorId = async (req, res) => {
 // POST /api/cocteles - Crear cóctel con su receta
 // POST /api/cocteles - Crear cóctel con su receta
 const crearCoctel = async (req, res) => {
-  const { nombre, descripcion, ingredientes } = req.body;
-
-  if (!nombre || typeof nombre !== 'string' || !nombre.trim()) {
-    return res.status(400).json({ error: 'Datos inválidos', detalle: 'El nombre del cóctel es obligatorio.' });
-  }
-
-  if (!Array.isArray(ingredientes) || ingredientes.length === 0) {
-    return res.status(400).json({ error: 'Datos inválidos', detalle: 'Debe incluir al menos un licor en la receta.' });
-  }
-
-  if (ingredientes.length > MAX_LICORES_POR_RECETA) {
-    return res.status(400).json({
-      error: 'Datos inválidos',
-      detalle: `Una receta no puede tener más de ${MAX_LICORES_POR_RECETA} licores.`,
-    });
-  }
-
-  for (const ing of ingredientes) {
-    const ml = parseFloat(ing.mililitros);
-    if (!ing.licor_id || isNaN(ml) || ml <= 0 || ml > ML_MAX_POR_LICOR) {
-      return res.status(400).json({
-        error: 'Datos inválidos',
-        detalle: `Los mililitros deben ser un número mayor a 0 y máximo ${ML_MAX_POR_LICOR} ml por licor.`,
-      });
-    }
-  }
+  // Validación estricta (config/reglasCoctel.js): «50abc», 0,001 ml, ids de texto, nombres de 151 caracteres, etc. dan 400
+  const datos = validarCoctel(req.body);
+  if (datos.error) return res.status(400).json({ error: 'Datos inválidos', detalle: datos.error });
+  const { nombre, descripcion, ingredientes } = datos;
 
   const client = await pool.connect();
   try {
@@ -144,7 +120,7 @@ const crearCoctel = async (req, res) => {
     // 2. Insertar en la tabla cocteles
     const { rows: nuevoCoctel } = await client.query(
       `INSERT INTO cocteles (nombre, descripcion) VALUES ($1, $2) RETURNING id, nombre, descripcion`,
-      [nombre.trim(), descripcion ? descripcion.trim() : null]
+      [nombre, descripcion]
     );
 
     const coctelId = nuevoCoctel[0].id;
@@ -152,7 +128,7 @@ const crearCoctel = async (req, res) => {
     // 3. Vincular a catalogo_productos para que aparezca en el grupo 'bar_cocteleria' de eventos
     const { rows: catalogoExistente } = await client.query(
       `SELECT id FROM catalogo_productos WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($1))`,
-      [nombre.trim()]
+      [nombre]
     );
 
     if (catalogoExistente.length === 0) {
@@ -168,7 +144,7 @@ const crearCoctel = async (req, res) => {
            precio_unitario,
            activo
          ) VALUES ($1, 'bar_cocteleria', 'unidad_persona', 1, 'cócteles', 0, 0, 18000, true)`,
-        [nombre.trim()]
+        [nombre]
       );
     } else {
       await client.query(
@@ -183,7 +159,7 @@ const crearCoctel = async (req, res) => {
     for (const ing of ingredientes) {
       await client.query(
         `INSERT INTO coctel_ingredientes (coctel_id, licor_id, mililitros) VALUES ($1, $2, $3)`,
-        [coctelId, ing.licor_id, parseFloat(ing.mililitros)]
+        [coctelId, ing.licor_id, ing.mililitros]
       );
     }
 
@@ -191,8 +167,8 @@ const crearCoctel = async (req, res) => {
 
     res.status(201).json({
       id: coctelId,
-      nombre: nombre.trim(),
-      descripcion: descripcion || null,
+      nombre,
+      descripcion,
       ingredientes,
     });
   } catch (error) {

@@ -2,8 +2,8 @@
  * Reglas del registro de personal de servicio (HU-26 · RF-33). Hoy solo meseros. La pantalla repite lo necesario en
  * frontend/src/lib/reglasRegistroPersonal.ts.
  *
- * Un mesero se registra con su nombre completo y un dato de contacto de texto libre: un teléfono, un correo o ambos
- * («carlos.r@email.com / +57 300 123 4567»). Se revisa que el nombre sea un nombre (letras, sin números) y que el
+ * Un mesero se registra con su nombre completo y UN dato de contacto de máximo 15 caracteres: un teléfono o un correo
+ * («3001234567», «+573001234567», «ana@correo.com»). Se revisa que el nombre sea un nombre (letras, sin números) y que el
  * contacto traiga de verdad un teléfono (mínimo 7 dígitos) o un correo, no cualquier texto.
  */
 const ROLES = ['mesero'];            // el rol «cocinero» existe en la tabla pero todavía no tiene su historia
@@ -12,7 +12,7 @@ const ALIAS_ROL = { mesero: 'mesero', waiter: 'mesero' }; // WAITER es el nombre
 
 const NOMBRE_MIN = 2;
 const NOMBRE_MAX = 150;
-const CONTACTO_MAX = 150;
+const CONTACTO_MAX = 15;           // decisión del PO: un teléfono (+573001234567) o un correo corto (ana@correo.com)
 const DIGITOS_TELEFONO_MIN = 7;
 
 const ID_MAX = 2147483647;

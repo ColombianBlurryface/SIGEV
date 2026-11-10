@@ -146,6 +146,29 @@ export interface ComprasIngredientes {
   platos_sin_receta: { producto_id: number; nombre: string }[]
 }
 
+// HU-45 (RF-53, RN-09, RN-15, RN-19): Botellas de licor a comprar para cócteles
+export interface CompraLicorItem {
+  licor_id: number
+  nombre_licor: string
+  ml_netos: number
+  ml_con_margen: number
+  volumen_botella_ml: number
+  botellas_requeridas: number
+  precio_unitario: number
+  costo_estimado: number
+  cocteles: string[]
+}
+
+export interface ComprasCocteles {
+  margen_porcentaje: number
+  asistentes: number
+  items: CompraLicorItem[]
+  total_botellas: number
+  costo_total_licores: number
+  cocteles_con_receta: number
+  cocteles_sin_receta: { producto_id?: number; nombre: string }[]
+}
+
 export interface ResumenPresupuesto {
   costo_alimentos_bebidas: number
   costo_servicios: number
@@ -253,6 +276,7 @@ export interface EventoDetalle extends EventoListado {
   logistica: LogisticaEvento
   // HU-47: ingredientes a comprar, calculados por el backend al consultar el evento
   compras_ingredientes: ComprasIngredientes
+  compras_cocteles?: ComprasCocteles
   asignacion_meseros: AsignacionMeseros
   desviaciones_personal?: EventStaffDeviationResponse
   productos_calculados: ProductoCalculado[]

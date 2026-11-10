@@ -27,6 +27,7 @@ const horaCorta = (hora) => (hora ? String(hora).slice(0, 5) : null);
 // mobiliario. No es un número fijo: sale de MAX_OWNED_CAPACITY_THRESHOLD (ver config/parametros.js).
 const { UMBRAL_ALQUILER } = require('../config/parametros');
 const { comprasDeEvento } = require('./comprasController');
+const { comprasCoctelesDeEvento } = require('./comprasCoctelesController');
 const { armarAsignacion } = require('./asignacionMeserosController');
 const { armarDesviacionesPersonal } = require('./desviacionesPersonalController');
 
@@ -481,6 +482,8 @@ const obtenerDetalleEvento = async (req, res) => {
       },
       // Ingredientes a comprar (HU-47 · RF-55, RN-09, RN-20): salen de las recetas de los platos y los asistentes
       compras_ingredientes: await comprasDeEvento(pool, id, asistentes),
+      // Botellas de licor para coctelería a comprar (HU-45 · RF-53, RN-09, RN-19): salen de las recetas de cócteles
+      compras_cocteles: await comprasCoctelesDeEvento(pool, id, asistentes),
       // Meseros asignados al evento y cuántos faltan o sobran frente a los requeridos (HU-28 · RF-35)
       asignacion_meseros: await armarAsignacion(pool, id, asistentes),
       // Desviaciones y alertas de personal (HU-25 · RF-32)
