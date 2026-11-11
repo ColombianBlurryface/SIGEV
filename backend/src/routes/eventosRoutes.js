@@ -8,6 +8,7 @@ const { Router } = require('express');
 const { crearEvento, listarEventos, obtenerDetalleEvento } = require('../controllers/eventosController');
 const { validarCreacionEvento } = require('../middlewares/validarEvento');
 const { calcularComprasPrevio } = require('../controllers/comprasController');
+const { calcularComprasCoctelesPrevio } = require('../controllers/comprasCoctelesController');
 const { listarMeserosDelEvento, listarMeserosDisponibles, asignarMeseros, cambiarEstadoAsignacion, listarChecklistMeseros } = require('../controllers/asignacionMeserosController');
 const { obtenerDesviacionesPersonal } = require('../controllers/desviacionesPersonalController');
 
