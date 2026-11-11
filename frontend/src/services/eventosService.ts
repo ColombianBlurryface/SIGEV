@@ -1,7 +1,7 @@
 /**
  * Llamadas a la API de eventos: listar, ver el detalle y registrar.
  */
-import type { AsignacionMeseros, CambioEstadoMesero, ComprasIngredientes, EstadoMesero, CrearEventoResponse, EventStaffDeviationResponse, MeserosDisponibles, EventoDetalle, EventoListado, NuevoEvento } from '@/types/evento'
+import type { AsignacionMeseros, CambioEstadoMesero, ComprasCocteles, ComprasIngredientes, EstadoMesero, CrearEventoResponse, EventStaffDeviationResponse, MeserosDisponibles, EventoDetalle, EventoListado, NuevoEvento } from '@/types/evento'
 import { apiRequest } from './api'
 
 export const eventosService = {
