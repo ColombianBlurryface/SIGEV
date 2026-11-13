@@ -183,7 +183,9 @@ flowchart LR
 - El **backend** aplica las reglas de negocio (cálculos, validaciones, transacciones) y es el único que consulta la base.
 - **Supabase** se usa solo como PostgreSQL administrado: no se usan su autenticación ni su API automática.
 
-**Mapa visual del sistema:** el [Mapa del sistema SIGEV](https://claude.ai/artifact/7ZNMWM62ZW4GrLcQ3DZic5) muestra cada módulo con su pantalla, su API y sus tablas, y lo que falta construir.
+**Mapa del sistema:** cada módulo con su pantalla, su API y sus tablas, y lo que falta construir.
+
+![Mapa del sistema SIGEV](docs/imagenes/mapa-del-sistema.svg)
 
 ---
 
