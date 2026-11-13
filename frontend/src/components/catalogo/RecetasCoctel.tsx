@@ -169,7 +169,7 @@ export const RecetasCoctel: React.FC = () => {
           {editandoId ? 'Editar Receta de Cóctel' : 'Crear Receta de Cóctel'}
         </h3>
         <p className="text-xs text-muted-foreground mb-4">
-          Define qué licores del catálogo requiere el cóctel y los mililitros exactos por trago (HU-44).
+          Define qué licores del catálogo requiere el cóctel y los mililitros exactos por trago.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">

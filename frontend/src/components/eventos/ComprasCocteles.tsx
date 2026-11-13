@@ -38,7 +38,7 @@ export function ComprasCocteles({
             )}
           </div>
           <span className="text-xs text-muted-foreground">
-            Para {formatearNumero(compras.asistentes)} asistentes, con margen del {compras.margen_porcentaje}% (RN-09, RN-19) y consolidación de licores.
+            Para {formatearNumero(compras.asistentes)} asistentes, con margen del {compras.margen_porcentaje}% y consolidación de licores.
           </span>
         </div>
       </div>

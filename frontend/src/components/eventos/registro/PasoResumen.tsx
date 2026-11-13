@@ -317,7 +317,7 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
         </div>
         <div className="flex items-start gap-2.5 rounded-[10px] bg-accent px-3.5 py-3 text-[13px] leading-relaxed text-accent-foreground">
           <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          Incluye el total de insumos calculados (+10% margen) y los servicios adicionales registrados (HU-48).
+          Incluye el total de insumos calculados (+10% margen) y los servicios adicionales registrados.
         </div>
       </Card>
     </div>

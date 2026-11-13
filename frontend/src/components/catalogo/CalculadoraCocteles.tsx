@@ -42,7 +42,7 @@ export const CalculadoraCocteles: React.FC<Props> = ({ asistentes, bebidas }) =>
           </h3>
         </div>
         <p className="text-xs text-muted-foreground">
-          Calcula las botellas a comprar con margen del 10% (RN-09, RN-19) y consolida licores comunes a partir de los cócteles seleccionados.
+          Calcula las botellas a comprar con margen del 10% y consolida licores comunes a partir de los cócteles seleccionados.
         </p>
       </div>
 
