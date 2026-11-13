@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-40 -40 2544 1300" width="2544" height="1300" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3A3F4B"/></marker></defs><rect x="-40" y="-40" width="2544" height="1300" fill="#FFFFFF"/><rect x="0" y="250" width="1964" height="150" rx="14" fill="#F6F7F9" stroke="#D3D6DC" stroke-width="1.5"/>
+<text x="4" y="238" font-size="20" font-weight="700" fill="#1F2430">Infraestructura</text>
+<rect x="0" y="490" width="340" height="730" rx="14" fill="#F6F7F9" stroke="#D3D6DC" stroke-width="1.5"/>
+<text x="4" y="478" font-size="20" font-weight="700" fill="#1F2430">Inventario</text>
+<rect x="436" y="490" width="380" height="730" rx="14" fill="#F6F7F9" stroke="#D3D6DC" stroke-width="1.5"/>
+<text x="440" y="478" font-size="20" font-weight="700" fill="#1F2430">Catálogo y recetas</text>
+<rect x="912" y="490" width="620" height="730" rx="14" fill="#F6F7F9" stroke="#D3D6DC" stroke-width="1.5"/>
+<text x="916" y="478" font-size="20" font-weight="700" fill="#1F2430">Eventos (el centro del sistema)</text>
+<rect x="1628" y="490" width="360" height="730" rx="14" fill="#F6F7F9" stroke="#D3D6DC" stroke-width="1.5"/>
+<text x="1632" y="478" font-size="20" font-weight="700" fill="#1F2430">Personal</text>
+<rect x="2084" y="490" width="380" height="730" rx="14" fill="#FDF1F6" stroke="#E3A3BE" stroke-width="1.5"/>
+<text x="2088" y="478" font-size="20" font-weight="700" fill="#1F2430">Falta construir (Sprint 5 en adelante)</text>
+<text x="0" y="45.6" font-size="48" font-weight="700" fill="#1F2430">Mapa del sistema SIGEV</text>
+<text x="0" y="98.6" font-size="28" fill="#1F2430">Cuatro módulos, del navegador a la base de datos</text>
+<rect x="0" y="130" width="180" height="44" rx="12" fill="#DCEAFB" stroke="#7FA7DB" stroke-width="1.5"/>
+<text x="90.0" y="155.9" font-size="14" text-anchor="middle" fill="#1F2430">Pantalla</text>
+<rect x="204" y="130" width="180" height="44" rx="12" fill="#FDE6D2" stroke="#E5A877" stroke-width="1.5"/>
+<text x="294.0" y="155.9" font-size="14" text-anchor="middle" fill="#1F2430">API y reglas</text>
+<path d="M408,133 L408,171 A90.0,9 0 0 0 588,171 L588,133 A90.0,9 0 0 0 408,133 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="498.0" cy="133" rx="90.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="498.0" y="160.4" font-size="14" text-anchor="middle" fill="#1F2430">Tabla</text>
+<rect x="612" y="130" width="180" height="44" rx="12" fill="#FBDDE8" stroke="#DF8EAF" stroke-width="1.5"/>
+<text x="702.0" y="155.9" font-size="14" text-anchor="middle" fill="#1F2430">Falta construir</text>
+<rect x="24" y="280" width="340" height="90" rx="12" fill="#DCEAFB" stroke="#7FA7DB" stroke-width="1.5"/>
+<text x="194.0" y="309.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">Frontend</tspan> · React 19 + Vite</text><text x="194.0" y="328.8" font-size="14" text-anchor="middle" fill="#1F2430">Login, menú, modo claro y oscuro</text><text x="194.0" y="347.8" font-size="14" text-anchor="middle" fill="#1F2430">Vercel «sigev»</text>
+<rect x="508" y="280" width="340" height="90" rx="12" fill="#FDE6D2" stroke="#E5A877" stroke-width="1.5"/>
+<text x="678.0" y="309.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">API</tspan> · Node + Express 5</text><text x="678.0" y="328.8" font-size="14" text-anchor="middle" fill="#1F2430">Token JWT en cada petición</text><text x="678.0" y="347.8" font-size="14" text-anchor="middle" fill="#1F2430">Vercel «sigev-api»</text>
+<path d="M992,289 L992,361 A170.0,9 0 0 0 1332,361 L1332,289 A170.0,9 0 0 0 992,289 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="1162.0" cy="289" rx="170.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="1162.0" y="323.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">PostgreSQL</tspan> en Supabase</text><text x="1162.0" y="342.8" font-size="14" text-anchor="middle" fill="#1F2430">tabla usuarios para el login</text>
+<text x="1380" y="305.3" font-size="14" fill="#4A5060">Tres entornos separados: local (Docker), QA (rama develop) y producción (rama main).</text><text x="1380" y="324.2" font-size="14" fill="#4A5060">Pruebas: unitarias en backend/test y 225 + 236 automáticas en qa/.</text>
+<rect x="24" y="520" width="292" height="90" rx="12" fill="#DCEAFB" stroke="#7FA7DB" stroke-width="1.5"/>
+<text x="170.0" y="559.4" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">/inventario</tspan></text><text x="170.0" y="578.3" font-size="14" text-anchor="middle" fill="#1F2430">Elementos, adquisición, retiro e historial</text>
+<rect x="24" y="674" width="292" height="170" rx="12" fill="#FDE6D2" stroke="#E5A877" stroke-width="1.5"/>
+<text x="170.0" y="725.0" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">/api/inventario</tspan></text><text x="170.0" y="743.9" font-size="14" text-anchor="middle" fill="#1F2430">Registrar, ajustar, adquirir y retirar</text><text x="170.0" y="762.8" font-size="14" text-anchor="middle" fill="#1F2430">Propio o alquilado · 4 categorías</text><text x="170.0" y="781.8" font-size="14" text-anchor="middle" fill="#1F2430">Topes: mobiliario 2.000 · vajilla 6.000 ·</text><text x="170.0" y="800.6" font-size="14" text-anchor="middle" fill="#1F2430">bebidas 4.000</text>
+<path d="M24,917 L24,979 A146.0,9 0 0 0 316,979 L316,917 A146.0,9 0 0 0 24,917 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="170.0" cy="917" rx="146.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="170.0" y="946.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">movimientos_inventario</tspan></text><text x="170.0" y="965.8" font-size="14" text-anchor="middle" fill="#1F2430">historial de cada cambio</text>
+<rect x="460" y="520" width="332" height="90" rx="12" fill="#DCEAFB" stroke="#7FA7DB" stroke-width="1.5"/>
+<text x="626.0" y="559.4" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">/catalogo</tspan></text><text x="626.0" y="578.3" font-size="14" text-anchor="middle" fill="#1F2430">Productos, recetas de cóctel y de platos</text>
+<rect x="460" y="674" width="332" height="170" rx="12" fill="#FDE6D2" stroke="#E5A877" stroke-width="1.5"/>
+<text x="626.0" y="734.5" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">/api/catalogo · /api/cocteles</tspan></text><text x="626.0" y="753.4" font-size="14" text-anchor="middle" fill="#1F2430">Productos con su cálculo y precio</text><text x="626.0" y="772.3" font-size="14" text-anchor="middle" fill="#1F2430">Recetas de platos: g, kilo, libra, arroba</text><text x="626.0" y="791.2" font-size="14" text-anchor="middle" fill="#1F2430">Recetas de cóctel: máx. 250 ml por licor</text>
+<path d="M460,917 L460,979 A166.0,9 0 0 0 792,979 L792,917 A166.0,9 0 0 0 460,917 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="626.0" cy="917" rx="166.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="626.0" y="946.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">catalogo_productos</tspan></text><text x="626.0" y="965.8" font-size="14" text-anchor="middle" fill="#1F2430">catálogo e inventario en una tabla</text>
+<path d="M460,1021 L460,1083 A166.0,9 0 0 0 792,1083 L792,1021 A166.0,9 0 0 0 460,1021 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="626.0" cy="1021" rx="166.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="626.0" y="1060.3" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">cocteles · coctel_ingredientes</tspan></text>
+<path d="M460,1125 L460,1187 A166.0,9 0 0 0 792,1187 L792,1125 A166.0,9 0 0 0 460,1125 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="626.0" cy="1125" rx="166.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="626.0" y="1164.3" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">ingredientes · plato_ingredientes</tspan></text>
+<rect x="936" y="520" width="274" height="90" rx="12" fill="#DCEAFB" stroke="#7FA7DB" stroke-width="1.5"/>
+<text x="1073.0" y="559.4" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">/eventos/nuevo</tspan></text><text x="1073.0" y="578.3" font-size="14" text-anchor="middle" fill="#1F2430">Registro en 3 pasos</text>
+<rect x="1234" y="520" width="274" height="90" rx="12" fill="#DCEAFB" stroke="#7FA7DB" stroke-width="1.5"/>
+<text x="1371.0" y="559.4" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">/eventos</tspan></text><text x="1371.0" y="578.3" font-size="14" text-anchor="middle" fill="#1F2430">Lista, filtros y detalle</text>
+<rect x="936" y="674" width="274" height="170" rx="12" fill="#FDE6D2" stroke="#E5A877" stroke-width="1.5"/>
+<text x="1073.0" y="725.0" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">Crear evento</tspan></text><text x="1073.0" y="743.9" font-size="14" text-anchor="middle" fill="#1F2430">40 a 600 asistentes · 3 a 8 h</text><text x="1073.0" y="762.8" font-size="14" text-anchor="middle" fill="#1F2430">Fecha de hoy en adelante · máx. 3 por</text><text x="1073.0" y="781.8" font-size="14" text-anchor="middle" fill="#1F2430">día</text><text x="1073.0" y="800.6" font-size="14" text-anchor="middle" fill="#1F2430">Alimentos +10 % · servicios con costo</text>
+<rect x="1234" y="674" width="274" height="170" rx="12" fill="#FDE6D2" stroke="#E5A877" stroke-width="1.5"/>
+<text x="1371.0" y="725.0" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">Detalle, calculado al consultar</tspan></text><text x="1371.0" y="743.9" font-size="14" text-anchor="middle" fill="#1F2430">Meseros ⌈a÷20⌉ · cocineros ⌈a÷25⌉×2</text><text x="1371.0" y="762.8" font-size="14" text-anchor="middle" fill="#1F2430">Ingredientes y licor +10 %</text><text x="1371.0" y="781.8" font-size="14" text-anchor="middle" fill="#1F2430">Mobiliario propio o a alquilar</text><text x="1371.0" y="800.6" font-size="14" text-anchor="middle" fill="#1F2430">Costo total y alertas de personal</text>
+<path d="M936,917 L936,979 A137.0,9 0 0 0 1210,979 L1210,917 A137.0,9 0 0 0 936,917 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="1073.0" cy="917" rx="137.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="1073.0" y="946.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">eventos</tspan></text><text x="1073.0" y="965.8" font-size="14" text-anchor="middle" fill="#1F2430">estado, fecha, hora, asistentes</text>
+<path d="M1234,917 L1234,979 A137.0,9 0 0 0 1508,979 L1508,917 A137.0,9 0 0 0 1234,917 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="1371.0" cy="917" rx="137.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="1371.0" y="946.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">evento_productos</tspan></text><text x="1371.0" y="965.8" font-size="14" text-anchor="middle" fill="#1F2430">alimentos y bebidas con margen</text>
+<path d="M936,1021 L936,1083 A137.0,9 0 0 0 1210,1083 L1210,1021 A137.0,9 0 0 0 936,1021 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="1073.0" cy="1021" rx="137.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="1073.0" y="1050.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">requerimientos_adicionales</tspan></text><text x="1073.0" y="1069.8" font-size="14" text-anchor="middle" fill="#1F2430">mobiliario y servicios</text>
+<path d="M1234,1021 L1234,1083 A137.0,9 0 0 0 1508,1083 L1508,1021 A137.0,9 0 0 0 1234,1021 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="1371.0" cy="1021" rx="137.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="1371.0" y="1050.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">evento_personal</tspan></text><text x="1371.0" y="1069.8" font-size="14" text-anchor="middle" fill="#1F2430">meseros asignados y su estado</text>
+<path d="M936,1125 L936,1187 A286.0,9 0 0 0 1508,1187 L1508,1125 A286.0,9 0 0 0 936,1125 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="1222.0" cy="1125" rx="286.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="1222.0" y="1154.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">evento_cocteles · evento_balance_recursos</tspan></text><text x="1222.0" y="1173.8" font-size="14" text-anchor="middle" fill="#1F2430">creadas, aún sin uso: base del balance</text>
+<rect x="1652" y="520" width="312" height="90" rx="12" fill="#DCEAFB" stroke="#7FA7DB" stroke-width="1.5"/>
+<text x="1808.0" y="559.4" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">/personal</tspan></text><text x="1808.0" y="578.3" font-size="14" text-anchor="middle" fill="#1F2430">Registrar y eliminar meseros</text>
+<rect x="1652" y="674" width="312" height="170" rx="12" fill="#FDE6D2" stroke="#E5A877" stroke-width="1.5"/>
+<text x="1808.0" y="725.0" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">/api/personal</tspan></text><text x="1808.0" y="743.9" font-size="14" text-anchor="middle" fill="#1F2430">Nombre y contacto validados</text><text x="1808.0" y="762.8" font-size="14" text-anchor="middle" fill="#1F2430">Borrado lógico, sin historial</text><text x="1808.0" y="781.8" font-size="14" text-anchor="middle" fill="#1F2430">Asignación y estados en</text><text x="1808.0" y="800.6" font-size="14" text-anchor="middle" fill="#1F2430">/api/eventos/:id/meseros</text>
+<path d="M1652,917 L1652,979 A156.0,9 0 0 0 1964,979 L1964,917 A156.0,9 0 0 0 1652,917 Z" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<ellipse cx="1808.0" cy="917" rx="156.0" ry="9" fill="#FFFFFF" stroke="#C3C7CF" stroke-width="1.5"/>
+<text x="1808.0" y="946.9" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">personal</tspan></text><text x="1808.0" y="965.8" font-size="14" text-anchor="middle" fill="#1F2430">mesero o cocinero, activo</text>
+<rect x="2108" y="520" width="332" height="90" rx="12" fill="#FBDDE8" stroke="#DF8EAF" stroke-width="1.5"/>
+<text x="2274.0" y="559.4" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">Balance logístico</tspan> (HU-31 a 35)</text><text x="2274.0" y="578.3" font-size="14" text-anchor="middle" fill="#1F2430">estados, fechas límite y faltantes</text>
+<rect x="2108" y="634" width="332" height="80" rx="12" fill="#FBDDE8" stroke="#DF8EAF" stroke-width="1.5"/>
+<text x="2274.0" y="677.8" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">Editar evento</tspan> y cambiar su estado</text>
+<rect x="2108" y="738" width="332" height="80" rx="12" fill="#FBDDE8" stroke="#DF8EAF" stroke-width="1.5"/>
+<text x="2274.0" y="772.4" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">Disponibilidad del mesero por día</tspan></text><text x="2274.0" y="791.3" font-size="14" text-anchor="middle" fill="#1F2430">defecto crítico</text>
+<rect x="2108" y="842" width="332" height="80" rx="12" fill="#FBDDE8" stroke="#DF8EAF" stroke-width="1.5"/>
+<text x="2274.0" y="876.4" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">Asignación de cocineros</tspan></text><text x="2274.0" y="895.3" font-size="14" text-anchor="middle" fill="#1F2430">hoy la alerta de cocina siempre da déficit</text>
+<rect x="2108" y="946" width="332" height="80" rx="12" fill="#FBDDE8" stroke="#DF8EAF" stroke-width="1.5"/>
+<text x="2274.0" y="989.8" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">Calendario</tspan> (HU-36, 37)</text>
+<rect x="2108" y="1050" width="332" height="80" rx="12" fill="#FBDDE8" stroke="#DF8EAF" stroke-width="1.5"/>
+<text x="2274.0" y="1093.8" font-size="14" text-anchor="middle" fill="#1F2430"><tspan font-weight="700">Servicios opcionales</tspan>: verificación (HU-38, 39)</text>
+<path d="M364.0,325.0 L436.0,325.0 L436.0,325.0 L508.0,325.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="397.9" y="314.0" width="76.2" height="22" rx="6" fill="#FFFFFF" stroke="#D3D6DC"/>
+<text x="436.0" y="329.5" font-size="13" text-anchor="middle" fill="#3A3F4B">HTTP + JWT</text>
+<path d="M848.0,325.0 L920.0,325.0 L920.0,325.0 L992.0,325.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="902.9" y="314.0" width="34.3" height="22" rx="6" fill="#FFFFFF" stroke="#D3D6DC"/>
+<text x="920.0" y="329.5" font-size="13" text-anchor="middle" fill="#3A3F4B">SQL</text>
+<path d="M170.0,610.0 L170.0,642.0 L170.0,642.0 L170.0,674.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M170.0,844.0 L170.0,876.0 L170.0,876.0 L170.0,908.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M316.0,759.0 L388.0,759.0 L388.0,948.0 L460.0,948.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="329.6" y="842.5" width="116.8" height="22" rx="6" fill="#FFFFFF" stroke="#D3D6DC"/>
+<text x="388.0" y="858.0" font-size="13" text-anchor="middle" fill="#3A3F4B">guarda elementos</text>
+<path d="M626.0,610.0 L626.0,642.0 L626.0,642.0 L626.0,674.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M626.0,844.0 L626.0,876.0 L626.0,876.0 L626.0,908.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M1073.0,610.0 L1073.0,642.0 L1073.0,642.0 L1073.0,674.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M1371.0,610.0 L1371.0,642.0 L1371.0,642.0 L1371.0,674.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M1073.0,844.0 L1073.0,876.0 L1073.0,876.0 L1073.0,908.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M1371.0,844.0 L1371.0,876.0 L1371.0,876.0 L1371.0,908.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M936.0,759.0 L864.0,759.0 L864.0,759.0 L792.0,759.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="813.1" y="748.0" width="101.9" height="22" rx="6" fill="#FFFFFF" stroke="#D3D6DC"/>
+<text x="864.0" y="763.5" font-size="13" text-anchor="middle" fill="#3A3F4B">lee el catálogo</text>
+<path d="M936.0,1052.0 L864.0,1052.0 L864.0,948.0 L792.0,948.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="800.9" y="989.0" width="126.2" height="22" rx="6" fill="#FFFFFF" stroke="#D3D6DC"/>
+<text x="864.0" y="1004.5" font-size="13" text-anchor="middle" fill="#3A3F4B">stock de mobiliario</text>
+<path d="M1508.0,1052.0 L1580.0,1052.0 L1580.0,948.0 L1652.0,948.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<rect x="1528.4" y="989.0" width="103.2" height="22" rx="6" fill="#FFFFFF" stroke="#D3D6DC"/>
+<text x="1580.0" y="1004.5" font-size="13" text-anchor="middle" fill="#3A3F4B">asigna meseros</text>
+<path d="M1808.0,610.0 L1808.0,642.0 L1808.0,642.0 L1808.0,674.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/>
+<path d="M1808.0,844.0 L1808.0,876.0 L1808.0,876.0 L1808.0,908.0" fill="none" stroke="#3A3F4B" stroke-width="2" marker-end="url(#ah)"/></svg>
