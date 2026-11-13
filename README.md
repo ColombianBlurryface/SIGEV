@@ -14,6 +14,7 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 - [Estructura del repositorio](#estructura-del-repositorio)
 - [Puesta en marcha](#puesta-en-marcha)
 - [Despliegue en Vercel](#despliegue-en-vercel)
+- [Pruebas y entorno de QA](#pruebas-y-entorno-de-qa)
 - [Base de datos](#base-de-datos)
 - [Reglas de negocio](#reglas-de-negocio)
 - [Flujo de trabajo del equipo](#flujo-de-trabajo-del-equipo)
@@ -38,8 +39,17 @@ SIGEV ayuda a una empresa de eventos a **planificar cada evento con precisión**
 | HU-08 | Registrar elementos del inventario propio, actualizar su cantidad y consultarlos. | `/inventario` |
 | HU-09 | Registrar adquisiciones que suman al inventario, con historial de todos los movimientos. | `/inventario` |
 | HU-09 · clasificación | Clasificar el inventario en cuatro categorías cerradas: Mobiliario, Bebidas Generales, Licores para Cócteles y Vajilla. No existe «Decoración». Se filtra por categoría y se puede cambiar la categoría de un elemento (por ahora solo en la API). | `/inventario` |
-| HU-10 | Dar de baja unidades dañadas desde una sección aparte: se elige el elemento y se escribe solo la cantidad dañada; el sistema hace la resta, muestra el nuevo total y no deja dar de baja más de lo disponible. | `/inventario` · pestaña «Baja» |
+| HU-10 | Retirar unidades del inventario desde una sección aparte, «Retiro de elementos» (cubre daño, pérdida o devolución): se elige el elemento y se escribe solo la «Cantidad a retirar»; el sistema hace la resta, muestra el nuevo total y no deja retirar más de lo disponible. | `/inventario` · pestaña «Retiro» |
 | HU-12 | Diferenciar lo propio de lo alquilado: cada elemento del inventario se registra como **Propio** o **Alquilado** (con filtro por propiedad), cada línea de mobiliario del evento dice cuántas unidades son propias y cuántas se alquilan, y se avisa de alquiler cuando el evento supera el umbral de asistentes (200 por defecto). | `/inventario`, nuevo evento · paso 2 y 3, detalle del evento |
+| HU-21 | **Calcular los meseros** de cada evento: 1 por cada 20 asistentes, siempre redondeado hacia arriba (45 asistentes → 2,25 → 3 meseros; 60 → 3). Se muestra dentro del detalle del evento con la cuenta explicada, y también en la vista previa y en el resumen del registro. Es la primera historia del módulo de **personal de servicio**, que se construye una historia a la vez. | Detalle del evento, nuevo evento · paso 1 y 3 |
+| HU-22 | **Calcular los cocineros** de cada evento con una sola regla general: 2 cocineros por cada 25 asistentes, con los grupos de 25 redondeados hacia arriba (100 asistentes → 8; 320 → 12,8 → 13 grupos → 26; 51 → 6). **No depende del tipo de evento ni de la comida** (cena, buffet, cóctel…): aplica igual a todos, también a los buffet de más de 300 asistentes. Se muestra en el detalle con la cuenta explicada, en la vista previa (cambia al escribir los asistentes) y en el resumen del registro. | Nuevo evento · paso 1 y 3, detalle del evento |
+| HU-46 | **Registrar la receta de cada plato:** los ingredientes de un plato del catálogo (alimento), cada uno con la **cantidad que consume una persona** (mayor a 0), su **unidad** (gramos, kilos, libras o arrobas, únicas permitidas) y **cómo se compra** en el mercado (kilo, libra o arroba). La receta se edita y se guarda completa; el sistema trae tres platos de ejemplo marcados como **datos de prueba**: Arroz verde con almendras (arroz 80 g / kilo, almendras 15 g / libra, cilantro 10 g / libra), Pechuga a la plancha (pechuga de pollo 200 g / kilo) y Papa salada (papa 150 g / arroba). Es la base para que una historia futura calcule las compras. | Catálogo · pestaña «Recetas de Platos» |
+| HU-47 | **Calcular los ingredientes a comprar** de un evento: con los asistentes y las recetas de los platos, la cantidad de cada ingrediente **en la unidad en que se compra** (kilo, libra o arroba), con el **10 % de margen** y **redondeada hacia arriba**. Si varios platos usan el mismo ingrediente se muestra **un solo total**. Ejemplos: 100 asistentes × 200 g de pechuga → 22 kilos; 50 asistentes con cilantro de dos platos (10 g y 5 g) → 825 g → 2 libras; 200 asistentes × 150 g de papa → 33.000 g → 3 arrobas. Se ve en el detalle del evento y en el resumen del registro (antes de guardar), y avisa de los platos que aún no tienen receta. | Detalle del evento · Nuevo evento (paso 3) |
+| HU-26 | **Registrar meseros:** nombre completo y datos de contacto (un teléfono, un correo o ambos). El nombre solo lleva letras y el contacto debe traer de verdad un teléfono (mínimo 7 dígitos) o un correo; no se repite un mesero activo con el mismo nombre y contacto. Los meseros registrados aparecen en un listado con buscador. Es la base de los eventos con personal asignado (HU-28). | Personal |
+| HU-27 | **Eliminar meseros:** cada mesero del listado tiene un botón «Eliminar» que pide confirmación en la misma fila. El mesero deja de aparecer en el listado (borrado lógico: el registro queda inactivo y sus asignaciones a eventos se borran: no se guarda historial de asignaciones) y se puede volver a registrar con los mismos datos. **No existe opción para modificar** a un mesero: si hubo un error al registrarlo, se elimina y se registra de nuevo. | Personal |
+| HU-28 | **Asignar meseros a un evento:** en el detalle del evento, «Meseros asignados» muestra cuántos hay frente a los requeridos (1 por cada 20 asistentes) con un aviso de cuántos **faltan** («4 de 5 · Faltan 1»), quiénes son, y un selector con casillas para elegir entre los meseros registrados. Guardar **sincroniza la lista completa**. **No se puede asignar más de los requeridos**, ni un mesero eliminado, ni uno que ya esté en **otro evento que se cruza en el tiempo** (si un evento termina justo cuando empieza el otro, sí se puede); los ocupados salen bloqueados con «Ocupado en …». Para esto el evento ahora lleva **hora de inicio**. Alimenta el comparativo de la HU-25. | Eventos · detalle del evento |
+| HU-29 | **Estado de la asignación:** cada mesero asignado a un evento tiene un estado: *por confirmar* (al asignarlo), *confirmado* o *no puede*, que se cambia desde un selector junto a su nombre. Quien «no puede» sigue en la lista pero **no cuenta** para el estándar: el «X de Y» y la alerta de personal (HU-25) solo suman a los demás, no ocupa un lugar del tope y no bloquea su horario en otro evento. Cambiar la asignación (HU-28) conserva el estado de los que se quedan. |
+| HU-30 | **Lista de meseros programados:** el detalle del evento muestra, por cada mesero asignado, su nombre, su contacto y su estado (el checklist de la HU-29). Un evento sin meseros lo dice y no es un error. **No se guarda historial de asignaciones:** quitar a un mesero de un evento, o eliminarlo del personal, borra sus asignaciones y no deja rastro. |
 
 Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia desde el menú lateral o desde el login.
 
@@ -64,6 +74,10 @@ Resumen, búsqueda, filtros por estado y, a la derecha, el detalle del evento se
 En el detalle, el mobiliario se compara con el **inventario actual**: si después se compran más unidades, lo que hay que alquilar baja solo.
 
 ![Detalle de un evento con mobiliario propio y alquilado](docs/imagenes/eventos-alquiler.png)
+
+**Meseros (HU-21).** El detalle muestra cuántos meseros hacen falta: 1 por cada 20 asistentes, siempre redondeado hacia arriba, con la cuenta a la vista. También se ve en la vista previa del paso 1 (cambia mientras se escriben los asistentes) y en el resumen del paso 3.
+
+![Meseros requeridos en el detalle de un evento](docs/imagenes/meseros-detalle.png)
 
 ### Registrar un evento (HU-01 a HU-05 y HU-07)
 
@@ -103,6 +117,24 @@ Aquí se mantienen los productos que se ofrecen al registrar un evento. Cada uno
 
 ![Pantalla de catálogo](docs/imagenes/catalogo.png)
 
+**Recetas de platos (HU-46).** En la pestaña «Recetas de Platos» se elige un plato y se registran sus ingredientes: nombre, cantidad que consume **una persona**, unidad (gramos, kilos, libras o arrobas) y cómo se compra (kilo, libra o arroba). La cantidad debe ser mayor a 0 (máximo 3 decimales y 1 kg por persona) y no se repite un ingrediente en la misma receta. Un ingrediente nuevo se crea al escribirlo; si ya existe, se reutiliza y se compra igual que en las otras recetas (la unidad de compra es del ingrediente). Guardar reemplaza la receta completa, y las recetas de ejemplo se marcan como «Datos de prueba» hasta que se guarda la real.
+
+**Ingredientes a comprar (HU-47).** El detalle del evento y el resumen del registro listan cuánto hay que comprar de cada ingrediente: `asistentes × cantidad por porción × 1,10`, convertido a la unidad de compra (1 kg = 1.000 g, 1 libra = 500 g, 1 arroba = 12,5 kg) y redondeado hacia arriba. Un ingrediente que usan varios platos se suma **antes** de aplicar el margen y redondear, así no se compra de más. El cálculo se hace al consultar (con enteros, para que 22.000 g sean exactamente 22 kilos y no 23), por eso siempre sigue a los asistentes y a la receta vigente. Los platos del evento sin receta se avisan aparte.
+
+![Receta de un plato en el catálogo](docs/imagenes/recetas-platos.png)
+
+### Personal (HU-26)
+
+En **Personal** se registran los meseros con su nombre completo y sus datos de contacto, y se ven en un listado con buscador. El nombre solo admite letras (con tildes, ñ, apóstrofos, puntos y guiones); el contacto es **un teléfono o un correo de máximo 15 caracteres** («3001234567», «+573001234567», «ana@correo.com»; un correo de más de 15 caracteres o un teléfono junto con un correo no caben) y debe traer de verdad un teléfono (mínimo 7 dígitos) o un correo. Los errores se avisan junto al campo mientras se escribe, y no se puede registrar dos veces el mismo mesero activo.
+
+**Eliminar meseros (HU-27).** Cada mesero tiene un botón de papelera que pide confirmación («¿Eliminar a Ana María López?») antes de quitarlo del listado. Es un borrado **lógico**: el registro pasa a inactivo y sus asignaciones a eventos se borran (no se guarda historial de asignaciones), y se puede volver a registrar con los mismos datos. Los datos de un mesero **no se modifican** (no hay «editar»): si hubo un error, se elimina y se registra de nuevo.
+
+![Pantalla de Personal con la confirmación para eliminar un mesero](docs/imagenes/personal-meseros.png)
+
+**Asignar meseros a un evento (HU-28).** En el detalle de un evento, «Meseros asignados» compara los asignados con los que el evento requiere (HU-21) y dice si el personal está **completo** o si **faltan**; «Asignar meseros» (o «Cambiar asignación») abre una lista con casillas de los meseros registrados y activos, con buscador. Guardar reemplaza la lista del evento por la que quedó marcada. Reglas: **no se pueden marcar más meseros que los requeridos** (al llegar al número, los demás se bloquean); un mesero eliminado no aparece; y un mesero **ocupado en otro evento que se cruza** (misma fecha y horas que se pisan) sale bloqueado con «Ocupado en «Boda» (18:00 – 22:00)». Si un evento termina justo cuando empieza el otro, **sí se puede**. Para saberlo, el registro del evento pide ahora la **hora de inicio** (el horario se ve como «18:00 – 22:00»); los eventos anteriores, sin hora, cuentan como ocupados todo el día.
+
+![Meseros asignados a un evento: 4 de 5, faltan 1, con el selector abierto](docs/imagenes/asignar-meseros.png)
+
 ### Inventario (HU-08 y HU-09)
 
 Registro de elementos y adquisiciones, tabla con búsqueda y filtros por categoría, y el historial de movimientos (registros, adquisiciones y ajustes).
@@ -111,9 +143,9 @@ Registro de elementos y adquisiciones, tabla con búsqueda y filtros por categor
 | --- | --- |
 | ![Inventario en modo claro](docs/imagenes/inventario-claro.png) | ![Inventario en modo oscuro](docs/imagenes/inventario-oscuro.png) |
 
-**Baja por daño (HU-10).** La pestaña «Baja» (o el botón «Baja» de cada fila) separa esta acción de actualizar la cantidad: solo se escribe cuántas unidades se dañaron y el sistema resta. Lo dado de baja deja de contarse como disponible, también para los eventos.
+**Retiro de elementos (HU-10).** La pestaña «Retiro» (o el botón «Retiro» de cada fila) separa esta acción de actualizar la cantidad: solo se escribe la cantidad a retirar, por daño, pérdida o devolución, y el sistema resta. Lo retirado deja de contarse como disponible, también para los eventos.
 
-![Sección de baja de elementos dañados](docs/imagenes/inventario-baja.png)
+![Sección de retiro de elementos](docs/imagenes/inventario-retiro.png)
 
 Cada elemento es **propio** o **alquilado** a un proveedor (HU-12). Los alquilados se marcan con su etiqueta, se pueden filtrar y no suman a las unidades propias; en un evento, todo lo que se pida de ellos cuenta como «a alquilar».
 
@@ -153,21 +185,28 @@ flowchart LR
 ```text
 SIGEV/
 ├── backend/                 API REST (Node.js + Express)
+│   ├── api/index.js         Entrada de la función serverless en Vercel
 │   ├── src/
 │   │   ├── server.js        Punto de entrada: configura Express y registra las rutas
-│   │   ├── config/          Conexión a PostgreSQL
+│   │   ├── config/          Conexión a PostgreSQL (con el seguro contra bases remotas) y parámetros
 │   │   ├── routes/          Rutas de cada módulo (auth, eventos, catálogo, inventario)
 │   │   ├── controllers/     Lógica de cada ruta: validaciones, cálculos y consultas SQL
 │   │   ├── middlewares/     Validaciones previas y verificación del token
-│   │   ├── scripts/         Script para crear usuarios
-│   │   └── db/              schema.sql (estructura) y seeds.sql (datos iniciales)
-│   ├── .env.example         Plantilla de variables de entorno
+│   │   ├── scripts/         Crear usuarios y generar el SQL del entorno de QA
+│   │   └── db/              schema.sql, seeds.sql (incluye las recetas de ejemplo), catálogo del mercado colombiano y usuario local
+│   ├── .env.example         Plantilla de variables de entorno (apunta a la base local)
+│   ├── vercel.json          Configuración del despliegue de la API
 │   └── README.md            Documentación de la API
 ├── frontend/                Aplicación web (React + Vite)
 │   ├── src/                 Páginas, componentes, servicios, hooks y tipos
+│   ├── vercel.json          Configuración del despliegue del frontend
 │   └── README.md            Cómo levantarlo y cómo está organizado
-└── docs/
-    └── imagenes/            Capturas usadas en la documentación
+├── qa/                      Pruebas automáticas (225 de regresión y 236 casos límite)
+├── docs/
+│   ├── imagenes/            Capturas usadas en la documentación
+│   ├── proceso-de-despliegue.md   Guía del proceso: del código a producción
+│   └── entorno-de-qa.md           Cómo montar y usar el entorno de QA compartido
+└── docker-compose.yml       Base de datos PostgreSQL local para desarrollar
 ```
 
 ---
@@ -182,15 +221,28 @@ cd SIGEV
 git switch develop
 ```
 
-1. **Backend:** sigue [`backend/README.md`](backend/README.md). En resumen: `cd backend`, `npm install`, copiar `.env.example` a `.env` con los datos de Supabase y ejecutar `node src/server.js`.
-2. **Frontend:** sigue [`frontend/README.md`](frontend/README.md). En resumen: `cd frontend`, `npm install`, copiar `.env.example` a `.env` y ejecutar `npm run dev`.
-3. Abre <http://localhost:5173> e inicia sesión con un usuario creado con el script `crearUsuario.js`.
+1. **Base de datos local:** `docker compose up -d` (carga sola la estructura, el catálogo y un usuario `dev` / `local1234`). Lo que crees en tu computadora **no toca QA ni producción**.
+2. **Backend:** sigue [`backend/README.md`](backend/README.md). En resumen: `cd backend`, `npm install`, `cp .env.example .env` (ya apunta a la base local) y `node src/server.js`.
+3. **Frontend:** sigue [`frontend/README.md`](frontend/README.md). En resumen: `cd frontend`, `npm install`, copiar `.env.example` a `.env` y ejecutar `npm run dev`.
+4. Abre <http://localhost:5173> e inicia sesión con `dev` / `local1234`.
+
+> **Seguridad:** el backend se niega a arrancar en tu computadora si el `.env` apunta a una base remota (QA o producción). Para usar la de QA a propósito hay que definir `PERMITIR_BASE_REMOTA=si`.
 
 ---
 
 ## Despliegue en Vercel
 
-La aplicación se publica como **dos proyectos de Vercel** que salen del mismo repositorio (rama `main`), con la base de datos en Supabase:
+Hay **tres entornos**, cada uno con su propia base de datos, para que lo que se pruebe nunca toque lo real:
+
+| Entorno | Para qué | Base de datos | Cómo se actualiza |
+| --- | --- | --- | --- |
+| **Local** | Desarrollar en tu computadora | PostgreSQL en Docker (`docker compose up -d`) | Tú, con `git pull` |
+| **QA** | Que todo el equipo pruebe antes de publicar | Supabase de QA | Solo con la rama `develop` |
+| **Producción** | Lo que usa el cliente | Supabase de producción | Solo con la rama `main`, mediante un PR de `develop` a `main` |
+
+El paso a paso del proceso está en [`docs/proceso-de-despliegue.md`](docs/proceso-de-despliegue.md) y el entorno de QA en [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md).
+
+Cada entorno publicado se compone de **dos proyectos de Vercel** que salen del mismo repositorio, con la base de datos en Supabase:
 
 | Proyecto | Root Directory | Qué es | Archivo de configuración |
 | --- | --- | --- | --- |
@@ -215,6 +267,17 @@ La aplicación se publica como **dos proyectos de Vercel** que salen del mismo r
 
 ---
 
+## Pruebas y entorno de QA
+
+El proyecto trae pruebas automáticas en [`qa/`](qa) (225 pruebas de los checklists y 236 casos límite de la API) y una guía para montar un **entorno de QA compartido**, con su propia base de datos, que se actualiza solo desde la rama `develop`:
+
+- [`qa/README.md`](qa/README.md): cómo ejecutar las pruebas.
+- [`docs/entorno-de-qa.md`](docs/entorno-de-qa.md): cómo montar y usar el entorno de QA.
+
+Las pruebas se niegan a ejecutarse contra producción.
+
+---
+
 ## Base de datos
 
 La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/schema.sql) y los productos iniciales del catálogo en [`backend/src/db/seeds.sql`](backend/src/db/seeds.sql).
@@ -226,7 +289,7 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 | `evento_productos` | Alimentos y bebidas de cada evento con la cantidad neta, la cantidad con margen y el costo estimado. |
 | `requerimientos_adicionales` | Mobiliario y servicios adicionales de cada evento (sin cálculo automático). El mobiliario guarda en `producto_id` el elemento del inventario con el que se relaciona (HU-12). |
 | `usuarios` | Cuentas que pueden iniciar sesión (contraseña guardada como hash bcrypt). |
-| `movimientos_inventario` | Historial de cada cambio de cantidad del inventario: registro inicial, adquisición, ajuste o baja por daño. |
+| `movimientos_inventario` | Historial de cada cambio de cantidad del inventario: registro inicial, adquisición, ajuste o retiro (por daño, pérdida o devolución; internamente el tipo se llama `baja`). |
 
 > **Importante:** modificar `schema.sql` **no actualiza Supabase por sí solo**. Quien cambie una tabla debe ejecutar ese cambio en Supabase (SQL Editor) dentro del mismo PR y avisarlo en la descripción.
 
@@ -235,18 +298,27 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 ## Reglas de negocio
 
 - Un evento debe tener **entre 40 y 600 asistentes** (RN-01 / HU-07).
+- La **duración** de un evento va de **3 a 8 horas** y la **fecha** debe ser **hoy o posterior** (nunca el pasado) y no pasar de 5 años adelante; no puede haber más de **3 eventos activos el mismo día** (RN-13, RN-14).
+- Cada **servicio adicional** (DJ, música en vivo, sonido, iluminación, entretenimiento) admite de **1 a 5 unidades** y sus **horas no pueden superar la duración del evento**: no hay «DJ ilimitados» ni 300 horas de DJ en un evento de 3. Si se acorta la duración del evento después de agregar servicios, el sistema avisa y no deja continuar hasta corregirlo (RN-18). Además (COR-06), las horas de un servicio van **de 1 a 5** aunque el evento dure más, y cada tipo tiene un **tope de unidades por evento, sumando todas sus líneas**: DJ 3, música en vivo 3, entretenimiento 3, sonido 2, iluminación 2 y otro 5 (no caben seis líneas de DJ). La pantalla muestra cuántas unidades quedan.
 - Con **más de 300 asistentes** el evento es de modalidad **buffet** (RN-02).
+- Los **meseros** requeridos son **1 por cada 20 asistentes**, siempre **redondeados hacia arriba** para que nunca falte personal (RN-04, RN-12). Se calculan al consultar el evento, no se guardan, así que siempre coinciden con los asistentes. Es la primera historia del módulo de personal de servicio (HU-21); las siguientes se suman una por una.
+- Los **cocineros** requeridos son **(asistentes ÷ 25, redondeado hacia arriba) × 2**, igual para todos los eventos, sin depender del tipo de evento ni de la comida (RN-05, RN-12): 40 → 4, 100 → 8, 200 → 16, 320 → 26, 600 → 48; el techo va antes de multiplicar por 2 (50 → 4, 51 → 6). También se calculan al consultar el evento y no se guardan; el cliente no puede fijarlos.
 - Con **más de 200 asistentes** (valor por defecto del umbral) se avisa que probablemente haya que **alquilar mobiliario** (RN-03 / P-05).
+- **Solo se alquila mobiliario y vajilla** (RN-17): las bebidas (generales y licores) siempre son propias y no ofrecen la opción «Alquilado». Lo que se alquila en un evento es, como máximo, lo requerido menos lo propio disponible, y si no falta nada no se alquila nada. La cantidad que se pide de mobiliario es un entero de 1 a 2.000 (RF-14).
 - El mobiliario de un evento se compara con el stock actual del inventario: lo que alcanza es **propio** y el resto se **alquila**. Lo que no está en el inventario, o está marcado como **alquilado**, se alquila completo (HU-12).
 - El umbral de 200 asistentes no está escrito en el código: se define con la variable `MAX_OWNED_CAPACITY_THRESHOLD` del backend (P-05). Si el cliente compra más inventario y el límite sube, solo se cambia el `.env` y se reinicia el servidor.
 - Las **bebidas generales** (cerveza, vino, champaña, gaseosa) y las del **bar de coctelería** (licores fuertes) se manejan por separado y un producto pertenece a un solo grupo (RN-08 / HU-13).
+- **Límites de las medidas**, avisados en pantalla apenas se escriben y exigidos también por el servidor: un alimento va de 1 a **1.000 g** por persona; una botella, hasta **5.000 ml** (y la porción no puede ser mayor que la botella); un licor de una receta de cóctel, hasta **250 ml** con 2 decimales; los asistentes de la calculadora de licor, de 40 a 600; los cócteles por persona, un entero de 1 a 10 (RN-15); y un precio no pasa de $100.000.000. Los campos numéricos se pueden borrar y reescribir sin que se quede un «0» pegado.
 - Todas las cantidades de alimentos y bebidas llevan un **margen de seguridad del 10%** (RN-09).
 - Cómo se calcula cada producto:
   - **Por porción** (alimentos): asistentes × gramos por persona; si supera 1000 g se expresa en kg.
   - **Por unidad** (bebidas individuales): asistentes × unidades por persona, redondeado hacia arriba.
+    Las unidades por persona son un **número entero de 1 a 10** (no se sirven 1,4 gaseosas por persona); se valida al registrar las bebidas del evento y al guardar el producto en el catálogo (RF-22 / RN-15).
   - **Por botella** (bebidas compartidas): porciones por botella = volumen ÷ tamaño de la porción; botellas = asistentes ÷ porciones por botella, redondeado hacia arriba.
 - El costo estimado solo incluye alimentos y bebidas; el mobiliario y los servicios se cotizan aparte.
 - Todo elemento del inventario tiene **una de cuatro categorías**: Mobiliario, Bebidas Generales, Licores para Cócteles o Vajilla. Cualquier otro valor (por ejemplo «Decoración») se rechaza, tanto en la API como en la base de datos (RF-10 / HU-09).
+- Cada elemento del inventario tiene un **máximo de unidades según su categoría**: mobiliario 2.000, vajilla 6.000, bebidas generales y licores 4.000. Se aplica al registrar, al actualizar la cantidad y al adquirir; una adquisición que se pasa se rechaza y dice cuántas unidades se pueden adquirir como mucho (RF-11, RF-13 / RN-16).
+- Un elemento nuevo se registra con **al menos 1 unidad** (no se puede registrar con 0) en todas las categorías; después, «Actualizar» sí puede dejarlo en 0 (COR-04).
 - En el inventario, la suma de los movimientos de cada elemento siempre es igual a su cantidad disponible.
 
 ---
@@ -264,5 +336,6 @@ La estructura completa está en [`backend/src/db/schema.sql`](backend/src/db/sch
 ## Pendientes y próximos pasos
 
 - **Registrar qué usuario hace cada movimiento del inventario:** la API ya exige sesión y el token trae el usuario; falta guardarlo en el historial.
-- **Validaciones de entrada en eventos:** algunos datos inválidos enviados directamente a la API (porciones o cantidades negativas, fechas inválidas, productos inexistentes) responden 500 o se aceptan; la interfaz los evita, pero la API debe rechazarlos con un 400 claro.
+- **Diseño responsive:** la interfaz está pensada para escritorio; la adaptación a celular y tablet (menú de cajón y tablas en tarjetas) está lista en el PR #32, pendiente de mezclar.
+- **Conectar Vercel directamente a este repositorio:** hoy se publica desde una copia y la sincronización es manual (ver la guía del proceso de despliegue).
 - Editar los requerimientos y cambiar el estado de un evento ya creado.

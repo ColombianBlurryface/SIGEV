@@ -11,6 +11,7 @@
  * los eventos nuevos.
  */
 const pool = require('../config/db');
+const { esUnidadesPorPersonaValida, MENSAJE_UNIDADES_POR_PERSONA } = require('../config/reglasBebidas');
 
 // Grupos del catálogo. El mobiliario no está aquí: vive en el inventario (HU-04 / HU-12).
 const CLASIFICACIONES = ['alimento', 'bebida_general', 'bar_cocteleria'];
@@ -32,6 +33,8 @@ const UNIDAD_POR_TIPO = {
 
 const LIMITE_NUMERO = 100000; // gramos, unidades o mililitros: más que esto es casi seguro un error
 const LIMITE_PRECIO = 100000000;
+const LIMITE_GRAMOS = 1000;   // un alimento no pasa de 1 kg por persona
+const LIMITE_BOTELLA_ML = 5000; // la botella más grande que se maneja: 5 litros
 
 const CAMPOS = `id, nombre, clasificacion, tipo_calculo, porcion_por_persona, unidad_medida,
   volumen_botella_ml, tamano_porcion_ml, precio_unitario, activo`;
@@ -70,8 +73,8 @@ const validarProducto = (body) => {
   let tamano = 0;
 
   if (tipo_calculo === 'botella_compartida') {
-    if (!esNumeroPositivo(volumen_botella_ml)) {
-      return { error: 'El volumen de la botella (ml) debe ser un número mayor a 0.' };
+    if (!esNumeroPositivo(volumen_botella_ml, LIMITE_BOTELLA_ML)) {
+      return { error: `El volumen de la botella (ml) debe ser un número mayor a 0 y de máximo ${LIMITE_BOTELLA_ML}.` };
     }
     if (!esNumeroPositivo(tamano_porcion_ml, volumen_botella_ml)) {
       return { error: 'El tamaño de la porción (ml) debe ser mayor a 0 y no puede superar el volumen de la botella.' };
@@ -79,12 +82,13 @@ const validarProducto = (body) => {
     volumen = volumen_botella_ml;
     tamano = tamano_porcion_ml;
   } else {
-    if (!esNumeroPositivo(porcion_por_persona)) {
-      return {
-        error: tipo_calculo === 'porcion_persona'
-          ? 'Los gramos por persona deben ser un número mayor a 0.'
-          : 'Las unidades por persona deben ser un número mayor a 0.'
-      };
+    if (tipo_calculo === 'porcion_persona') {
+      if (!esNumeroPositivo(porcion_por_persona, LIMITE_GRAMOS)) {
+        return { error: `Los gramos por persona deben ser un número mayor a 0 y de máximo ${LIMITE_GRAMOS}.` };
+      }
+    } else if (!esUnidadesPorPersonaValida(porcion_por_persona)) {
+      // Bebida individual (RF-22, RN-15): las unidades por persona son un entero de 1 a 10
+      return { error: MENSAJE_UNIDADES_POR_PERSONA };
     }
     porcion = porcion_por_persona;
   }
@@ -113,6 +117,11 @@ const obtenerCatalogo = async (req, res) => {
   try {
     const { clasificacion, incluir_inactivos } = req.query;
     const incluirInactivos = incluir_inactivos === 'true';
+
+    // Un grupo que no existe daba un error 500 de la base de datos (enum inválido): ahora es un 400 claro
+    if (clasificacion !== undefined && clasificacion !== '' && !CLASIFICACIONES.includes(clasificacion)) {
+      return datosInvalidos(res, `El grupo debe ser uno de: ${CLASIFICACIONES.join(', ')}.`);
+    }
 
     let query = `
       SELECT ${CAMPOS}
@@ -146,7 +155,10 @@ const obtenerCatalogo = async (req, res) => {
  */
 const obtenerProductoPorId = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1 || id > 2147483647) {
+      return datosInvalidos(res, 'El identificador del producto no es válido.');
+    }
     const query = `
       SELECT * FROM catalogo_productos 
       WHERE id = $1 AND activo = true AND categoria_inventario IS NULL;

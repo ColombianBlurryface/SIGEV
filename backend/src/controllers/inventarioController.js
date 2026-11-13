@@ -16,9 +16,11 @@
  *   - registro:    cantidad inicial al crear el elemento
  *   - adquisicion: unidades compradas que se suman (HU-09)
  *   - ajuste:      corrección manual de la cantidad (+ o -) desde "Actualizar"
- *   - baja:        unidades dañadas que se retiran (HU-10), siempre en negativo
+ *   - baja:        retiro de unidades (HU-10, COR-09: por daño, pérdida o devolución), siempre en negativo.
+ *                  En pantalla se llama «retiro»; el nombre interno «baja» se conserva en la base de datos.
  */
 const pool = require('../config/db');
+const { MAXIMO_POR_CATEGORIA, ETIQUETA_CATEGORIA, CATEGORIAS_ALQUILABLES, formatearCantidad } = require('../config/limitesInventario');
 
 // Cada categoría de inventario se guarda con la clasificación del catálogo que le corresponde.
 // La vajilla no tiene clasificación propia en el catálogo (el enum solo distingue alimento,
@@ -36,6 +38,15 @@ const CAMPOS_INVENTARIO = 'id, nombre, categoria_inventario, cantidad_propia, ca
 
 // Una cantidad de inventario válida es un número entero mayor o igual a 0
 const esCantidadValida = (valor) => typeof valor === 'number' && Number.isInteger(valor) && valor >= 0;
+
+// RN-16: cada categoría tiene un máximo de unidades por elemento (ver config/limitesInventario.js)
+const mensajeMaximo = (categoria) =>
+    `El máximo por elemento de ${ETIQUETA_CATEGORIA[categoria]} es ${formatearCantidad(MAXIMO_POR_CATEGORIA[categoria])} unidades.`;
+
+// RN-17: solo se alquila mobiliario y vajilla; las bebidas siempre son propias
+const esAlquilable = (categoria) => CATEGORIAS_ALQUILABLES.includes(categoria);
+const mensajeNoAlquilable = (categoria) =>
+    `Solo se alquila mobiliario y vajilla (RN-17): ${ETIQUETA_CATEGORIA[categoria]} no se puede marcar como alquilado.`;
 
 // Respuesta estándar 400 cuando los datos enviados no cumplen las reglas
 const datosInvalidos = (res, detalle) => res.status(400).json({ error: 'Datos inválidos', detalle });
@@ -56,7 +67,6 @@ const categoriaInvalida = (res, valor) => {
 };
 
 const TIPOS_MOVIMIENTO = ['registro', 'adquisicion', 'ajuste', 'baja'];
-const CANTIDAD_MAXIMA_ADQUISICION = 100000;
 
 // Devuelve el texto sin espacios sobrantes, o '' si no se envió texto
 const leerNotas = (valor) => (typeof valor === 'string' ? valor.trim() : '');
@@ -88,11 +98,18 @@ const registrarElemento = async (req, res) => {
     if (!esCategoriaValida(categoria_inventario)) {
         return categoriaInvalida(res, categoria_inventario);
     }
-    if (!esCantidadValida(cantidad_propia)) {
-        return datosInvalidos(res, 'La cantidad disponible debe ser un número entero mayor o igual a 0.');
+    // COR-04: un elemento nuevo se registra con al menos 1 unidad (los ajustes posteriores sí pueden dejarlo en 0)
+    if (!esCantidadValida(cantidad_propia) || cantidad_propia < 1) {
+        return datosInvalidos(res, 'La cantidad inicial debe ser un número entero mayor o igual a 1.');
+    }
+    if (cantidad_propia > MAXIMO_POR_CATEGORIA[categoria_inventario]) {
+        return datosInvalidos(res, `No se pueden registrar ${formatearCantidad(cantidad_propia)} unidades. ${mensajeMaximo(categoria_inventario)}`);
     }
     if (typeof esPropio !== 'boolean') {
         return datosInvalidos(res, 'es_propio debe ser verdadero (propio) o falso (alquilado).');
+    }
+    if (!esPropio && !esAlquilable(categoria_inventario)) {
+        return datosInvalidos(res, mensajeNoAlquilable(categoria_inventario));
     }
 
     const client = await pool.connect();
@@ -108,15 +125,13 @@ const registrarElemento = async (req, res) => {
         );
         const elemento = result.rows[0];
 
-        if (cantidad_propia > 0) {
-            await registrarMovimiento(client, {
-                productoId: elemento.id,
-                tipo: 'registro',
-                cantidad: cantidad_propia,
-                cantidadResultante: cantidad_propia,
-                notas: 'Registro inicial del elemento'
-            });
-        }
+        await registrarMovimiento(client, {
+            productoId: elemento.id,
+            tipo: 'registro',
+            cantidad: cantidad_propia,
+            cantidadResultante: cantidad_propia,
+            notas: 'Registro inicial del elemento'
+        });
 
         await client.query('COMMIT');
         res.status(201).json(elemento);
@@ -191,15 +206,24 @@ const actualizarPropiedad = async (req, res) => {
     }
 
     try {
+        // RN-17: marcar un elemento como alquilado solo se permite en mobiliario y vajilla
         const result = await pool.query(
             `UPDATE catalogo_productos SET es_propio = $1
             WHERE id = $2 AND categoria_inventario IS NOT NULL
+              AND ($1 = true OR categoria_inventario = ANY($3))
             RETURNING ${CAMPOS_INVENTARIO}`,
-            [es_propio, id]
+            [es_propio, id, CATEGORIAS_ALQUILABLES]
         );
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
+            const existe = await pool.query(
+                'SELECT categoria_inventario FROM catalogo_productos WHERE id = $1 AND categoria_inventario IS NOT NULL',
+                [id]
+            );
+            if (existe.rowCount === 0) {
+                return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
+            }
+            return datosInvalidos(res, mensajeNoAlquilable(existe.rows[0].categoria_inventario));
         }
         res.json(result.rows[0]);
     } catch (error) {
@@ -225,15 +249,31 @@ const actualizarCategoria = async (req, res) => {
     }
 
     try {
+        // RN-16: el elemento no puede pasar a una categoría cuyo máximo ya supera su cantidad
         const result = await pool.query(
             `UPDATE catalogo_productos SET categoria_inventario = $1, clasificacion = $2
-            WHERE id = $3 AND categoria_inventario IS NOT NULL
+            WHERE id = $3 AND categoria_inventario IS NOT NULL AND cantidad_propia <= $4
+              AND (es_propio = true OR $5::boolean)
             RETURNING ${CAMPOS_INVENTARIO}`,
-            [categoria_inventario, CATEGORIAS_INVENTARIO[categoria_inventario], id]
+            [categoria_inventario, CATEGORIAS_INVENTARIO[categoria_inventario], id, MAXIMO_POR_CATEGORIA[categoria_inventario], esAlquilable(categoria_inventario)]
         );
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
+            const existe = await pool.query(
+                'SELECT cantidad_propia, es_propio FROM catalogo_productos WHERE id = $1 AND categoria_inventario IS NOT NULL',
+                [id]
+            );
+            if (existe.rowCount === 0) {
+                return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
+            }
+            // RN-17: un elemento alquilado no puede pasar a una categoría que no se alquila
+            if (!existe.rows[0].es_propio && !esAlquilable(categoria_inventario)) {
+                return datosInvalidos(res, `El elemento está marcado como alquilado. ${mensajeNoAlquilable(categoria_inventario)}`);
+            }
+            return datosInvalidos(
+                res,
+                `El elemento tiene ${formatearCantidad(existe.rows[0].cantidad_propia)} unidades y no cabe en esa categoría. ${mensajeMaximo(categoria_inventario)}`
+            );
         }
         res.json(result.rows[0]);
     } catch (error) {
@@ -267,7 +307,7 @@ const actualizarCantidad = async (req, res) => {
         await client.query('BEGIN');
 
         const actual = await client.query(
-            `SELECT cantidad_propia FROM catalogo_productos
+            `SELECT cantidad_propia, categoria_inventario FROM catalogo_productos
             WHERE id = $1 AND categoria_inventario IS NOT NULL
             FOR UPDATE`, // Bloquea la fila hasta terminar, para que dos ajustes simultáneos no se pisen
             [id]
@@ -276,6 +316,15 @@ const actualizarCantidad = async (req, res) => {
         if (actual.rowCount === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
+        }
+
+        // RN-16: la nueva cantidad no puede pasar del máximo de la categoría del elemento
+        if (cantidad_propia > MAXIMO_POR_CATEGORIA[actual.rows[0].categoria_inventario]) {
+            await client.query('ROLLBACK');
+            return datosInvalidos(
+                res,
+                `No se pueden fijar ${formatearCantidad(cantidad_propia)} unidades. ${mensajeMaximo(actual.rows[0].categoria_inventario)}`
+            );
         }
 
         const diferencia = cantidad_propia - actual.rows[0].cantidad_propia;
@@ -318,8 +367,8 @@ const registrarAdquisicion = async (req, res) => {
     if (!Number.isInteger(id) || id <= 0) {
         return datosInvalidos(res, 'El identificador del elemento no es válido.');
     }
-    if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > CANTIDAD_MAXIMA_ADQUISICION) {
-        return datosInvalidos(res, `La cantidad adquirida debe ser un número entero entre 1 y ${CANTIDAD_MAXIMA_ADQUISICION}.`);
+    if (!Number.isInteger(cantidad) || cantidad < 1) {
+        return datosInvalidos(res, 'La cantidad adquirida debe ser un número entero mayor o igual a 1.');
     }
     if (notas.length > 300) {
         return datosInvalidos(res, 'Las notas admiten máximo 300 caracteres.');
@@ -329,18 +378,37 @@ const registrarAdquisicion = async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        const actualizado = await client.query(
-            // La suma se hace en la propia base de datos, así dos adquisiciones al mismo tiempo no se pierden
-            `UPDATE catalogo_productos SET cantidad_propia = cantidad_propia + $1
-            WHERE id = $2 AND categoria_inventario IS NOT NULL
-            RETURNING ${CAMPOS_INVENTARIO}`,
-            [cantidad, id]
+        const actual = await client.query(
+            `SELECT nombre, cantidad_propia, categoria_inventario FROM catalogo_productos
+            WHERE id = $1 AND categoria_inventario IS NOT NULL
+            FOR UPDATE`, // Bloquea la fila: dos adquisiciones simultáneas no pueden pasarse juntas del máximo
+            [id]
         );
 
-        if (actualizado.rowCount === 0) {
+        if (actual.rowCount === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Elemento de inventario no encontrado' });
         }
+
+        // RN-16: la adquisición no puede dejar el elemento por encima del máximo de su categoría
+        const { nombre, cantidad_propia: disponible, categoria_inventario: categoria } = actual.rows[0];
+        const cabe = Math.max(MAXIMO_POR_CATEGORIA[categoria] - disponible, 0);
+        if (cantidad > cabe) {
+            await client.query('ROLLBACK');
+            return datosInvalidos(
+                res,
+                cabe === 0
+                    ? `«${nombre}» ya tiene el máximo de ${formatearCantidad(MAXIMO_POR_CATEGORIA[categoria])} unidades; no se pueden adquirir más.`
+                    : `No se pueden adquirir ${formatearCantidad(cantidad)} unidades de «${nombre}»: ${mensajeMaximo(categoria)} Ya hay ${formatearCantidad(disponible)}, así que como mucho se pueden adquirir ${formatearCantidad(cabe)}.`
+            );
+        }
+
+        const actualizado = await client.query(
+            `UPDATE catalogo_productos SET cantidad_propia = cantidad_propia + $1
+            WHERE id = $2
+            RETURNING ${CAMPOS_INVENTARIO}`,
+            [cantidad, id]
+        );
 
         const elemento = actualizado.rows[0];
         const movimiento = await registrarMovimiento(client, {
@@ -415,14 +483,14 @@ const consultarMovimientos = async (req, res) => {
     }
 };
 
-// Texto que queda en el historial cuando la baja se registra sin motivo
-const MOTIVO_BAJA_POR_DEFECTO = 'Baja por daño';
+// Texto que queda en el historial cuando el retiro se registra sin motivo
+const MOTIVO_BAJA_POR_DEFECTO = 'Retiro de elementos';
 
 /**
- * POST /api/inventario/:id/baja - HU-10 (RF-12)
- * Retira unidades dañadas { cantidad, motivo? } de un elemento: las resta de la cantidad
- * disponible, las suma a cantidad_danada y deja un movimiento de tipo "baja" en el historial.
- * Basta con indicar la cantidad dañada; el motivo es opcional (QA-02).
+ * POST /api/inventario/:id/retiro (y /baja, el nombre anterior) - HU-10 (RF-12, COR-09)
+ * Retira unidades { cantidad, motivo? } de un elemento, por daño, pérdida o devolución: las resta de la
+ * cantidad disponible, las suma a cantidad_danada (columna que conserva su nombre) y deja un movimiento
+ * de tipo "baja" en el historial. Basta con indicar la cantidad; el motivo es opcional (QA-02).
  */
 const retirarDanado = async (req, res) => {
     const id = Number(req.params.id);
@@ -483,8 +551,8 @@ const retirarDanado = async (req, res) => {
         res.status(201).json({ elemento, movimiento: movimiento.rows[0] });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Error al retirar elementos dañados:', error);
-        res.status(500).json({ error: 'Error al retirar los elementos dañados' });
+        console.error('Error al retirar elementos:', error);
+        res.status(500).json({ error: 'Error al retirar los elementos' });
     } finally {
         client.release();
     }

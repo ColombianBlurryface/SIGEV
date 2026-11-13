@@ -7,7 +7,7 @@ import type {
   MovimientoInventario,
   NuevoElementoInventario,
   RegistrarAdquisicionResponse,
-  RegistrarBajaResponse,
+  RegistrarRetiroResponse,
 } from '@/types/inventario'
 import { apiRequest } from './api'
 
@@ -50,9 +50,9 @@ export const inventarioService = {
     })
   },
 
-  // HU-10: da de baja unidades dañadas; el backend resta la cantidad y deja el movimiento en el historial
-  registrarBaja(id: number, cantidad: number, motivo?: string) {
-    return apiRequest<RegistrarBajaResponse>(`/inventario/${id}/baja`, {
+  // HU-10: retira unidades (daño, pérdida o devolución); el backend resta la cantidad y deja el movimiento en el historial
+  registrarRetiro(id: number, cantidad: number, motivo?: string) {
+    return apiRequest<RegistrarRetiroResponse>(`/inventario/${id}/retiro`, {
       method: 'POST',
       body: { cantidad, motivo },
     })

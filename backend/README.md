@@ -6,50 +6,64 @@ API REST de SIGEV hecha con **Node.js + Express 5** y **PostgreSQL** (Supabase).
 
 ## Puesta en marcha
 
-### 1. Instalar dependencias
+> **Regla de oro: en tu computadora trabajas siempre contra la base de datos LOCAL.** Lo que crees mientras desarrollas se queda en tu computadora y nunca llega a QA ni a producción. El backend se niega a arrancar si `DB_HOST` apunta a una base remota (ver más abajo).
+
+### 1. Levantar la base de datos local
+
+Desde la **raíz del repositorio** (necesitas Docker):
+
+```bash
+docker compose up -d
+```
+
+La primera vez crea una base PostgreSQL en el puerto `5433` y le carga la estructura, el catálogo, el inventario base y un usuario de desarrollo (`dev` / `local1234`). Los datos que crees quedan en tu computadora.
+
+| Comando | Qué hace |
+| --- | --- |
+| `docker compose up -d` | Levanta la base (conserva tus datos) |
+| `docker compose down` | La apaga sin borrar nada |
+| `docker compose down -v` | La borra por completo; al volver a levantar queda como nueva |
+
+Si el puerto `5433` está ocupado: `SIGEV_DB_PORT=5434 docker compose up -d` y usa ese puerto en `DB_PORT`.
+
+### 2. Instalar dependencias y configurar el `.env`
 
 ```bash
 cd backend
 npm install
-```
-
-### 2. Configurar las variables de entorno
-
-```bash
 cp .env.example .env
 ```
 
-Completa `backend/.env` (pide los valores reales al equipo; **nunca subas este archivo al repositorio**):
+El `.env.example` ya apunta a la base local, así que solo tienes que cambiar `JWT_SECRET` por cualquier texto largo (por ejemplo `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`). **Nunca subas el `.env` al repositorio.**
 
 | Variable | Descripción |
 | --- | --- |
-| `DB_HOST` | Host del *pooler* de Supabase (`aws-0-<region>.pooler.supabase.com`) o `localhost` |
-| `DB_PORT` | `6543` (Supabase, *transaction pooler*) o el puerto de tu Postgres local |
-| `DB_NAME` | Nombre de la base (`postgres` en Supabase) |
-| `DB_USER` | Usuario (`postgres.<project-ref>` en Supabase) |
-| `DB_PASSWORD` | Contraseña de la base de datos |
-| `DB_SSL` | `true` para Supabase, `false` para un Postgres local |
+| `DB_HOST` | `localhost` (base local). Cualquier otro valor está bloqueado en tu computadora salvo con `PERMITIR_BASE_REMOTA=si` |
+| `DB_PORT` | `5433` (la del `docker compose`) |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | `sigev_dev`, `sigev`, `sigev` en la base local |
+| `DB_SSL` | `false` en local; `true` en Supabase |
 | `PORT` | Puerto del backend (por defecto `3000`) |
-| `MAX_OWNED_CAPACITY_THRESHOLD` | Umbral de asistentes a partir del cual se avisa que hay que alquilar mobiliario (P-05, RN-03). Opcional: por defecto `200`. Hay que reiniciar el servidor al cambiarlo |
 | `JWT_SECRET` | Clave larga y aleatoria para firmar los tokens de sesión |
-| `CORS_ORIGIN` | Opcional. Sitios que pueden llamar a la API, separados por comas (por ejemplo la dirección del frontend). Sin definirla acepta cualquiera |
+| `MAX_OWNED_CAPACITY_THRESHOLD` | Umbral de asistentes a partir del cual se avisa que hay que alquilar mobiliario (P-05, RN-03). Opcional: por defecto `200`. Hay que reiniciar el servidor al cambiarlo |
+| `PERMITIR_BASE_REMOTA` | `si` para permitir, a propósito, una base remota (por ejemplo el Supabase de QA) desde tu computadora |
+| `CORS_ORIGIN` | Opcional (en Vercel). Sitios que pueden llamar a la API, separados por comas |
 | `DB_POOL_MAX` | Opcional. Máximo de conexiones por instancia (por defecto `5`) |
 
-> En Supabase usa la conexión del **pooler** (Connect → Direct → *Session/Transaction pooler*). La conexión directa (`db.<ref>.supabase.co`) solo funciona con IPv6 y en muchas redes no resuelve.
+### Qué base usa cada cosa
 
-### 3. Crear las tablas (solo si la base está vacía)
+| Qué estás usando | Base de datos |
+| --- | --- |
+| Tu backend local (`node src/server.js`) con el `.env.example` | **Local** (Docker). No toca nada compartido |
+| `sigev-qa.vercel.app` | Supabase de **QA** |
+| `sigev-nine.vercel.app` | Supabase de **producción** |
 
-Ejecuta en orden `src/db/schema.sql` y `src/db/seeds.sql`, en el SQL Editor de Supabase o con `psql`:
+Para usar el **Supabase de QA** desde tu computadora, escribe en el `.env` los datos de QA que te dé el equipo por privado y agrega `PERMITIR_BASE_REMOTA=si`. **Los datos de producción no van en el `.env` de nadie:** viven solo en las variables de entorno de Vercel.
 
-```bash
-psql -d sigev_db -f src/db/schema.sql
-```
+> En Supabase usa la conexión del **pooler** (Connect → Transaction pooler). La conexión directa (`db.<ref>.supabase.co`) solo funciona con IPv6 y en muchas redes no resuelve.
 
-```bash
-psql -d sigev_db -f src/db/seeds.sql
-```
+### 3. Crear las tablas en una base remota (QA)
 
-Los dos archivos se pueden volver a ejecutar sin error.
+La base local se carga sola con `docker compose`. Para una base **remota nueva** (por ejemplo un Supabase de QA), pega en su SQL Editor el SQL de arranque que genera `src/scripts/generarSqlQA.js` (ver `docs/entorno-de-qa.md`). Todos los archivos SQL se pueden volver a ejecutar sin error.
 
 ### 4. Crear un usuario
 
@@ -59,7 +73,7 @@ No hay registro público: los usuarios se crean con este script. Escribe la cont
 node src/scripts/crearUsuario.js <usuario> '<contraseña>' "<Nombre Completo>" admin
 ```
 
-Si el usuario ya existe, solo cambia su contraseña.
+Si el usuario ya existe, solo cambia su contraseña. En la base local ya existe `dev` / `local1234`. Para crear usuarios en una base remota hay que tener `PERMITIR_BASE_REMOTA=si` en el entorno.
 
 ### 5. Iniciar el servidor
 
@@ -68,6 +82,16 @@ node src/server.js
 ```
 
 Comprueba que responde en <http://localhost:3000/api/health>.
+
+---
+
+## Pruebas unitarias
+
+```bash
+npm test
+```
+
+Corre con el ejecutor de pruebas que trae Node (`node --test`) los cálculos puros de `test/`: hoy, los meseros (HU-21), los cocineros (HU-22), las reglas de las recetas de platos (HU-46), el cálculo de ingredientes a comprar (HU-47) y el registro de meseros (HU-26). Las pruebas de punta a punta (API y pantalla) están en [`../qa`](../qa).
 
 ---
 
@@ -80,6 +104,24 @@ Comprueba que responde en <http://localhost:3000/api/health>.
 - Renombra productos que ya existían para no duplicarlos.
 
 Se puede ejecutar varias veces: no duplica nada y no pisa precios escritos desde la pantalla Catálogo. **Todos los productos nuevos quedan sin precio**; las porciones y presentaciones son las habituales y se ajustan desde el Catálogo. Incluye, comentada, una limpieza opcional de los datos de prueba marcados con «(borrar)».
+
+---
+
+## Datos de prueba del entorno publicado
+
+Para que ningún módulo se vea vacío al abrirlo en el entorno publicado (por ejemplo, en una sustentación), [`src/db/datos-de-prueba.sql`](src/db/datos-de-prueba.sql) carga, en el SQL Editor de Supabase (primero QA, luego producción):
+
+- **Inventario de las cuatro categorías** (mobiliario, vajilla, bebidas generales y licores para cócteles) con cantidades de ejemplo y movimientos de cada tipo (registro inicial, adquisición y retiro), para que el historial tenga algo que mostrar.
+- **6 eventos de ejemplo con mobiliario requerido**, con alimentos, bebidas y servicios, en los cuatro estados: uno de 250 asistentes que supera el umbral de alquiler (se ven las unidades propias y las que se alquilan), uno de 480 en modalidad buffet y confirmado, uno de 120 y uno de 90 que el inventario propio cubre completo, uno ya realizado y uno cancelado (para probar el filtro por estado). Los próximos van a «hoy + 30, 45, 60 y 75 días», así que siempre salen como próximos. El costo usa el precio del catálogo cuando ya lo tiene.
+- Los productos del catálogo que esos eventos usan, solo si faltan.
+
+**Se identifican como prueba:** los eventos empiezan por «[Demo] » y sus observaciones dicen «Datos de prueba»; cada cantidad de ejemplo del inventario deja un movimiento con la nota «Datos de prueba…» (se ve en el historial de `/inventario`), y los elementos de bebidas que crea el script terminan en « (demo)».
+
+**Es seguro repetirlo:** no duplica nada y **no toca ningún elemento que ya tenga unidades**, así que no pisa inventario real. Solo agrega datos; no cambia la estructura de la base.
+
+Los precios de referencia del catálogo están en [`src/db/precios-catalogo.sql`](src/db/precios-catalogo.sql): son estimaciones aproximadas del mercado colombiano, solo se aplican a productos que están en 0 y nunca pisan un precio ya escrito. Para empezar QA de cero está [`../../qa/reiniciar-datos-qa.sql`](../../qa/reiniciar-datos-qa.sql) (ver `docs/entorno-de-qa.md`).
+
+Cuando empiecen los datos reales, [`src/db/datos-de-prueba-quitar.sql`](src/db/datos-de-prueba-quitar.sql) los quita: borra los eventos «[Demo]», devuelve cada elemento a la cantidad que tenía antes y borra los elementos « (demo)». Si ya hubo movimientos reales sobre un elemento de ejemplo, ese elemento se salta y el script lo avisa al final.
 
 ---
 
@@ -105,7 +147,8 @@ backend/src/
 ├── scripts/crearUsuario.js      Alta de usuarios desde la terminal
 └── db/
     ├── schema.sql               Tablas, tipos y restricciones
-    └── seeds.sql                Productos iniciales del catálogo
+    ├── seeds.sql                Productos iniciales del catálogo y las recetas de ejemplo (HU-46)
+    └── recetas-de-prueba.sql    Solo las recetas de ejemplo, para cargarlas en QA o producción
 ```
 
 ---
@@ -136,16 +179,29 @@ Todas las rutas empiezan por `/api`. Los cuerpos se envían y reciben en JSON.
 | POST | `/catalogo` | Crear un producto del catálogo |
 | PUT | `/catalogo/:id` | Editar un producto del catálogo |
 | PATCH | `/catalogo/:id/estado` | Activar o desactivar un producto |
+| POST | `/personal` | Registrar un mesero: `{ nombre_completo, contacto, rol? }` (HU-26) |
+| GET | `/personal` | Listar el personal activo, ordenado por nombre; filtro opcional `?rol=mesero` (HU-26) |
+| DELETE | `/personal/:id` | Eliminar un mesero (borrado lógico, `204`; HU-27) |
+| GET | `/eventos/:id/meseros` | Meseros asignados a un evento y cuántos faltan frente a los requeridos (HU-28) |
+| GET | `/eventos/:id/meseros/disponibles` | Meseros registrados marcando los asignados y los ocupados en otro evento que se cruza (HU-28) |
+| PUT / POST | `/eventos/:id/meseros` | Asignar meseros a un evento: sincroniza la lista completa `{ personal_ids: [..] }` (HU-28) |
+| PATCH | `/eventos/:id/meseros/:personalId/estado` | Cambia el estado de UNA asignación: `{ "estado": "por_confirmar" \| "confirmado" \| "no_puede" }` (también `PENDING`, `CONFIRMED`, `UNAVAILABLE`, y la ruta `/eventos/:id/staff/:personalId/status` con `{ "status": … }`) (HU-29) |
+| GET | `/eventos/:id/staff/waiters` | Lista de meseros programados del evento para el checklist: `{ event_id, total_assigned, staff_checklist: [{ staff_id, full_name, contact_info, assignment_status }] }` (HU-30) |
+| GET | `/catalogo/recetas` | Resumen: cuántos ingredientes tiene la receta de cada plato (HU-46) |
+| GET | `/catalogo/ingredientes` | El maestro de ingredientes con su unidad de compra (HU-46) |
+| GET | `/catalogo/:id/receta` | La receta de un plato (HU-46) |
+| PUT | `/catalogo/:id/receta` | Registrar o reemplazar la receta de un plato (HU-46) |
 | POST | `/eventos` | Registrar un evento con sus requerimientos |
 | GET | `/eventos` | Lista de eventos ordenada por fecha |
 | GET | `/eventos/:id` | Detalle de un evento con sus requerimientos |
+| POST | `/eventos/calcular-compras` | Ingredientes a comprar de unos platos y unos asistentes, antes de guardar el evento (HU-47) |
 | POST | `/inventario` | Registrar un elemento del inventario |
 | GET | `/inventario` | Elementos del inventario (filtro `?categoria=`) |
 | PATCH | `/inventario/:id/categoria` | Cambiar la categoría de un elemento |
 | PATCH | `/inventario/:id/propiedad` | Marcar un elemento como propio o alquilado |
 | PATCH | `/inventario/:id/cantidad` | Fijar la cantidad disponible (queda como ajuste) |
 | POST | `/inventario/:id/adquisiciones` | Registrar una adquisición (suma a la cantidad) |
-| POST | `/inventario/:id/baja` | Retirar unidades dañadas (resta de la cantidad) |
+| POST | `/inventario/:id/retiro` | Retirar unidades por daño, pérdida o devolución (resta de la cantidad). `/inventario/:id/baja` es el nombre anterior y sigue funcionando |
 | GET | `/inventario/movimientos` | Historial de movimientos del inventario |
 
 ### Autenticación
@@ -218,7 +274,7 @@ Crea un producto. `precio_unitario` es opcional: sin precio queda en `0` y se es
 | Grupo (`clasificacion`) | Tipos de cálculo permitidos | Datos |
 | --- | --- | --- |
 | `alimento` | `porcion_persona` | `porcion_por_persona` en gramos; el precio es por kg |
-| `bebida_general`, `bar_cocteleria` | `unidad_persona` | `porcion_por_persona` en unidades; el precio es por unidad |
+| `bebida_general`, `bar_cocteleria` | `unidad_persona` | `porcion_por_persona` en unidades: un **entero de 1 a 10** (RF-22 / RN-15); el precio es por unidad |
 | `bebida_general`, `bar_cocteleria` | `botella_compartida` | `volumen_botella_ml` y `tamano_porcion_ml` (la porción no puede superar la botella); el precio es por botella |
 
 La unidad de medida se deduce del tipo. Los números deben enviarse como número (no como texto). Responde `201` con el producto, `400` si algo no cumple las reglas y `409` si ya hay otro producto del catálogo con ese nombre. El mobiliario no se crea aquí: vive en el inventario.
@@ -226,6 +282,99 @@ La unidad de medida se deduce del tipo. Los números deben enviarse como número
 #### `PUT /api/catalogo/:id`
 
 Edita un producto; se envían todos los campos, igual que al crearlo. Si el producto **ya se usó en algún evento**, no se puede cambiar su `clasificacion` ni su `tipo_calculo` (`409`); sí el nombre, las porciones y el precio. Los eventos ya guardados conservan sus cantidades y costos.
+
+#### `PUT /api/catalogo/:id/receta` y `GET /api/catalogo/:id/receta` (HU-46 · RF-54)
+
+La receta de un **plato** (un alimento del catálogo): sus ingredientes, la cantidad que consume **una persona** y la unidad. `PUT` registra o **reemplaza la receta completa** en una transacción (o se guarda entera o no se guarda nada); `GET` la devuelve.
+
+```json
+{
+  "ingredientes": [
+    { "nombre_ingrediente": "Arroz",     "unidad_compra": "kilo",  "cantidad_porcion": 80, "unidad_porcion": "gramo" },
+    { "nombre_ingrediente": "Almendras", "unidad_compra": "libra", "cantidad_porcion": 15, "unidad_porcion": "gramo" }
+  ]
+}
+```
+
+Respuesta `200` (la misma de `GET`):
+
+```json
+{
+  "plato_id": 3, "plato": "Arroz Verde con Almendras", "es_dato_prueba": false,
+  "receta": [
+    { "ingrediente_id": 1, "ingrediente": "Arroz", "cantidad_porcion": 80, "unidad_porcion": "gramo", "unidad_compra": "kilo", "es_dato_prueba": false }
+  ]
+}
+```
+
+| Regla | Detalle |
+| --- | --- |
+| Unidades | Únicas: `gramo`, `kilo`, `libra`, `arroba` (en `unidad_compra` y `unidad_porcion`). También se entienden `GRAM`, `KILO`, `POUND`, `ARROBA`, el plural y `g`, `kg`, `lb`, `@`. Cualquier otra (litros, paquetes…) da `400` con «Las unidades permitidas son solo gramos, kilos, libras o arrobas.» |
+| Cantidad | `cantidad_porcion` es un número **mayor a 0** (no texto), con máximo 3 decimales y sin pasar de **1 kg por persona** en gramos equivalentes (libra = 500 g, arroba = 12,5 kg) |
+| Ingredientes | De 1 a 30 por receta; nombre de 1 a 100 caracteres; no se repite en la receta (sin importar mayúsculas, tildes ni espacios) |
+| Plato | Debe existir (`404`) y ser un alimento del catálogo (`400` si es una bebida; un elemento del inventario es `404`); un `id` que no es un entero positivo da `400` |
+| Maestro | Un ingrediente que no existe se crea al vuelo; si existe, se reutiliza con su nombre original. Su **unidad de compra es del ingrediente**: si otra receta ya lo compra distinto, `409`; si solo lo usa esta receta, se corrige |
+| Datos de prueba | `es_dato_prueba` es `true` mientras la receta sea la de ejemplo; al guardar la receta real pasa a `false`. El cliente no puede marcarla |
+
+`GET /api/catalogo/recetas` devuelve, por plato, `ingredientes` (cantidad de líneas; 0 = sin receta) y `es_dato_prueba`. `GET /api/catalogo/ingredientes` devuelve el maestro (`nombre`, `unidad_compra`, `platos` que lo usan). Las reglas están en [`src/config/reglasReceta.js`](src/config/reglasReceta.js) y se prueban con `npm test`.
+
+#### `POST /api/personal` y `GET /api/personal` (HU-26 · RF-33)
+
+Personal de servicio, hoy solo **meseros**. Una sola tabla `personal` con un `rol` (`mesero` hoy; cocineros u otros perfiles después, sin tablas nuevas) y `activo`, que permite el borrado lógico de la HU-27.
+
+```json
+{ "nombre_completo": "Carlos Rodríguez", "contacto": "3001234567", "rol": "mesero" }
+```
+
+`POST` responde `201` con `{ id, nombre_completo, contacto, rol, activo: true, creado_en }`. `GET` devuelve un arreglo con el personal **activo** (`?rol=mesero` o `WAITER` filtra; otro valor da `400`).
+
+| Regla | Detalle |
+| --- | --- |
+| `nombre_completo` | Obligatorio, de 2 a 150 caracteres, solo letras (tildes, ñ, otros alfabetos), espacios, apóstrofo, punto y guion: sin números, símbolos ni emoji. Los espacios de más se limpian |
+| `contacto` | Obligatorio («El contacto es obligatorio», `400`), **máximo 15 caracteres** (decisión del PO: `3001234567`, `+573001234567`, `ana@correo.com`; «El contacto admite máximo 15 caracteres» si se pasa), con un **teléfono (mínimo 7 dígitos) o un correo válido**; sin símbolos raros. La columna de la base sigue siendo de 150: los contactos ya guardados con más caracteres se siguen viendo |
+| `rol` | Opcional, `mesero` por defecto (`WAITER` también se entiende); cualquier otro da `400` |
+| Repetidos | No puede haber dos personas **activas** con el mismo rol, nombre y contacto (sin importar mayúsculas): `409`. Con otro contacto sí se puede |
+| Otros campos | `id`, `activo`, `creado_en` enviados por el cliente se ignoran |
+
+Las reglas están en [`src/config/reglasRegistroPersonal.js`](src/config/reglasRegistroPersonal.js) y se prueban con `npm test`. La tabla es nueva (solo agrega): ver `docs/sql-hu-26-personal.sql`.
+
+**`DELETE /api/personal/:id` (HU-27 · RF-34).** Elimina un mesero con **borrado lógico**: pone `activo = false` (la fila del mesero no se borra, pero **sus asignaciones a eventos sí**: RF-38, sin historial de asignaciones) y deja de aparecer en `GET /api/personal`. Respuestas: `204` sin cuerpo; `404` si el mesero no existe o ya fue eliminado (`«El mesero con ID 123 no existe o ya fue eliminado.»`); `400` si el id no es un entero positivo (`abc`, `0`, `-1`, `1.5`, gigantes); `401` sin sesión. Es una sola sentencia (`UPDATE … WHERE id = $1 AND activo = true`): 10 eliminaciones simultáneas del mismo mesero dan un `204` y nueve `404`, nunca un `500`. Un mesero eliminado se puede volver a registrar con los mismos datos (el índice único solo cuenta a los activos).
+
+**Asignar meseros a un evento (HU-28 · RF-35).** `PUT /api/eventos/:id/meseros` (también `POST`, como lo define la historia) con `{ "personal_ids": [3, 7, 9] }` **sincroniza la lista completa**: los meseros que no vienen se quitan, los nuevos se agregan (sin duplicar) y una lista vacía los quita a todos. `GET /api/eventos/:id/meseros` y el bloque `asignacion_meseros` del detalle del evento devuelven lo mismo:
+
+**Estado de la asignación (HU-29 · RF-36).** Cada fila de `evento_personal` tiene `estado`: `por_confirmar` (el valor con el que nace toda asignación), `confirmado` o `no_puede` (columna con restricción `CHECK`; SQL en `docs/sql-hu-29-estado-asignacion.sql`). `PATCH /api/eventos/:id/meseros/:personalId/estado` con `{ "estado": … }` (o `{ "status": "CONFIRMED" }`) lo cambia y responde `{ evento_id, personal_id, nombre_completo, estado, event_id, staff_id, full_name, assignment_status, asignacion }`; el estado inválido da **400**, un mesero que no está asignado a ese evento (o un evento inexistente) **404**, y un evento realizado o cancelado **409**. Cada mesero de `meseros_asignados` trae `estado` y `assignment_status`, y la respuesta suma `total_utiles` (los que cuentan: por confirmar y confirmados), `por_confirmar`, `confirmados` y `no_pueden`; `total_asignados` sigue siendo la cantidad total. **Quien está «no puede» no cuenta** para el estándar: `deficit`/`excedente`, el tope de meseros y la alerta de personal de la HU-25 (`assigned_count`) usan `total_utiles` (5 requeridos, 5 asignados y uno «no puede» → 4 asignados y diferencia −1), y tampoco bloquea su horario en otro evento. Volver a contar a alguien que «no puede» exige que quepa en el tope (400) y que no se cruce con otro evento (409). Sincronizar la lista (`PUT`/`POST`) **conserva el estado** de los que ya estaban, agrega los nuevos como `por_confirmar` y borra solo los que salen.
+
+**Lista de meseros programados (HU-30 · RF-37 / RF-38).** `GET /api/eventos/:id/staff/waiters` devuelve `{ event_id, total_assigned, staff_checklist }`; cada elemento trae `staff_id`, `full_name`, `contact_info` y `assignment_status` (`PENDING`, `CONFIRMED`, `UNAVAILABLE`), más los mismos datos con nombres en español (`personal_id`, `nombre_completo`, `contacto`, `estado`). Se arma con **una sola consulta** (JOIN de `evento_personal` con `personal`, solo meseros activos, ordenados por nombre), sin consultar mesero por mesero. Un evento sin meseros asignados responde **200** con `staff_checklist: []` y `total_assigned: 0`; un evento que no existe, **404**; un id inválido, **400**. **Sin historial (RF-38):** la tabla `evento_personal` no tiene borrado lógico: sincronizar la lista (`PUT`/`POST`) borra las filas de los meseros que salen, y eliminar un mesero (`DELETE /api/personal/:id`) borra todas sus asignaciones en la misma transacción, así que la base no guarda rastro de que estuvo asignado.
+
+```json
+{
+  "evento_id": 201, "total_asignados": 4, "meseros_requeridos": 5,
+  "diferencia": -1, "deficit": 1, "excedente": 0, "estado": "deficit",
+  "meseros_asignados": [ { "id": 3, "nombre_completo": "Carlos Rodríguez", "contacto": "3001234567" } ]
+}
+```
+
+`meseros_requeridos` es el de la HU-21 (1 por cada 20 asistentes); `deficit` es lo que falta y `estado` es `completo` o `deficit`: es el valor que usará la HU-25 para las desviaciones (escenario 3: un evento de 100 asistentes requiere 5; con 4 asignados, déficit de 1). `GET /api/eventos/:id/meseros/disponibles` lista todos los meseros activos marcando los `asignado` a este evento y, en `ocupado_en`, el evento y el horario donde están ocupados (los usa el selector de la pantalla).
+
+| Regla | Detalle |
+| --- | --- |
+| Evento | Debe existir (`404`); su id debe ser un entero positivo (`400`); un evento `realizado` o `cancelado` no admite asignaciones (`409`) |
+| `personal_ids` | Lista (puede ir vacía) de ids enteros positivos, **sin repetidos**; también se entiende `staff_ids` |
+| **Tope** | No se pueden asignar **más meseros que los requeridos** (1 por cada 20 asistentes): `400` «Este evento requiere 5 meseros (1 por cada 20 asistentes): no puedes asignar más (enviaste 6)» |
+| Meseros | Todos deben existir, estar **activos** y ser meseros; si no, `400` «Uno o más meseros no son válidos o están inactivos (ids: …)» y **no se cambia nada** (todo o nada) |
+| **Cruces** | Un mesero **no puede estar en dos eventos que se cruzan en el tiempo**: `409` «… ya está asignado a «Boda» el 2027-03-20 (18:00 – 22:00), que se cruza con este evento», con la lista `conflictos`. Dos eventos se cruzan si cada uno empieza antes de que el otro termine; **si uno termina justo cuando empieza el otro, no se cruzan y sí se puede**. Un evento **sin hora de inicio** (anteriores a esta regla) ocupa todo el día; uno cancelado no cuenta; los eventos que cruzan la medianoche (22:00 + 4 h) se tratan bien |
+| Concurrencia | El evento y los meseros de la lista se bloquean durante la sincronización (en orden de id): dos asignaciones a la vez del mismo mesero a eventos que se cruzan dejan entrar solo una (la otra recibe `409`); eliminar un mesero mientras se asigna nunca deja un inactivo asignado |
+| Mesero eliminado después (HU-27) | Sus asignaciones a eventos se borran (RF-38, HU-30): deja de contar y de aparecer, y el déficit se recalcula solo |
+
+**Hora de inicio del evento.** `POST /api/eventos` acepta `hora_inicio` (`"18:00"`, formato `HH:MM` de `00:00` a `23:59`; cualquier otra cosa da `400`). Es **opcional en la API** (los eventos anteriores no la tienen) pero el registro en pantalla la exige. Se devuelve en la lista y el detalle como `"hora_inicio": "18:00"` (o `null`). Sin ella no se puede saber si dos eventos se cruzan.
+
+Necesita una columna y una tabla nuevas (solo agregan): `docs/sql-hu-28-asignacion-meseros.sql`. Las reglas están en [`src/config/reglasAsignacionPersonal.js`](src/config/reglasAsignacionPersonal.js) y se prueban con `npm test`.
+
+**No hay `PUT` ni `PATCH`** (sobre `/api/personal/:id`). Los datos de un mesero no se modifican (decisión de negocio): cualquier otro método sobre `/api/personal/:id` (`PUT`, `PATCH`, `POST`, `GET`) responde `405 Method Not Allowed` con la cabecera `Allow: DELETE`. Si hubo un error al registrarlo, se elimina y se registra de nuevo. No necesita SQL propio: reutiliza la tabla `personal` de la HU-26.
+
+#### `POST /api/eventos/calcular-compras` (HU-47 · RF-55)
+
+El mismo cálculo de `compras_ingredientes`, pero **antes de guardar el evento** (lo usa el resumen del registro): `{ "asistentes": 100, "productos": [3, 22] }`, donde `productos` son los ids de los platos (alimentos) elegidos. Responde `200` con la misma estructura que `compras_ingredientes`. `asistentes` debe ser un entero de 40 a 600 (RN-01); `productos`, una lista de máximo 100 ids enteros positivos de alimentos del catálogo (los repetidos se cuentan una vez; una bebida o un id inexistente dan `400`). Sin sesión, `401`.
 
 #### `PATCH /api/catalogo/:id/estado`
 
@@ -254,13 +403,14 @@ Activa o desactiva un producto. Un producto desactivado deja de ofrecerse en los
   "servicios_adicionales": [
     { "tipo": "mobiliario", "descripcion": "Sillas Tiffany doradas", "cantidad": 250, "producto_id": 10 },
     { "tipo": "mobiliario", "descripcion": "Carpa 10 × 20 m", "cantidad": 1 },
-    { "tipo": "dj", "descripcion": "DJ para recepción y fiesta", "cantidad": 6 }
+    { "tipo": "dj", "descripcion": "DJ para recepción y fiesta", "cantidad": 1, "horas": 6 }
   ]
 }
 ```
 
 - `productos` y `servicios_adicionales` son opcionales.
 - `porcion_por_persona` es opcional: si no se envía, se usa la del catálogo.
+- En una bebida de tipo `unidad_persona`, la porción (la enviada o la del catálogo) debe ser un entero de 1 a 10; si no, responde `400` con «Las unidades por persona de «…» deben ser un número entero de 1 a 10» y no se guarda nada (RF-22 / RN-15).
 - `precio_unitario` es opcional: es el valor unitario (por unidad, por botella o por kg) escrito en el evento. Si no se envía, se usa el del catálogo. Debe ser un número mayor o igual a 0 (`400` si no). El costo guardado se calcula con ese valor, y el detalle del evento lo devuelve como el precio realmente usado.
 - El mobiliario se envía como servicio adicional con `tipo: "mobiliario"`. Con `producto_id` se relaciona con un elemento del inventario de categoría `Mobiliario` (HU-12); en ese caso la descripción se toma del inventario. Sin `producto_id`, el elemento no está en el inventario y todo se alquila.
 - Un mismo elemento del inventario no puede repetirse en el evento (`400`).
@@ -268,7 +418,26 @@ Activa o desactiva un producto. Un producto desactivado deja de ofrecerse en los
 
 Respuesta `201`: `{ "mensaje": "...", "evento": { "id": 4, "estado": "planificacion", ... } }`
 
-Validaciones (`400`): campos obligatorios, asistentes entre 40 y 600, duración mayor a 0 y `producto_id` de mobiliario existente y sin repetir.
+**Validaciones.** Todo lo que no cumple responde `400` con el motivo y **no se guarda nada** (antes varios casos daban un error 500). Las reglas viven en `src/config/reglasEvento.js` y se revisan en `src/middlewares/validarEvento.js`:
+
+| Dato | Regla |
+| --- | --- |
+| Nombre | Texto con contenido, máximo 150 caracteres |
+| Tipo de evento | Uno de: Boda, Corporativo, Quinceañero, Gala, Cumpleaños, Otro |
+| Fecha | Día real `AAAA-MM-DD`, desde hoy (hora de Colombia) hasta 5 años adelante, y máximo 3 eventos activos por día (RN-13) |
+| Hora de inicio | Opcional: `HH:MM` de `00:00` a `23:59` (HU-28); el registro en pantalla la exige |
+| Duración | Número de 3 a 8 horas (RN-14); un texto como «4 horas» no vale |
+| Asistentes | Entero de 40 a 600 (RN-01) |
+| Observaciones | Texto de máximo 2.000 caracteres |
+| Productos | Lista de máximo 100; `producto_id` entero que exista y esté activo; sin repetir un producto; alimentos de 1 a 1.000 g por persona; bebidas individuales de 1 a 10 unidades por persona (RN-15); el valor unitario, de 0 a 100.000.000 |
+| Mobiliario | Entero de 1 a 2.000 por línea (RN-17); «Otro» exige descripción |
+| Servicios (DJ, música en vivo, sonido, iluminación, entretenimiento, otro) | **RN-18:** `cantidad` (unidades) entera de 1 a 5 y `horas` en horas completas o medias horas, **de 1 a 5** y **sin superar la duración del evento**; **COR-06:** tope de unidades por tipo en todo el evento, sumando las líneas (`dj` 3, `musica_en_vivo` 3, `entretenimiento` 3, `sonido` 2, `iluminacion` 2, `otro` 5); tipo de la lista; descripción obligatoria (máximo 300 caracteres); notas de máximo 300 |
+
+El registro de un evento toma un candado por fecha dentro de la transacción: con varias peticiones simultáneas para el mismo día entran 3 como máximo, no más. Las horas de cada servicio se guardan en la columna `horas` de `requerimientos_adicionales` (opcional, por eso los servicios guardados antes de esta regla no la tienen). Si se crea la base de cero con `schema.sql` ya viene incluida; en una base existente hay que agregarla (ver `docs/despliegue-y-sql-pendiente.md`).
+
+También devuelven `400` (antes `500`): un `id` que no es un número entero en `GET /api/eventos/:id` y `GET /api/catalogo/:id`, y un `?clasificacion=` que no existe en `GET /api/catalogo`. En el catálogo, los gramos por persona de un alimento van de 1 a 1.000 y la botella de una bebida compartida no pasa de 5.000 ml (la porción tampoco puede superarla).
+
+**Cócteles (`/api/cocteles`).** Las reglas están en [`src/config/reglasCoctel.js`](src/config/reglasCoctel.js) y se revisan de forma **estricta** antes de tocar la base: `nombre` de 1 a 150 caracteres; `descripcion` texto de máximo 500; de 1 a 6 licores, cada uno con `licor_id` entero positivo de una bebida de coctelería activa (sin repetir; también al editar) y `mililitros` **número** mayor a 0, máximo **250** y 2 decimales (un texto como `"50abc"`, `15000` o `0.001` dan `400`). En `POST /cocteles/calcular`, `asistentes` es un entero de 40 a 600 y cada `cocteles_por_persona` un entero de 1 a 10 (RN-15); `coctel_id` debe existir y no repetirse. Los ids de la ruta (`/cocteles/:id`) deben ser enteros positivos (`400` si no). Antes varias de estas entradas daban `500` o se aceptaban truncadas (`"100abc"` → 100, `2.7` → 2). Editar con el nombre de otro cóctel da `409`.
 
 #### `GET /api/eventos`
 
@@ -281,6 +450,31 @@ Datos del evento más:
 - `productos_calculados`: nombre, clasificación, porción, `cantidad_neta`, `cantidad_con_margen`, `unidad_entrega`, `precio_unitario`, `costo_estimado` y `componentes_menu`.
 - `servicios_adicionales`: `tipo`, `descripcion`, `cantidad` y `notas` (incluye el mobiliario).
 - En el mobiliario, además (HU-12): `producto_id`, `disponible_inventario` (stock actual), `unidades_propias` y `unidades_alquilar`. En los demás servicios esos campos llegan en `null`.
+- `compras_ingredientes` (HU-47 · RF-55, RN-09, RN-20): los ingredientes a comprar, calculados al consultar con las recetas de los platos (alimentos) del evento y sus asistentes:
+
+```json
+{
+  "margen_porcentaje": 10, "asistentes": 50, "platos_con_receta": 2, "platos_sin_receta": [],
+  "items": [
+    { "ingrediente_id": 7, "ingrediente": "Cilantro", "cantidad_a_comprar": 2, "unidad_compra": "libra",
+      "cantidad_exacta": 1.65, "gramos_base": 750, "gramos_con_margen": 825, "platos": ["Plato A", "Plato B"] }
+  ]
+}
+```
+
+  `cantidad_a_comprar` = techo( asistentes × cantidad por porción en gramos × 1,10 ÷ gramos de la unidad de compra ): 100 asistentes × 200 g de pechuga → 22.000 g → **22 kilos**; 50 asistentes con cilantro de dos platos (10 g + 5 g) → 750 g → 825 g → 1,65 → **2 libras**; 200 asistentes × 150 g de papa → 33.000 g → 2,64 → **3 arrobas**. Equivalencias: 1 kg = 1.000 g, 1 libra = 500 g, 1 arroba = 12.500 g. El ingrediente que usan varios platos va en **un solo total** (el margen y el redondeo se aplican una vez, sobre la suma). Todo se calcula con enteros (miligramos): 20.000 g × 1,10 son exactamente 22.000 g y no 22.000,000000000004, que el techo subiría a 23 kilos. Un plato del evento **sin receta** no aporta ingredientes y aparece en `platos_sin_receta`. Se calcula con la receta vigente al consultar (si se edita la receta, el evento ya guardado se actualiza); las bebidas y el mobiliario no cuentan. No necesita tablas nuevas. El cálculo está en [`src/config/reglasCompras.js`](src/config/reglasCompras.js) y se prueba con `npm test`.
+- `logistica` (HU-21 · RF-28, RN-04, RN-12): el personal de servicio, calculado al consultar (no se guarda). Hoy trae los meseros y, desde la HU-22 (RF-29, RN-05), los cocineros:
+
+```json
+{
+  "meseros_requeridos": 3, "asistentes_por_mesero": 20, "relacion_meseros": "1 por cada 20 asistentes",
+  "cocineros_requeridos": 4, "asistentes_por_grupo_cocina": 25, "cocineros_por_grupo": 2, "relacion_cocineros": "2 por cada 25 asistentes"
+}
+```
+
+  `cocineros_requeridos` = techo(asistentes ÷ 25) × 2, **igual para todos los eventos** (no depende del tipo de evento, de la comida ni de los productos): 40 → **4**; 100 → **8**; 200 → **16**; 320 → 12,8 → 13 → **26**; 600 → **48**; 50 → **4** y 51 → **6** (el techo se aplica a los grupos antes de multiplicar por 2). Se calcula en el servidor con los asistentes ya validados (40 a 600); un valor `cocineros_requeridos` enviado en el cuerpo se ignora.
+
+  `meseros_requeridos` es el techo de asistentes ÷ 20: 45 → 2,25 → **3**; 60 → **3**; 12 → 0,6 → **1**; 0 → **0**. El cálculo vive en [`src/config/reglasPersonal.js`](src/config/reglasPersonal.js) y se prueba con `npm test` (los cuatro escenarios de la historia; los de 12 y 0 asistentes solo se pueden probar ahí porque un evento real exige 40 a 600, RN-01).
 - `aviso_alquiler`: `true` si el evento supera el umbral de asistentes (200 por defecto).
 - `estado_alquiler` (RN-03):
 
@@ -303,11 +497,26 @@ Las unidades propias se calculan con el inventario **al momento de consultar**, 
 
 Categorías válidas (conjunto cerrado, HU-09 / RF-10): `Mobiliario`, `Bar/Bebidas` (bebidas de consumo directo), `Bebidas de Coctelería` (licores fuertes) y `Vajilla`. Esos son los valores de la API y de la base; en la pantalla se muestran como «Bebidas Generales» y «Licores para Cócteles» (ver el README del frontend). Hay que escribirlas exactamente así. Cada elemento tiene una sola categoría y el filtro `?categoria=` devuelve solo esa (HU-13). Cualquier otro valor, como `Decoración`, `null` o un texto en minúsculas, responde `400`: `La categoría «Decoración» no es válida. Debe ser una de: ...`. La base de datos también lo rechaza con una restricción, y hay un índice sobre la categoría porque se filtra muy seguido.
 
+Máximo de unidades **por elemento** según su categoría (RF-11, RF-13, RN-16). Se aplica al registrar, al actualizar la cantidad, al adquirir y al cambiar la categoría de un elemento; pasarse responde `400` con el motivo. Los límites viven en [`src/config/limitesInventario.js`](src/config/limitesInventario.js) y en `frontend/src/lib/inventario.ts`.
+
+| Categoría | Máximo por elemento |
+| --- | --- |
+| `Mobiliario` | 2.000 |
+| `Vajilla` | 6.000 |
+| `Bar/Bebidas` (Bebidas Generales) | 4.000 |
+| `Bebidas de Coctelería` (Licores para Cócteles) | 4.000 |
+
+**Alquiler (RF-14, RN-17):** solo se alquila mobiliario y vajilla. Marcar un elemento de bebidas como alquilado (`es_propio: false`) responde `400` al registrarlo y al cambiar su propiedad, y un elemento alquilado no puede pasar a una categoría de bebidas. En los eventos, lo que se pide de mobiliario (`servicios_adicionales[].cantidad` con `tipo: "mobiliario"`) debe ser un entero de 1 a 2.000 (`400` si no); lo que se alquila se calcula al consultar el evento y es, como máximo, lo requerido menos lo propio disponible. Si ya había bebidas alquiladas en la base, [`src/db/cor-08-bebidas-no-alquilables.sql`](src/db/cor-08-bebidas-no-alquilables.sql) las revisa y las pasa a propias.
+
+Las cantidades deben ser enteros: no se aceptan negativos, decimales ni texto. Una adquisición que haría pasar el máximo se rechaza y el mensaje dice cuánto se puede adquirir como mucho (por ejemplo, con 1.800 sillas y 2.000 de máximo: «como mucho se pueden adquirir 200»).
+
 #### `POST /api/inventario`
 
 ```json
 { "nombre": "Sillas Tiffany doradas", "categoria_inventario": "Mobiliario", "cantidad_propia": 300 }
 ```
+
+`cantidad_propia` es la cantidad inicial: entero de **1** hasta el máximo de la categoría (COR-04: no se registra un elemento con 0; `400` con «La cantidad inicial debe ser un número entero mayor o igual a 1»). Más adelante, «Actualizar» sí puede dejarlo en 0.
 
 `es_propio` es opcional: `true` (valor por defecto) para un elemento de la organización y `false` para uno alquilado a un proveedor (HU-12). Debe ser booleano; un texto como `"false"` responde `400`.
 
@@ -357,15 +566,15 @@ Fija la cantidad disponible. La diferencia con la cantidad anterior queda como u
 { "cantidad": 50, "notas": "Reposición para temporada de bodas" }
 ```
 
-Suma la cantidad al elemento (entero de 1 a 100.000) y registra un movimiento de tipo `adquisicion`. Solo aplica a elementos que ya existen. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
+Suma la cantidad al elemento (entero mayor o igual a 1) y registra un movimiento de tipo `adquisicion`. La cantidad no puede dejar el elemento por encima del **máximo de su categoría** (ver abajo): si se pasa, responde `400` y dice cuántas unidades se pueden adquirir como mucho. Solo aplica a elementos que ya existen. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
 
-#### `POST /api/inventario/:id/baja`
+#### `POST /api/inventario/:id/retiro`
 
 ```json
 { "cantidad": 5, "motivo": "Manchas de vino que no salieron" }
 ```
 
-Retira unidades dañadas (HU-10): las resta de `cantidad_propia`, las suma a `cantidad_danada` y registra un movimiento de tipo `baja` con la cantidad en negativo. Basta con la cantidad: el `motivo` es opcional (máximo 300 caracteres) y, si no se envía, el historial guarda «Baja por daño». No se puede retirar más de lo disponible (`400`). Como se resta de `cantidad_propia`, lo dado de baja deja de contarse como disponible en los eventos. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
+Retira unidades (HU-10, COR-09), por daño, pérdida o devolución: las resta de `cantidad_propia`, las suma a `cantidad_danada` y registra un movimiento de tipo `baja` con la cantidad en negativo (en pantalla se llama «retiro»; el nombre interno no cambió). Basta con la cantidad: el `motivo` es opcional (máximo 300 caracteres) y, si no se envía, el historial guarda «Retiro de elementos». No se puede retirar más de lo disponible (`400`). Como se resta de `cantidad_propia`, lo retirado deja de contarse como disponible en los eventos. La ruta anterior `POST /api/inventario/:id/baja` hace lo mismo. Respuesta `201`: `{ "elemento": { ... }, "movimiento": { ... } }`.
 
 #### `GET /api/inventario/movimientos?elemento_id=12&tipo=adquisicion&limite=20`
 

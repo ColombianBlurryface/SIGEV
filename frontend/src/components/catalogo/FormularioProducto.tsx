@@ -24,6 +24,8 @@ import {
   type TipoConsumo,
 } from '@/lib/catalogo'
 import { formatearMoneda, formatearNumero } from '@/lib/formato'
+import { BOTELLA_ML_MAX, GRAMOS_POR_PERSONA_MAX, PRECIO_MAX } from '@/lib/limites'
+import { esUnidadesPorPersonaValida, MENSAJE_UNIDADES_POR_PERSONA } from '@/lib/reglasBebidas'
 import { ApiError } from '@/services/api'
 import { catalogoService } from '@/services/catalogoService'
 import type { DatosProducto, GrupoCatalogo, ProductoCatalogo } from '@/types/catalogo'
@@ -45,6 +47,35 @@ interface Valores {
 
 const positivo = (texto: string) => texto.trim() !== '' && Number.isFinite(Number(texto)) && Number(texto) > 0
 
+/**
+ * Los máximos de ml, gramos y precio se avisan apenas se escribe, sin esperar a «Guardar»: 15.000 ml en una botella o
+ * 5.000 g por persona no son cantidades posibles (el servidor también las rechaza).
+ */
+function erroresDeLimite(v: Valores): Errores {
+  const errores: Errores = {}
+  const numero = (t: string) => (t.trim() === '' ? null : Number(t))
+  const volumen = numero(v.volumen)
+  const tamano = numero(v.tamano)
+  const porcion = numero(v.porcion)
+  const precio = numero(v.precio)
+  if (v.tipo === 'botella_compartida') {
+    if (volumen !== null && Number.isFinite(volumen) && volumen > BOTELLA_ML_MAX) {
+      errores.volumen = `Máximo ${formatearNumero(BOTELLA_ML_MAX)} ml por botella (escribiste ${formatearNumero(volumen)}).`
+    }
+    if (tamano !== null && Number.isFinite(tamano) && volumen !== null && Number.isFinite(volumen) && tamano > volumen && volumen > 0) {
+      errores.tamano = 'La porción no puede ser mayor que la botella.'
+    } else if (tamano !== null && Number.isFinite(tamano) && tamano > BOTELLA_ML_MAX) {
+      errores.tamano = `Máximo ${formatearNumero(BOTELLA_ML_MAX)} ml por porción.`
+    }
+  } else if (v.tipo === 'porcion_persona' && porcion !== null && Number.isFinite(porcion) && porcion > GRAMOS_POR_PERSONA_MAX) {
+    errores.porcion = `Máximo ${formatearNumero(GRAMOS_POR_PERSONA_MAX)} g por persona: un alimento no pasa de 1 kg (escribiste ${formatearNumero(porcion)}).`
+  }
+  if (precio !== null && Number.isFinite(precio) && precio > PRECIO_MAX) {
+    errores.precio = `El precio no puede pasar de $${formatearNumero(PRECIO_MAX)}.`
+  }
+  return errores
+}
+
 function validar(v: Valores): Errores {
   const errores: Errores = {}
   if (!v.nombre.trim()) errores.nombre = 'Escribe el nombre del producto.'
@@ -53,17 +84,26 @@ function validar(v: Valores): Errores {
 
   if (v.tipo === 'botella_compartida') {
     if (!positivo(v.volumen)) errores.volumen = 'Indica el volumen de la botella en ml.'
+    else if (Number(v.volumen) > BOTELLA_ML_MAX) errores.volumen = erroresDeLimite(v).volumen
     if (!positivo(v.tamano)) errores.tamano = 'Indica el tamaño de cada porción en ml.'
     else if (positivo(v.volumen) && Number(v.tamano) > Number(v.volumen)) {
       errores.tamano = 'La porción no puede ser mayor que la botella.'
     }
+  } else if (v.tipo === 'unidad_persona') {
+    // Bebida individual (RF-22, RN-15): las unidades por persona son un entero de 1 a 10
+    if (v.porcion.trim() === '') errores.porcion = 'Indica las unidades por persona.'
+    else if (!esUnidadesPorPersonaValida(v.porcion)) errores.porcion = MENSAJE_UNIDADES_POR_PERSONA
   } else if (v.tipo && !positivo(v.porcion)) {
-    errores.porcion = v.tipo === 'porcion_persona' ? 'Indica los gramos por persona.' : 'Indica las unidades por persona.'
+    errores.porcion = 'Indica los gramos por persona.'
+  } else if (v.tipo === 'porcion_persona' && Number(v.porcion) > GRAMOS_POR_PERSONA_MAX) {
+    errores.porcion = erroresDeLimite(v).porcion
   }
 
   // El precio es opcional: vacío = sin precio. Si se escribe, debe ser 0 o más.
   if (v.precio.trim() !== '' && (!Number.isFinite(Number(v.precio)) || Number(v.precio) < 0)) {
     errores.precio = 'El precio debe ser 0 o más.'
+  } else if (Number(v.precio) > PRECIO_MAX) {
+    errores.precio = erroresDeLimite(v).precio
   }
   return errores
 }
@@ -100,7 +140,11 @@ export function FormularioProducto({ producto, onGuardado, onCancelar }: Formula
   const [exito, setExito] = useState<string | null>(null)
 
   const editando = producto !== null
-  const errores = intento ? validar(valores) : {}
+  const errores: Errores = intento ? validar(valores) : erroresDeLimite(valores)
+  // Las unidades por persona se avisan apenas se escriben, sin esperar a «Guardar» (RF-22)
+  if (!intento && valores.tipo === 'unidad_persona' && valores.porcion.trim() !== '' && !esUnidadesPorPersonaValida(valores.porcion)) {
+    errores.porcion = MENSAJE_UNIDADES_POR_PERSONA
+  }
   const cambiar = (campo: keyof Valores, valor: string) => setValores((v) => ({ ...v, [campo]: valor }))
   const propsError = (campo: Campo, id: string) => ({
     'aria-invalid': Boolean(errores[campo]),
@@ -233,6 +277,7 @@ export function FormularioProducto({ producto, onGuardado, onCancelar }: Formula
                   id="catalogo-volumen"
                   type="number"
                   min={0}
+                  max={BOTELLA_ML_MAX}
                   step="any"
                   inputMode="decimal"
                   value={valores.volumen}
@@ -265,13 +310,15 @@ export function FormularioProducto({ producto, onGuardado, onCancelar }: Formula
             >
               <Input
                 id="catalogo-porcion"
-                type="number"
-                min={0}
-                step="any"
-                inputMode="decimal"
+                // Las unidades por persona son un entero: se escribe como texto para ver y rechazar «1,4»
+                type={tipo === 'unidad_persona' ? 'text' : 'number'}
+                min={tipo === 'unidad_persona' ? undefined : 0}
+                max={tipo === 'porcion_persona' ? GRAMOS_POR_PERSONA_MAX : undefined}
+                step={tipo === 'unidad_persona' ? undefined : 'any'}
+                inputMode={tipo === 'unidad_persona' ? 'numeric' : 'decimal'}
                 value={valores.porcion}
                 onChange={(e) => cambiar('porcion', e.target.value)}
-                placeholder={tipo === 'porcion_persona' ? 'Ej. 200' : 'Ej. 2'}
+                placeholder={tipo === 'porcion_persona' ? 'Ej. 200' : 'Ej. 2 (entero de 1 a 10)'}
                 disabled={enviando}
                 {...propsError('porcion', 'catalogo-porcion')}
               />
@@ -297,6 +344,7 @@ export function FormularioProducto({ producto, onGuardado, onCancelar }: Formula
                 id="catalogo-precio"
                 type="number"
                 min={0}
+                max={PRECIO_MAX}
                 step="any"
                 inputMode="decimal"
                 value={valores.precio}

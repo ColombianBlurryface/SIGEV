@@ -58,6 +58,12 @@ CREATE TABLE IF NOT EXISTS eventos (
     CONSTRAINT chk_asistentes_rango CHECK (asistentes >= 40 AND asistentes <= 600),
     CONSTRAINT chk_duracion_positiva CHECK (duracion_horas > 0)
 );
+-- COR-01 (HU-01, RF-02, RN-14): Asegurar de forma repetible que la duración esté entre 3 y 8 horas
+-- (por si la tabla ya existía con la restricción antigua chk_duracion_positiva)
+ALTER TABLE eventos DROP CONSTRAINT IF EXISTS chk_duracion_positiva;
+ALTER TABLE eventos DROP CONSTRAINT IF EXISTS chk_duracion_rango;
+ALTER TABLE eventos ADD CONSTRAINT chk_duracion_rango
+    CHECK (duracion_horas >= 3 AND duracion_horas <= 8);
 
 -- 3. Catálogo de Alimentos y Bebidas Predeterminadas (RF-18, RF-19, RF-20)
 CREATE TABLE IF NOT EXISTS catalogo_productos (
@@ -107,6 +113,23 @@ CREATE TABLE IF NOT EXISTS requerimientos_adicionales (
 ALTER TABLE requerimientos_adicionales
 ADD COLUMN IF NOT EXISTS producto_id INTEGER REFERENCES catalogo_productos(id) ON DELETE SET NULL;
 
+-- RN-18 (HU-05, RF-06): cada servicio adicional tiene sus unidades (columna cantidad, de 1 a 5) y sus horas, que no
+-- pueden superar la duración del evento. Solo se agrega una columna opcional: no cambia ni borra nada de lo que ya hay.
+ALTER TABLE requerimientos_adicionales ADD COLUMN IF NOT EXISTS horas NUMERIC(4, 2);
+-- HU-48 (RF-47, RF-48, RF-56, RN-18): Registro de costo para servicios adicionales
+-- Modalidad de cobro (por_servicio o por_hora) y su valor unitario mayor que cero
+ALTER TABLE requerimientos_adicionales
+  ADD COLUMN IF NOT EXISTS tipo_cobro VARCHAR(20) DEFAULT 'por_servicio',
+  ADD COLUMN IF NOT EXISTS valor_unitario NUMERIC(12, 2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS costo_total NUMERIC(12, 2) DEFAULT 0;
+
+-- Restricción RN-18 / HU-48: el valor_unitario no puede ser negativo
+ALTER TABLE requerimientos_adicionales 
+  DROP CONSTRAINT IF EXISTS chk_servicio_valor_positivo;
+
+ALTER TABLE requerimientos_adicionales 
+  ADD CONSTRAINT chk_servicio_valor_positivo 
+  CHECK (tipo = 'mobiliario' OR valor_unitario >= 0);
 -- 6. Usuarios del sistema (login únicamente; el alta se hace con src/scripts/crearUsuario.js)
 --    La contraseña se guarda como hash bcrypt, nunca en texto plano.
 CREATE TABLE IF NOT EXISTS usuarios (
@@ -177,3 +200,190 @@ ALTER TABLE movimientos_inventario ADD CONSTRAINT chk_cantidad_por_tipo CHECK (
     OR (tipo = 'ajuste' AND cantidad <> 0)
     OR (tipo = 'baja' AND cantidad < 0)
 );
+-- 1. Tabla de cócteles
+CREATE TABLE IF NOT EXISTS cocteles (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL UNIQUE,
+    descripcion TEXT,
+    activo BOOLEAN NOT NULL DEFAULT true,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Tabla relacional de la receta (licores y mililitros)
+CREATE TABLE IF NOT EXISTS coctel_ingredientes (
+    id SERIAL PRIMARY KEY,
+    coctel_id INTEGER NOT NULL REFERENCES cocteles(id) ON DELETE CASCADE,
+    licor_id INTEGER NOT NULL REFERENCES catalogo_productos(id) ON DELETE RESTRICT,
+    mililitros NUMERIC(8, 2) NOT NULL,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    -- Criterio HU-44 acotado: mayor a 0 y máximo 250 ml por cóctel
+    CONSTRAINT chk_mililitros_rango CHECK (mililitros > 0 AND mililitros <= 250),
+    CONSTRAINT uq_coctel_licor UNIQUE (coctel_id, licor_id)
+);
+
+-- Para bases de datos donde la tabla ya existía con la restricción anterior sin límite superior:
+ALTER TABLE coctel_ingredientes DROP CONSTRAINT IF EXISTS chk_mililitros_positivos;
+ALTER TABLE coctel_ingredientes DROP CONSTRAINT IF EXISTS chk_mililitros_rango;
+ALTER TABLE coctel_ingredientes ADD CONSTRAINT chk_mililitros_rango 
+    CHECK (mililitros > 0 AND mililitros <= 250);
+
+CREATE INDEX IF NOT EXISTS idx_coctel_ingredientes_coctel ON coctel_ingredientes(coctel_id);
+-- =============================================================================
+-- HU-45 (RF-53, RN-15, RN-19): Cócteles asignados al evento
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS evento_cocteles (
+    id SERIAL PRIMARY KEY,
+    evento_id INTEGER NOT NULL REFERENCES eventos(id) ON DELETE CASCADE,
+    coctel_id INTEGER NOT NULL REFERENCES cocteles(id) ON DELETE RESTRICT,
+    cocteles_por_persona INTEGER NOT NULL,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    -- RN-15: entero de 1 a 10 por persona
+    CONSTRAINT chk_cocteles_persona_rango CHECK (cocteles_por_persona >= 1 AND cocteles_por_persona <= 10),
+    CONSTRAINT uq_evento_coctel UNIQUE (evento_id, coctel_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evento_cocteles_evento ON evento_cocteles(evento_id);
+
+-- =============================================================================
+-- HU-46 (RF-54): Recetas de los platos
+--   ingredientes        el maestro: cada ingrediente y cómo se compra en el mercado (kilo, libra o arroba)
+--   plato_ingredientes  la receta: qué ingredientes lleva un plato (alimento del catálogo) y cuánto consume
+--                       UNA persona, con su unidad. Unidades permitidas: gramo, kilo, libra, arroba.
+-- Solo agrega tablas nuevas: no cambia ni borra nada de lo que ya hay.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS ingredientes (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    unidad_compra VARCHAR(10) NOT NULL,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_ingrediente_unidad_compra CHECK (unidad_compra IN ('gramo', 'kilo', 'libra', 'arroba'))
+);
+-- Un nombre una sola vez, sin importar mayúsculas
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ingredientes_nombre ON ingredientes (lower(nombre));
+
+CREATE TABLE IF NOT EXISTS plato_ingredientes (
+    id SERIAL PRIMARY KEY,
+    plato_id INTEGER NOT NULL REFERENCES catalogo_productos(id) ON DELETE CASCADE,
+    ingrediente_id INTEGER NOT NULL REFERENCES ingredientes(id) ON DELETE RESTRICT,
+    cantidad_porcion NUMERIC(10, 3) NOT NULL,
+    unidad_porcion VARCHAR(10) NOT NULL,
+    -- true en las recetas de ejemplo; al guardar la receta real del plato deja de ser dato de prueba
+    es_dato_prueba BOOLEAN NOT NULL DEFAULT false,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_plato_ingrediente_cantidad CHECK (cantidad_porcion > 0),
+    CONSTRAINT chk_plato_ingrediente_unidad CHECK (unidad_porcion IN ('gramo', 'kilo', 'libra', 'arroba')),
+    CONSTRAINT uq_plato_ingrediente UNIQUE (plato_id, ingrediente_id)
+);
+CREATE INDEX IF NOT EXISTS idx_plato_ingredientes_plato ON plato_ingredientes(plato_id);
+
+
+-- =============================================================================
+-- HU-26 (RF-33): Personal de servicio. Una sola tabla genérica con un rol (hoy solo «mesero»; mañana cocineros u
+-- otros perfiles sin crear tablas nuevas). `activo` permite el borrado lógico de la HU-27 (RF-34): un mesero
+-- eliminado se marca inactivo y deja de listarse y se borran sus asignaciones a eventos (RF-38: sin historial de asignaciones).
+-- Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS personal (
+    id SERIAL PRIMARY KEY,
+    nombre_completo VARCHAR(150) NOT NULL,
+    contacto VARCHAR(150) NOT NULL,
+    rol VARCHAR(20) NOT NULL DEFAULT 'mesero',
+    activo BOOLEAN NOT NULL DEFAULT true,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_personal_rol CHECK (rol IN ('mesero', 'cocinero')),
+    CONSTRAINT chk_personal_nombre CHECK (length(btrim(nombre_completo)) > 0),
+    CONSTRAINT chk_personal_contacto CHECK (length(btrim(contacto)) > 0)
+);
+-- No puede haber dos personas ACTIVAS iguales (mismo rol, nombre y contacto); un eliminado se puede volver a crear
+CREATE UNIQUE INDEX IF NOT EXISTS uq_personal_activo ON personal (rol, lower(nombre_completo), lower(contacto)) WHERE activo;
+CREATE INDEX IF NOT EXISTS idx_personal_rol_activo ON personal (rol) WHERE activo;
+
+
+-- =============================================================================
+-- Hora de inicio del evento (HU-28): para saber si dos eventos se cruzan en el tiempo hace falta la hora. Columna
+-- OPCIONAL: los eventos anteriores no la tienen y se tratan como ocupados todo el día. Solo agrega una columna.
+-- =============================================================================
+ALTER TABLE eventos ADD COLUMN IF NOT EXISTS hora_inicio TIME;
+
+-- =============================================================================
+-- HU-28 (RF-35): Meseros asignados a un evento. Relación muchos a muchos entre eventos y personal. Un mesero no se
+-- puede asignar dos veces al mismo evento. Si un mesero se elimina después (borrado lógico, HU-27) sus asignaciones se borran
+-- (RF-38: la tabla no guarda historial, es la «foto» actual). Solo agrega una tabla nueva: no cambia ni borra nada de lo que ya hay.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS evento_personal (
+    id SERIAL PRIMARY KEY,
+    evento_id INTEGER NOT NULL REFERENCES eventos(id) ON DELETE CASCADE,
+    personal_id INTEGER NOT NULL REFERENCES personal(id) ON DELETE RESTRICT,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_evento_personal UNIQUE (evento_id, personal_id)
+);
+CREATE INDEX IF NOT EXISTS idx_evento_personal_evento ON evento_personal (evento_id);
+CREATE INDEX IF NOT EXISTS idx_evento_personal_personal ON evento_personal (personal_id);
+
+-- =============================================================================
+-- Épica 6 (HU-31 a HU-35 · RF-39 a RF-44): Balance logístico de recursos del evento
+--
+-- Tarea adelantada de Sprint 4 (Mitigación de Riesgo R4):
+-- Diseñar el modelo de datos del balance logístico para que el Sprint 5 no arranque
+-- bloqueado. Integra personal, alimentos, bebidas, mobiliario y demás recursos requeridos (RF-40).
+-- Cada elemento tiene un estado: 'disponible', 'por_comprar', 'por_conseguir', 'pendiente' (RF-41).
+-- Permite establecer fecha límite a pendientes (RF-42) y actualización manual a 'disponible' (RF-43).
+-- No maneja facturas ni comprobantes contables (RF-41, RF-43).
+-- =============================================================================
+DO $$ BEGIN
+    CREATE TYPE categoria_balance_enum AS ENUM (
+        'personal',
+        'alimento',
+        'bebida',
+        'mobiliario',
+        'servicio'
+    );
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE estado_balance_enum AS ENUM (
+        'disponible',
+        'por_comprar',
+        'por_conseguir',
+        'pendiente'
+    );
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS evento_balance_recursos (
+    id SERIAL PRIMARY KEY,
+    evento_id INTEGER NOT NULL REFERENCES eventos(id) ON DELETE CASCADE,
+    categoria categoria_balance_enum NOT NULL,
+    recurso_nombre VARCHAR(150) NOT NULL,
+    origen_tipo VARCHAR(30) CHECK (origen_tipo IN ('personal', 'producto_catalogo', 'ingrediente', 'coctel', 'servicio_adicional')),
+    origen_id INTEGER,
+    cantidad_requerida NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    cantidad_disponible NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    unidad_medida VARCHAR(30) NOT NULL DEFAULT 'unidades',
+    estado estado_balance_enum NOT NULL DEFAULT 'pendiente',
+    fecha_limite DATE,
+    notas TEXT,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_cantidad_requerida_positiva CHECK (cantidad_requerida >= 0),
+    CONSTRAINT chk_cantidad_disponible_positiva CHECK (cantidad_disponible >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evento_balance_evento ON evento_balance_recursos (evento_id);
+CREATE INDEX IF NOT EXISTS idx_evento_balance_estado ON evento_balance_recursos (evento_id, estado);
+CREATE INDEX IF NOT EXISTS idx_evento_balance_categoria ON evento_balance_recursos (evento_id, categoria);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_evento_recurso_origen 
+    ON evento_balance_recursos (evento_id, origen_tipo, origen_id) 
+    WHERE origen_tipo IS NOT NULL AND origen_id IS NOT NULL;
+
+
+-- =============================================================================
+-- HU-29 (RF-36): Estado de cada mesero asignado a un evento: por confirmar, confirmado o no puede. Toda asignación nueva
+-- nace «por_confirmar». Un mesero que «no_puede» NO cuenta para el estándar de personal (HU-25) ni bloquea su horario en
+-- otro evento. Solo agrega una columna con valor por defecto: las asignaciones que ya existen quedan «por_confirmar».
+-- =============================================================================
+ALTER TABLE evento_personal ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'por_confirmar';
+ALTER TABLE evento_personal DROP CONSTRAINT IF EXISTS chk_evento_personal_estado;
+ALTER TABLE evento_personal ADD CONSTRAINT chk_evento_personal_estado CHECK (estado IN ('por_confirmar', 'confirmado', 'no_puede'));

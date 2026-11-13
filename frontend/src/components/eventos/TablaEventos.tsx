@@ -10,7 +10,9 @@ import { cn } from '@/lib/utils'
 import type { EventoListado } from '@/types/evento'
 import { BuffetBadge, EstadoBadge } from './EstadoBadge'
 
-const COLUMNAS = 'grid grid-cols-[minmax(0,1fr)_128px_104px_128px_20px] items-center gap-3'
+// En pantallas pequeñas la fecha y los asistentes pasan debajo del nombre y el encabezado se oculta
+const COLUMNAS =
+  'grid grid-cols-[minmax(0,1fr)_auto_20px] items-center gap-3 md:grid-cols-[minmax(0,1fr)_128px_104px_128px_20px]'
 
 interface TablaEventosProps {
   eventos: EventoListado[]
@@ -24,7 +26,7 @@ export function TablaEventos({ eventos, seleccionadoId, onSeleccionar }: TablaEv
       <div
         className={cn(
           COLUMNAS,
-          'border-b border-border bg-muted px-[18px] py-3 text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase',
+          'hidden border-b border-border bg-muted px-[18px] py-3 text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase md:grid',
         )}
       >
         <span>Evento</span>
@@ -58,9 +60,13 @@ export function TablaEventos({ eventos, seleccionadoId, onSeleccionar }: TablaEv
                     <span className="text-[12.5px] text-muted-foreground">
                       {capitalizar(evento.tipo_evento)} · {formatearNumero(evento.duracion_horas)} h
                     </span>
+                    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px] text-subtle md:hidden">
+                      {formatearFecha(evento.fecha_evento)} · {formatearNumero(evento.asistentes)} asistentes
+                      {evento.es_modalidad_buffet && <BuffetBadge />}
+                    </span>
                   </span>
-                  <span className="text-subtle">{formatearFecha(evento.fecha_evento)}</span>
-                  <span className="flex items-center gap-1.5">
+                  <span className="hidden text-subtle md:block">{formatearFecha(evento.fecha_evento)}</span>
+                  <span className="hidden items-center gap-1.5 md:flex">
                     <span className="font-semibold">{formatearNumero(evento.asistentes)}</span>
                     {evento.es_modalidad_buffet && <BuffetBadge />}
                   </span>

@@ -2,7 +2,9 @@
  * Tarjeta de "Vista previa" del paso 1 del registro: muestra en vivo lo que se va escribiendo.
  */
 import { Card } from '@/components/ui/card'
+import { describirHorario } from '@/lib/horario'
 import { formatearFecha } from '@/lib/formato'
+import { calcularCocineros, calcularMeseros } from '@/lib/reglasPersonal'
 import { validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
 
 export function VistaPreviaEvento({ valores }: { valores: ValoresEvento }) {
@@ -14,8 +16,13 @@ export function VistaPreviaEvento({ valores }: { valores: ValoresEvento }) {
     { etiqueta: 'Tipo', valor: valores.tipo || '—' },
     { etiqueta: 'Fecha', valor: formatearFecha(valores.fecha) },
     { etiqueta: 'Duración', valor: valores.duracion ? `${valores.duracion} h` : '—' },
+    { etiqueta: 'Horario', valor: describirHorario(valores.horaInicio, Number(valores.duracion)) ?? '—' },
     { etiqueta: 'Asistentes', valor: asistentes.cantidad ?? '—' },
     { etiqueta: 'Modalidad', valor: modalidad },
+    // HU-21: 1 mesero por cada 20 asistentes, redondeado hacia arriba (solo con un número de asistentes válido)
+    { etiqueta: 'Meseros', valor: valido ? calcularMeseros(asistentes.cantidad) : '—' },
+    // HU-22: 2 cocineros por cada 25 asistentes (hacia arriba), sin importar la comida ni el tipo de evento
+    { etiqueta: 'Cocineros', valor: valido ? calcularCocineros(asistentes.cantidad) : '—' },
   ]
 
   return (

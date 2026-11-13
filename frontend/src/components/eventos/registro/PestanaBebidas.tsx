@@ -22,13 +22,20 @@ import { useCatalogo } from '@/hooks/useCatalogo'
 import { calcularProducto } from '@/lib/calculos'
 import { ORDEN_TIPOS_BEBIDA, TIPOS_BEBIDA, type TipoBebida } from '@/lib/categorias'
 import { formatearMoneda, formatearNumero } from '@/lib/formato'
+import { PRECIO_MAX } from '@/lib/limites'
+import { esUnidadesPorPersonaValida, MENSAJE_UNIDADES_POR_PERSONA } from '@/lib/reglasBebidas'
 import { cn } from '@/lib/utils'
+import { CalculadoraCocteles } from '@/components/catalogo/CalculadoraCocteles'
 import type { ProductoCatalogo } from '@/types/catalogo'
 import type { BebidaAgregada } from '@/types/registro'
 
 type ModoConsumo = 'individual' | 'compartida'
 
-const COLUMNAS = 'grid grid-cols-[minmax(0,1fr)_92px_104px_80px_92px_104px_36px] items-center gap-2.5'
+// Tabla en pantallas medianas y grandes; en celular cada bebida es una tarjeta con sus datos etiquetados
+const COLUMNAS =
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1.5 md:grid-cols-[minmax(0,1fr)_92px_104px_80px_92px_104px_36px]'
+const CELDA =
+  'before:mr-1 before:text-muted-foreground before:content-[attr(data-etiqueta)] md:text-right md:before:content-none'
 
 const modoDe = (p: ProductoCatalogo): ModoConsumo => (p.tipo_calculo === 'botella_compartida' ? 'compartida' : 'individual')
 const porcionesPorBotella = (p: ProductoCatalogo) => Number(p.volumen_botella_ml) / Number(p.tamano_porcion_ml)
@@ -62,11 +69,18 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
   const bebidasDelTipo = bebidas.filter((b) => b.producto.clasificacion === tipo)
   const productoCatalogo = productos.find((p) => p.id === Number(productoId)) ?? null
   const precioNumero = precio.trim() === '' ? 0 : Number(precio)
-  const precioValido = Number.isFinite(precioNumero) && precioNumero >= 0
+  const precioValido = Number.isFinite(precioNumero) && precioNumero >= 0 && precioNumero <= PRECIO_MAX
+  const errorPrecio =
+    precio.trim() === '' || precioValido
+      ? undefined
+      : precioNumero > PRECIO_MAX
+        ? `El valor no puede pasar de $${formatearNumero(PRECIO_MAX)}.`
+        : 'El valor unitario debe ser 0 o más.'
   // Con el valor escrito en el evento, todos los cálculos (vista previa, subtotal y resumen) usan ese precio
   const producto = productoCatalogo ? { ...productoCatalogo, precio_unitario: String(precioValido ? precioNumero : 0) } : null
+  // RF-22, RN-15: las unidades por persona de una bebida individual son un entero de 1 a 10
   const unidadesNumero = Number(unidades)
-  const unidadesValidas = unidades.trim() !== '' && Number.isFinite(unidadesNumero) && unidadesNumero > 0
+  const unidadesValidas = esUnidadesPorPersonaValida(unidades)
   const listo = producto !== null && (modo === 'compartida' || unidadesValidas)
   // En las compartidas la porción viene del catálogo (tamaño de la copa); en las individuales la escribe el usuario
   const porcionEnvio = modo === 'compartida' ? Number(producto?.porcion_por_persona ?? 0) : unidadesNumero
@@ -107,8 +121,8 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
   function agregar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault()
     if (!producto) return setErrorForm('Selecciona una bebida del catálogo.')
-    if (modo === 'individual' && !unidadesValidas) return setErrorForm('Las unidades por persona deben ser mayores a 0.')
-    if (!precioValido) return setErrorForm('El valor unitario debe ser 0 o más.')
+    if (modo === 'individual' && !unidadesValidas) return setErrorForm(MENSAJE_UNIDADES_POR_PERSONA)
+    if (!precioValido) return setErrorForm(errorPrecio ?? 'El valor unitario debe ser 0 o más.')
 
     onAgregar({ producto, porcion: porcionEnvio })
     setProductoId('')
@@ -225,16 +239,25 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
                   </FormField>
 
                   {modo === 'individual' ? (
-                    <FormField id="bebida-unidades" label="Unidades por persona">
+                    <FormField
+                      id="bebida-unidades"
+                      label="Unidades por persona"
+                      hint="Número entero de 1 a 10"
+                      error={unidades.trim() !== '' && !unidadesValidas ? MENSAJE_UNIDADES_POR_PERSONA : undefined}
+                    >
                       <Input
                         id="bebida-unidades"
-                        type="number"
-                        min={0}
-                        step="any"
-                        inputMode="decimal"
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={3}
                         value={unidades}
-                        onChange={(e) => setUnidades(e.target.value)}
+                        onChange={(e) => {
+                          setUnidades(e.target.value)
+                          setErrorForm(null)
+                        }}
                         disabled={!producto}
+                        aria-invalid={unidades.trim() !== '' && !unidadesValidas}
+                        aria-describedby={unidades.trim() !== '' && !unidadesValidas ? 'bebida-unidades-error' : undefined}
                       />
                     </FormField>
                   ) : (
@@ -251,6 +274,7 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
                   <FormField
                     id="bebida-precio"
                     label={modo === 'compartida' ? 'Valor por botella' : 'Valor unitario'}
+                    error={errorPrecio}
                   >
                     <div className="relative">
                       <span aria-hidden="true" className="pointer-events-none absolute top-3.5 left-3.5 text-sm text-muted-foreground">
@@ -260,10 +284,15 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
                         id="bebida-precio"
                         type="number"
                         min={0}
+                        max={PRECIO_MAX}
                         step="any"
                         inputMode="decimal"
+                        aria-invalid={Boolean(errorPrecio)}
                         value={precio}
-                        onChange={(e) => setPrecio(e.target.value)}
+                        onChange={(e) => {
+                          setPrecio(e.target.value)
+                          setErrorForm(null)
+                        }}
                         placeholder="Opcional"
                         disabled={!productoCatalogo}
                         className="pl-8"
@@ -295,7 +324,7 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
 
       <Card className="overflow-hidden rounded-[14px]">
         <div
-          className={`${COLUMNAS} border-b border-border bg-muted px-[18px] py-3 text-[11.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase`}
+          className={`${COLUMNAS} hidden border-b border-border bg-muted px-[18px] py-3 text-[11.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase md:grid`}
         >
           <span>Bebida</span>
           <span>Tipo</span>
@@ -320,23 +349,32 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
                   <span className="truncate font-bold" title={bebida.producto.nombre}>
                     {bebida.producto.nombre}
                   </span>
-                  <span className="text-subtle">{modoDe(bebida.producto) === 'compartida' ? 'Compartida' : 'Individual'}</span>
-                  <span className="text-subtle">{describirConsumo(bebida)}</span>
-                  <span className="text-right">
-                    {formatearNumero(calculo.neto)} {unidadCorta}
-                  </span>
-                  <span className="text-right font-bold">
-                    {formatearNumero(calculo.conMargen)} {unidadCorta}
-                  </span>
-                  <span className={cn('text-right', Number(bebida.producto.precio_unitario) === 0 && 'text-muted-foreground')}>
-                    {Number(bebida.producto.precio_unitario) === 0 ? 'Sin valor' : formatearMoneda(calculo.costo)}
+                  <span className="col-span-2 row-start-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] md:contents md:text-sm">
+                    <span data-etiqueta="Tipo:" className={cn(CELDA, 'text-subtle md:text-left')}>
+                      {modoDe(bebida.producto) === 'compartida' ? 'Compartida' : 'Individual'}
+                    </span>
+                    <span data-etiqueta="Consumo:" className={cn(CELDA, 'text-subtle md:text-left')}>
+                      {describirConsumo(bebida)}
+                    </span>
+                    <span data-etiqueta="Neto:" className={CELDA}>
+                      {formatearNumero(calculo.neto)} {unidadCorta}
+                    </span>
+                    <span data-etiqueta="Con margen:" className={`${CELDA} font-bold`}>
+                      {formatearNumero(calculo.conMargen)} {unidadCorta}
+                    </span>
+                    <span
+                      data-etiqueta="Costo:"
+                      className={cn(CELDA, Number(bebida.producto.precio_unitario) === 0 && 'text-muted-foreground')}
+                    >
+                      {Number(bebida.producto.precio_unitario) === 0 ? 'Sin valor' : formatearMoneda(calculo.costo)}
+                    </span>
                   </span>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => onQuitar(bebida.producto.id)}
                     aria-label={`Quitar ${bebida.producto.nombre}`}
-                    className="size-8 text-muted-foreground"
+                    className="col-start-2 row-start-1 size-8 text-muted-foreground md:col-start-auto md:row-start-auto"
                   >
                     <Trash2 className="!size-4" />
                   </Button>
@@ -351,6 +389,11 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
           <span className="font-bold">{formatearMoneda(subtotal)}</span>
         </div>
       </Card>
+
+      {/* HU-45: Botellas consolidadas a comprar para coctelería */}
+      {tipo === 'bar_cocteleria' && (
+        <CalculadoraCocteles asistentes={asistentes} bebidas={bebidas} />
+      )}
     </div>
   )
 }

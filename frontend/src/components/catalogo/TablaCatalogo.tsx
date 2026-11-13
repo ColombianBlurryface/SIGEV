@@ -57,7 +57,7 @@ export function TablaCatalogo({ productos, mensajeVacio, cambiandoId, onEditar, 
                   </div>
                   <span
                     className={cn(
-                      'w-28 text-right',
+                      'sm:w-28 sm:text-right',
                       Number(producto.precio_unitario) > 0 ? 'font-semibold' : 'text-muted-foreground',
                     )}
                   >

@@ -2,6 +2,8 @@
  * Tipos de los eventos: lo que se envía al registrarlos y lo que devuelve la API al consultarlos.
  * Los valores numéricos de PostgreSQL (NUMERIC) llegan como texto, por eso varios campos son string.
  */
+import type { UnidadReceta } from './recetas'
+
 export const TIPOS_EVENTO = ['Boda', 'Corporativo', 'Quinceañero', 'Gala', 'Cumpleaños', 'Otro'] as const
 
 export type TipoEvento = (typeof TIPOS_EVENTO)[number]
@@ -14,6 +16,8 @@ export interface Evento {
   fecha_evento: string
   tipo_evento: string
   duracion_horas: string
+  // Hora de inicio «HH:MM»; los eventos anteriores a la HU-28 no la tienen (ocupan todo el día)
+  hora_inicio: string | null
   asistentes: number
   estado: EstadoEvento
   observaciones_generales: string | null
@@ -42,6 +46,7 @@ export interface NuevoEvento {
   fecha_evento: string
   tipo_evento: string
   duracion_horas: number
+  hora_inicio?: string
   asistentes: number
   observaciones_generales?: string
   productos?: ProductoEventoPayload[]
@@ -79,6 +84,11 @@ export interface ServicioAdicional {
   tipo: string
   descripcion: string
   cantidad: number | null
+  // Horas del servicio (RN-18). El mobiliario y los servicios guardados antes de esta regla no la tienen.
+  horas: string | number | null
+  tipo_cobro?: 'por_servicio' | 'por_hora' | null
+  valor_unitario?: string | number | null
+  costo_total?: string | number | null
   notas: string | null
   creado_en: string
   // HU-12: solo en el mobiliario. Se comparan con el stock actual del inventario.
@@ -100,8 +110,179 @@ export interface EstadoAlquiler {
   motivo: string
 }
 
+// HU-21 (RF-28, RN-04, RN-12): personal de servicio. Se calcula al consultar el evento, no se guarda.
+export interface LogisticaEvento {
+  meseros_requeridos: number
+  asistentes_por_mesero: number
+  relacion_meseros: string
+  // HU-22 (RF-29, RN-05): cocineros, una sola regla para todos los eventos (2 por cada 25 asistentes)
+  cocineros_requeridos: number
+  asistentes_por_grupo_cocina: number
+  cocineros_por_grupo: number
+  relacion_cocineros: string
+}
+
+// HU-47 (RF-55, RN-09, RN-20): ingredientes a comprar, calculados con las recetas de los platos del evento
+export interface ItemCompraIngrediente {
+  ingrediente_id: number
+  ingrediente: string
+  // Entero, redondeado hacia arriba, en la unidad de compra del ingrediente
+  cantidad_a_comprar: number
+  unidad_compra: UnidadReceta
+  // Lo mismo sin redondear (1,65 libras) y en gramos, para que el cálculo se pueda comprobar
+  cantidad_exacta: number
+  gramos_base: number
+  gramos_con_margen: number
+  // Platos del evento que usan el ingrediente (si son varios, ya viene sumado en un solo total)
+  platos: string[]
+}
+
+export interface ComprasIngredientes {
+  margen_porcentaje: number
+  asistentes: number
+  items: ItemCompraIngrediente[]
+  platos_con_receta: number
+  // Platos del evento sin receta: no aportan ingredientes y se avisa
+  platos_sin_receta: { producto_id: number; nombre: string }[]
+}
+
+// HU-45 (RF-53, RN-09, RN-15, RN-19): Botellas de licor a comprar para cócteles
+export interface CompraLicorItem {
+  licor_id: number
+  nombre_licor: string
+  ml_netos: number
+  ml_con_margen: number
+  volumen_botella_ml: number
+  botellas_requeridas: number
+  precio_unitario: number
+  costo_estimado: number
+  cocteles: string[]
+}
+
+export interface ComprasCocteles {
+  margen_porcentaje: number
+  asistentes: number
+  items: CompraLicorItem[]
+  total_botellas: number
+  costo_total_licores: number
+  cocteles_con_receta: number
+  cocteles_sin_receta: { producto_id?: number; nombre: string }[]
+}
+
+export interface ResumenPresupuesto {
+  costo_alimentos_bebidas: number
+  costo_servicios: number
+  costo_total_estimado: number
+}
+
+// HU-28 (RF-35): meseros asignados al evento y cuántos faltan o sobran frente a los requeridos (HU-21)
+export interface MeseroAsignado {
+  id: number
+  nombre_completo: string
+  contacto: string
+  // HU-29 (RF-36): estado de la asignación de este mesero al evento
+  estado: EstadoMesero
+}
+
+export type EstadoMesero = 'por_confirmar' | 'confirmado' | 'no_puede'
+
+export type EstadoAsignacion = 'completo' | 'deficit' | 'excedente'
+
+// HU-25 (RF-32): Desviaciones y alertas de personal frente al estándar calculado
+export type EstadoDesviacion = 'DEFICIT' | 'OK' | 'SURPLUS'
+export type EstadoGlobalDesviacion = 'COMPLIANT' | 'DEFICIT' | 'SURPLUS'
+
+export interface DesviacionRol {
+  role: 'WAITERS' | 'COOKS'
+  rol: 'mesero' | 'cocinero'
+  nombre_rol: string
+  required_count: number
+  assigned_count: number
+  difference: number
+  deficit: number
+  excedente: number
+  status: EstadoDesviacion
+  message: string
+}
+
+export interface ResumenDesviaciones {
+  total_required: number
+  total_assigned: number
+  total_missing: number
+}
+
+export interface AlertaPersonal {
+  activa: boolean
+  tipo: string
+  diferencia: number
+  deficit: number
+  mensaje: string
+}
+
+export interface EventStaffDeviationResponse {
+  event_id: number | string
+  evento_id: number
+  has_deviations: boolean
+  overall_status: EstadoGlobalDesviacion
+  summary: ResumenDesviaciones
+  roles_breakdown: DesviacionRol[]
+  alerta_meseros?: AlertaPersonal
+}
+
+export interface AsignacionMeseros {
+  evento_id: number
+  // Todos los asignados (incluye a quienes «no pueden»); total_utiles es el que cuenta para el estándar (HU-25)
+  total_asignados: number
+  total_utiles: number
+  por_confirmar: number
+  confirmados: number
+  no_pueden: number
+  meseros_requeridos: number
+  diferencia: number
+  deficit: number
+  excedente: number
+  estado: EstadoAsignacion
+  alerta_personal?: AlertaPersonal
+  desviaciones_personal?: EventStaffDeviationResponse
+  meseros_asignados: MeseroAsignado[]
+}
+
+// Un mesero registrado frente a UN evento: si ya está asignado y si está ocupado en otro evento que se cruza (HU-28)
+export interface MeseroCandidato extends Omit<MeseroAsignado, 'estado'> {
+  asignado: boolean
+  estado: EstadoMesero | null
+  ocupado_en: { evento_id: number; nombre_evento: string; fecha: string; horario: string }[]
+}
+
+// HU-29: respuesta de cambiar el estado de una asignación
+export interface CambioEstadoMesero {
+  evento_id: number
+  personal_id: number
+  nombre_completo: string
+  estado: EstadoMesero
+  asignacion: AsignacionMeseros
+}
+
+export interface MeserosDisponibles {
+  evento_id: number
+  meseros_requeridos: number
+  meseros: MeseroCandidato[]
+}
+
 export interface EventoDetalle extends EventoListado {
   estado_alquiler: EstadoAlquiler
+  resumen_presupuesto?: ResumenPresupuesto
+  // HU-21: personal de servicio calculado por el backend al consultar el evento
+  logistica: LogisticaEvento
+  // HU-47: ingredientes a comprar, calculados por el backend al consultar el evento
+  compras_ingredientes: ComprasIngredientes
+  compras_cocteles?: ComprasCocteles
+  asignacion_meseros: AsignacionMeseros
+  desviaciones_personal?: EventStaffDeviationResponse
   productos_calculados: ProductoCalculado[]
   servicios_adicionales: ServicioAdicional[]
 }
+
+
+// Re-exportar tipos del Balance Logístico (Épica 6 · HU-31 a HU-35)
+export type * from './balance'

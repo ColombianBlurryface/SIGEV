@@ -10,23 +10,36 @@ import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatearNumero } from '@/lib/formato'
-import { etiquetaCategoria } from '@/lib/inventario'
+import { etiquetaCategoria, maximoCategoria } from '@/lib/inventario'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'
 import { CATEGORIAS_INVENTARIO, type ElementoInventario } from '@/types/inventario'
 
-const CANTIDAD_MAXIMA = 100000
-
 type Errores = Partial<Record<'elemento' | 'cantidad', string>>
 
-function validar(elementoId: string, cantidad: string): Errores {
+// Cuántas unidades más caben en el elemento sin pasar el máximo de su categoría (RN-16)
+const unidadesQueCaben = (elemento: ElementoInventario) =>
+  Math.max(maximoCategoria(elemento.categoria_inventario) - elemento.cantidad_propia, 0)
+
+function errorCantidad(cantidad: string, elemento: ElementoInventario | null): string | undefined {
+  const numero = Number(cantidad)
+  if (cantidad.trim() === '') return 'Indica cuántas unidades se adquirieron.'
+  if (!Number.isInteger(numero) || numero < 1) return 'Debe ser un número entero mayor o igual a 1.'
+  if (elemento && numero > unidadesQueCaben(elemento)) {
+    const cabe = unidadesQueCaben(elemento)
+    const maximo = maximoCategoria(elemento.categoria_inventario)
+    return cabe === 0
+      ? `Este elemento ya tiene el máximo de ${formatearNumero(maximo)} unidades; no se pueden adquirir más.`
+      : `Como mucho se pueden adquirir ${formatearNumero(cabe)}: el máximo de ${etiquetaCategoria(elemento.categoria_inventario)} es ${formatearNumero(maximo)} por elemento y ya hay ${formatearNumero(elemento.cantidad_propia)}.`
+  }
+  return undefined
+}
+
+function validar(elementoId: string, cantidad: string, elemento: ElementoInventario | null): Errores {
   const errores: Errores = {}
   if (!elementoId) errores.elemento = 'Selecciona el elemento adquirido.'
-  const numero = Number(cantidad)
-  if (cantidad.trim() === '') errores.cantidad = 'Indica cuántas unidades se adquirieron.'
-  else if (!Number.isInteger(numero) || numero < 1 || numero > CANTIDAD_MAXIMA) {
-    errores.cantidad = `Debe ser un número entero entre 1 y ${formatearNumero(CANTIDAD_MAXIMA)}.`
-  }
+  const error = errorCantidad(cantidad, elemento)
+  if (error) errores.cantidad = error
   return errores
 }
 
@@ -45,10 +58,15 @@ export function FormularioAdquisicion({ elementos, elementoInicialId, onRegistra
   const [errorServidor, setErrorServidor] = useState<string | null>(null)
   const [exito, setExito] = useState<string | null>(null)
 
-  const errores = intento ? validar(elementoId, cantidad) : {}
   const elemento = elementos.find((e) => e.id === Number(elementoId)) ?? null
+  const errores = intento ? validar(elementoId, cantidad, elemento) : {}
+  // El máximo se avisa apenas se escribe una cantidad que lo pasa, sin esperar a «Registrar»
+  if (!errores.cantidad && cantidad.trim() !== '') {
+    const aviso = errorCantidad(cantidad, elemento)
+    if (aviso) errores.cantidad = aviso
+  }
   const cantidadNumero = Number(cantidad)
-  const cantidadValida = Number.isInteger(cantidadNumero) && cantidadNumero >= 1 && cantidadNumero <= CANTIDAD_MAXIMA
+  const cantidadValida = cantidad.trim() !== '' && errorCantidad(cantidad, elemento) === undefined
   const propsError = (campo: keyof Errores, id: string) => ({
     'aria-invalid': Boolean(errores[campo]),
     'aria-describedby': errores[campo] ? `${id}-error` : undefined,
@@ -59,7 +77,7 @@ export function FormularioAdquisicion({ elementos, elementoInicialId, onRegistra
     setIntento(true)
     setErrorServidor(null)
     setExito(null)
-    if (Object.keys(validar(elementoId, cantidad)).length > 0 || !elemento) return
+    if (Object.keys(validar(elementoId, cantidad, elemento)).length > 0 || !elemento) return
 
     setEnviando(true)
     try {
@@ -122,7 +140,18 @@ export function FormularioAdquisicion({ elementos, elementoInicialId, onRegistra
         </Select>
       </FormField>
 
-      <FormField id="adquisicion-cantidad" label="Cantidad adquirida" error={errores.cantidad}>
+      <FormField
+        id="adquisicion-cantidad"
+        label="Cantidad adquirida"
+        error={errores.cantidad}
+        hint={
+          elemento
+            ? unidadesQueCaben(elemento) > 0
+              ? `Como mucho puedes adquirir ${formatearNumero(unidadesQueCaben(elemento))} unidades más (máximo ${formatearNumero(maximoCategoria(elemento.categoria_inventario))} por elemento).`
+              : `Este elemento ya tiene el máximo de ${formatearNumero(maximoCategoria(elemento.categoria_inventario))} unidades.`
+            : undefined
+        }
+      >
         <div className="relative">
           <Input
             id="adquisicion-cantidad"

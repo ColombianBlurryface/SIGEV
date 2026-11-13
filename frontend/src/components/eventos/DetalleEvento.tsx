@@ -4,11 +4,16 @@
  * propio y cuánto hay que alquilar según el inventario actual (HU-12). Las bebidas generales
  * y las de coctelería se muestran en secciones separadas, cada una con su costo (HU-13).
  */
-import { RotateCw } from 'lucide-react'
+import { describirHorario } from '@/lib/horario'
+import { ChefHat, RotateCw, Users } from 'lucide-react'
+import { useState } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AsignacionMeseros, type MensajeAsignacion } from '@/components/eventos/AsignacionMeseros'
+import { ComprasIngredientes } from '@/components/eventos/ComprasIngredientes'
+import { ComprasCocteles } from '@/components/eventos/ComprasCocteles'
 import { useEventoDetalle } from '@/hooks/useEventoDetalle'
 import { describirReparto, type RepartoMobiliario } from '@/lib/alquiler'
 import {
@@ -22,6 +27,15 @@ import {
   type TipoBebida,
 } from '@/lib/categorias'
 import { capitalizar, formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
+import {
+  calcularCocineros,
+  calcularMeseros,
+  explicarCocineros,
+  explicarMeseros,
+  relacionCocineros,
+  relacionMeseros,
+} from '@/lib/reglasPersonal'
+import { describirHoras } from '@/lib/reglasServicios'
 import { cn } from '@/lib/utils'
 import type { EventoDetalle, EventoListado } from '@/types/evento'
 import { AvisoAlquiler, OrigenBadge } from './AlquilerMobiliario'
@@ -91,28 +105,61 @@ function agruparRequerimientos(detalle: EventoDetalle) {
           ? 'Elemento alquilado · '
           : ''
     const origen = reparto ? `${prefijoOrigen}${describirReparto(reparto)}` : null
+
+    // HU-48: Costo individual del servicio
+    let costoServicioNum: number | null = null
+    if (!esMobiliario) {
+      if (servicio.costo_total != null) {
+        costoServicioNum = Number(servicio.costo_total)
+      } else if (servicio.valor_unitario != null) {
+        const vu = Number(servicio.valor_unitario)
+        costoServicioNum = servicio.tipo_cobro === 'por_hora'
+          ? vu * Number(servicio.horas || 0)
+          : vu * Number(servicio.cantidad || 1)
+      }
+      if (costoServicioNum !== null && Number.isFinite(costoServicioNum)) {
+        costos.servicios = (costos.servicios ?? 0) + costoServicioNum
+      }
+    }
+
     grupos[esMobiliario ? 'mobiliario' : 'servicios'].push({
       id: `s-${servicio.id}`,
       nombre: esMobiliario
         ? servicio.descripcion
         : `${etiquetaServicio(servicio.tipo)}${servicio.descripcion ? ` · ${servicio.descripcion}` : ''}`,
-      nota: [origen, servicio.notas].filter(Boolean).join(' · ') || undefined,
+      nota:
+        [origen, servicio.horas !== null && servicio.horas !== undefined ? describirHoras(Number(servicio.horas)) : null, servicio.notas]
+          .filter(Boolean)
+          .join(' · ') || undefined,
       reparto,
       cantidad:
-        servicio.cantidad === null ? '—' : `${formatearNumero(servicio.cantidad)}${esMobiliario ? ' und' : ''}`,
-      costo: null,
+        servicio.cantidad === null
+          ? '—'
+          : `${formatearNumero(servicio.cantidad)}${esMobiliario || (servicio.horas !== null && servicio.horas !== undefined) ? ' und' : ''}`,
+      costo: costoServicioNum !== null && Number.isFinite(costoServicioNum) ? formatearMoneda(costoServicioNum) : null,
     })
   }
 
-  // El costo estimado solo incluye alimentos y bebidas; mobiliario y servicios se cotizan aparte
-  const total = detalle.productos_calculados.reduce((suma, p) => suma + Number(p.costo_estimado || 0), 0)
+  // HU-48: Total consolidado del servidor (alimentos, bebidas y servicios) o sumatoria
+  const costoAlimentosBebidas = detalle.productos_calculados.reduce((suma, p) => suma + Number(p.costo_estimado || 0), 0)
+  const costoServicios = costos.servicios ?? 0
+  const total =
+    detalle.resumen_presupuesto?.costo_total_estimado != null
+      ? Number(detalle.resumen_presupuesto.costo_total_estimado)
+      : costoAlimentosBebidas + costoServicios
   const unidadesAlquilar = grupos.mobiliario.reduce((suma, item) => suma + (item.reparto?.alquilar ?? 0), 0)
+  const unidadesPedidas = grupos.mobiliario.reduce((suma, item) => suma + (item.reparto ? item.reparto.propias + item.reparto.alquilar : 0), 0)
   return {
     grupos,
     costos,
     estadoAlquiler: detalle.estado_alquiler,
     total,
     unidadesAlquilar,
+    unidadesPedidas,
+    compras: detalle.compras_ingredientes,
+    comprasCocteles: detalle.compras_cocteles,
+    asignacion: detalle.asignacion_meseros,
+    desviaciones: detalle.desviaciones_personal,
     vacio: detalle.productos_calculados.length + detalle.servicios_adicionales.length === 0,
   }
 }
@@ -120,10 +167,13 @@ function agruparRequerimientos(detalle: EventoDetalle) {
 export function DetalleEvento({ evento }: { evento: EventoListado }) {
   const { detalle, cargando, error, recargar } = useEventoDetalle(evento.id)
   const requerimientos = detalle ? agruparRequerimientos(detalle) : null
+  // Mensaje de la asignación de meseros: se guarda aquí (y con el id del evento) porque el detalle se recarga al guardar
+  const [mensajeAsignacion, setMensajeAsignacion] = useState<{ eventoId: number; mensaje: MensajeAsignacion } | null>(null)
 
   const datos = [
     { etiqueta: 'Fecha', valor: formatearFecha(evento.fecha_evento) },
     { etiqueta: 'Duración', valor: `${formatearNumero(evento.duracion_horas)} h` },
+    { etiqueta: 'Horario', valor: describirHorario(evento.hora_inicio, Number(evento.duracion_horas)) ?? 'Sin hora de inicio' },
     { etiqueta: 'Asistentes', valor: formatearNumero(evento.asistentes) },
     { etiqueta: 'Modalidad', valor: evento.es_modalidad_buffet ? 'Buffet' : 'Servida a la mesa' },
   ]
@@ -148,6 +198,46 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
         ))}
       </dl>
 
+      {/* HU-21: personal de servicio. Se calcula con los asistentes (1 por cada 20, redondeado hacia arriba) */}
+      <div className="flex items-center gap-3.5 rounded-[10px] bg-accent px-3.5 py-3 text-accent-foreground">
+        <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-card">
+          <Users className="size-5" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-xs font-semibold">Meseros requeridos · {relacionMeseros}</span>
+          <span className="text-[12.5px] opacity-80">{explicarMeseros(evento.asistentes)}</span>
+        </div>
+        <span aria-label="Meseros requeridos" className="font-display text-3xl leading-none font-extrabold">
+          {formatearNumero(calcularMeseros(evento.asistentes))}
+        </span>
+      </div>
+
+      {/* HU-22: cocineros. Una sola regla para todos los eventos, sin depender de la comida (2 por cada 25, hacia arriba) */}
+      <div className="flex items-center gap-3.5 rounded-[10px] bg-accent px-3.5 py-3 text-accent-foreground">
+        <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-card">
+          <ChefHat className="size-5" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-xs font-semibold">Cocineros requeridos · {relacionCocineros}</span>
+          <span className="text-[12.5px] opacity-80">{explicarCocineros(evento.asistentes)}</span>
+        </div>
+        <span aria-label="Cocineros requeridos" className="font-display text-3xl leading-none font-extrabold">
+          {formatearNumero(calcularCocineros(evento.asistentes))}
+        </span>
+      </div>
+
+      {/* HU-28: los meseros asignados frente a los requeridos, y el selector para asignarlos */}
+      {requerimientos && (
+        <AsignacionMeseros
+          eventoId={evento.id}
+          estadoEvento={evento.estado}
+          asignacion={requerimientos.asignacion}
+          mensaje={mensajeAsignacion?.eventoId === evento.id ? mensajeAsignacion.mensaje : null}
+          onMensaje={(mensaje) => setMensajeAsignacion(mensaje ? { eventoId: evento.id, mensaje } : null)}
+          onCambio={recargar}
+        />
+      )}
+
       <div className="flex flex-col gap-1">
         <span className="text-xs font-bold text-muted-foreground">Observaciones</span>
         <p className="text-[13.5px] leading-relaxed text-subtle">{evento.observaciones_generales || 'Sin observaciones.'}</p>
@@ -161,6 +251,7 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
             superaUmbral={requerimientos.estadoAlquiler.umbral_superado}
             umbral={requerimientos.estadoAlquiler.umbral}
             unidadesAlquilar={requerimientos.unidadesAlquilar}
+            unidadesPedidas={requerimientos.unidadesPedidas}
             className="text-[13px]"
           />
         )}
@@ -239,9 +330,17 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
             })}
       </div>
 
+      {/* HU-47: lo que hay que comprar de cada ingrediente, según los asistentes y las recetas de los platos */}
+      {requerimientos && <ComprasIngredientes compras={requerimientos.compras} />}
+
+      {/* HU-45: botellas de licor para coctelería a comprar, según los asistentes y recetas de cócteles */}
+      {requerimientos?.comprasCocteles && (
+        <ComprasCocteles compras={requerimientos.comprasCocteles} />
+      )}
+
       {requerimientos && !requerimientos.vacio && (
         <div className="flex items-baseline justify-between border-t border-border pt-3.5">
-          <span className="text-[13px] text-subtle">Costo estimado · alimentos y bebidas</span>
+          <span className="text-[13px] text-subtle">Costo total estimado</span>
           <span className="font-display text-[22px] font-bold">{formatearMoneda(requerimientos.total)}</span>
         </div>
       )}

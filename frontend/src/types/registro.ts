@@ -4,6 +4,17 @@
  */
 import type { ProductoCatalogo } from './catalogo'
 
+export interface ServicioRequerimiento {
+  id?: string
+  tipo: string
+  descripcion: string
+  tipo_cobro?: 'por_hora' | 'por_servicio'
+  valor_unitario?: number
+  cantidad?: number
+  horas?: number
+  costo_total?: number
+  notas?: string
+}
 export interface AlimentoAgregado {
   producto: ProductoCatalogo
   porcion: number
@@ -35,8 +46,12 @@ export interface ServicioAgregado {
   id: string
   tipo: string
   descripcion: string
-  cantidad: number | null
-  notas: string
+  cantidad: number
+  horas?: number              // Puede ser undefined si se cobra por_servicio
+  tipo_cobro?: 'por_servicio' | 'por_hora'
+  valor_unitario?: number
+  costo_total?: number
+  notas?: string
 }
 
 export interface RequerimientosEvento {

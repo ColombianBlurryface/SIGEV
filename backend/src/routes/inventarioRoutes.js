@@ -29,7 +29,8 @@ router.get('/movimientos', inventarioController.consultarMovimientos);
 // POST /api/inventario/:id/adquisiciones - HU-09 (RF-13): Registrar adquisición de un elemento existente
 router.post('/:id/adquisiciones', inventarioController.registrarAdquisicion);
 
-// POST /api/inventario/:id/baja - HU-10 (RF-12): Retirar unidades dañadas de un elemento
-router.post('/:id/baja', inventarioController.retirarDanado);
+// POST /api/inventario/:id/retiro - HU-10 (RF-12, COR-09): Retirar unidades de un elemento (daño, pérdida o devolución).
+// /baja es el nombre anterior de la misma acción y se conserva para no romper a quien ya lo usa.
+router.post(['/:id/retiro', '/:id/baja'], inventarioController.retirarDanado);
 
 module.exports = router;

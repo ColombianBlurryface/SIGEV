@@ -10,7 +10,7 @@ import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatearNumero } from '@/lib/formato'
-import { etiquetaCategoria } from '@/lib/inventario'
+import { esAlquilable, etiquetaCategoria, maximoCategoria } from '@/lib/inventario'
 import { cn } from '@/lib/utils'
 import { ApiError } from '@/services/api'
 import { inventarioService } from '@/services/inventarioService'
@@ -18,14 +18,25 @@ import { CATEGORIAS_INVENTARIO, type CategoriaInventario, type ElementoInventari
 
 type Errores = Partial<Record<'nombre' | 'categoria' | 'cantidad', string>>
 
+// Error de la cantidad inicial (COR-04): entero de 1 en adelante (no se registra un elemento con 0) y, si ya se
+// eligió categoría, sin pasar su máximo (RN-16)
+function errorCantidad(cantidad: string, categoria: string): string | undefined {
+  const numero = Number(cantidad)
+  if (cantidad.trim() === '') return 'Indica la cantidad disponible.'
+  if (!Number.isInteger(numero) || numero < 1) return 'Debe ser un número entero mayor o igual a 1.'
+  if (categoria && numero > maximoCategoria(categoria as CategoriaInventario)) {
+    return `El máximo por elemento de ${etiquetaCategoria(categoria as CategoriaInventario)} es ${formatearNumero(maximoCategoria(categoria as CategoriaInventario))} unidades.`
+  }
+  return undefined
+}
+
 function validar(nombre: string, categoria: string, cantidad: string): Errores {
   const errores: Errores = {}
   if (!nombre.trim()) errores.nombre = 'Escribe el nombre del elemento.'
   else if (nombre.trim().length > 150) errores.nombre = 'El nombre admite máximo 150 caracteres.'
   if (!categoria) errores.categoria = 'Selecciona la categoría.'
-  const numero = Number(cantidad)
-  if (cantidad.trim() === '') errores.cantidad = 'Indica la cantidad disponible.'
-  else if (!Number.isInteger(numero) || numero < 0) errores.cantidad = 'Debe ser un número entero mayor o igual a 0.'
+  const errorDeCantidad = errorCantidad(cantidad, categoria)
+  if (errorDeCantidad) errores.cantidad = errorDeCantidad
   return errores
 }
 
@@ -41,6 +52,19 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
   const [exito, setExito] = useState<string | null>(null)
 
   const errores = intento ? validar(nombre, categoria, cantidad) : {}
+  // El máximo se avisa apenas se escribe una cantidad que lo pasa, sin esperar a «Registrar»
+  if (!errores.cantidad && cantidad.trim() !== '') {
+    const aviso = errorCantidad(cantidad, categoria)
+    if (aviso) errores.cantidad = aviso
+  }
+  const maximo = categoria ? maximoCategoria(categoria as CategoriaInventario) : null
+  // RN-17: solo se alquila mobiliario y vajilla; en las bebidas no se ofrece «Alquilado»
+  const puedeAlquilar = !categoria || esAlquilable(categoria as CategoriaInventario)
+
+  function elegirCategoria(valor: string) {
+    setCategoria(valor)
+    if (!esAlquilable(valor as CategoriaInventario)) setEsPropio(true)
+  }
   const propsError = (campo: keyof Errores, id: string) => ({
     'aria-invalid': Boolean(errores[campo]),
     'aria-describedby': errores[campo] ? `${id}-error` : undefined,
@@ -96,7 +120,7 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
         <Select
           id="inventario-categoria"
           value={categoria}
-          onChange={(e) => setCategoria(e.target.value)}
+          onChange={(e) => elegirCategoria(e.target.value)}
           disabled={enviando}
           {...propsError('categoria', 'inventario-categoria')}
         >
@@ -127,9 +151,10 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
               type="button"
               aria-pressed={esPropio === valor}
               onClick={() => setEsPropio(valor)}
-              disabled={enviando}
+              disabled={enviando || (!valor && !puedeAlquilar)}
+              title={!valor && !puedeAlquilar ? 'Solo se alquila mobiliario y vajilla' : undefined}
               className={cn(
-                'h-9 flex-1 cursor-pointer rounded-lg text-[13.5px] font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
+                'h-9 flex-1 cursor-pointer rounded-lg text-[13.5px] font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40',
                 esPropio === valor ? 'bg-card text-foreground shadow-sm dark:bg-input' : 'text-subtle',
               )}
             >
@@ -138,16 +163,25 @@ export function FormularioElemento({ onRegistrado }: { onRegistrado: (elemento: 
           ))}
         </div>
         <span className="text-[12.5px] text-muted-foreground">
-          {esPropio ? 'Pertenece a la organización.' : 'Se alquila a un proveedor: en un evento siempre cuenta como «a alquilar».'}
+          {!puedeAlquilar
+            ? 'Solo se alquila mobiliario y vajilla: las bebidas siempre son propias.'
+            : esPropio
+              ? 'Pertenece a la organización.'
+              : 'Se alquila a un proveedor: en un evento siempre cuenta como «a alquilar».'}
         </span>
       </div>
 
-      <FormField id="inventario-cantidad" label="Cantidad disponible" error={errores.cantidad}>
+      <FormField
+        id="inventario-cantidad"
+        label="Cantidad disponible"
+        error={errores.cantidad}
+        hint={maximo ? `Máximo ${formatearNumero(maximo)} unidades por elemento de ${etiquetaCategoria(categoria as CategoriaInventario)}.` : undefined}
+      >
         <div className="relative">
           <Input
             id="inventario-cantidad"
             type="number"
-            min={0}
+            min={1}
             step={1}
             inputMode="numeric"
             value={cantidad}

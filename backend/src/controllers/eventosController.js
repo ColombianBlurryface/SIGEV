@@ -4,26 +4,37 @@
  * Aquí está el "motor de cálculo" de SIGEV: al registrar un evento, calcula cuánto
  * se necesita de cada alimento y bebida según el número de asistentes, con un
  * margen de seguridad del 10%. También guarda los servicios adicionales y el
- * mobiliario, que se registran sin cálculo. Al consultar un evento, compara su
- * mobiliario con el inventario para saber qué es propio y qué hay que alquilar (HU-12).
+ * mobiliario, calculando los costos de servicios según su modalidad (HU-48).
+ * Al consultar un evento, compara su mobiliario con el inventario para saber
+ * qué es propio y qué hay que alquilar (HU-12).
  */
 const pool = require('../config/db');
+const { esUnidadesPorPersonaValida } = require('../config/reglasBebidas');
+const { MAXIMO_POR_CATEGORIA, formatearCantidad } = require('../config/limitesInventario');
+const { LIMITES } = require('../config/reglasEvento');
+const {
+  ASISTENTES_POR_MESERO, calcularMeseros,
+  ASISTENTES_POR_GRUPO_COCINA, COCINEROS_POR_GRUPO, calcularCocineros
+} = require('../config/reglasPersonal');
 
 // Redondea hacia arriba evitando errores de precisión decimal de JavaScript.
-// Se redondea a 6 decimales antes del ceil: 50 * 1.10 da 55.00000000000001 en JS y subiría a 56.
 const redondearArriba = (valor) => Math.ceil(Number(valor.toFixed(6)));
+
+// La hora de inicio llega de la base como «18:00:00»; se entrega como «18:00» (o null si el evento no la tiene)
+const horaCorta = (hora) => (hora ? String(hora).slice(0, 5) : null);
 
 // RN-03 (P-05): con más asistentes que este umbral se avisa que probablemente haya que alquilar
 // mobiliario. No es un número fijo: sale de MAX_OWNED_CAPACITY_THRESHOLD (ver config/parametros.js).
 const { UMBRAL_ALQUILER } = require('../config/parametros');
+const { comprasDeEvento } = require('./comprasController');
+const { comprasCoctelesDeEvento } = require('./comprasCoctelesController');
+const { armarAsignacion } = require('./asignacionMeserosController');
+const { armarDesviacionesPersonal } = require('./desviacionesPersonalController');
 
 /**
  * POST /api/eventos
  * Registra un evento, sus productos de catálogo calculados con 10% de margen (RN-09, RN-11)
- * y los servicios adicionales opcionales sin cálculo (RF-06, RF-47, RF-48).
- *
- * Todo se guarda dentro de una transacción: si algo falla a mitad de camino
- * (por ejemplo, un producto que no existe), no queda nada guardado a medias.
+ * y los servicios adicionales (HU-48, RF-47, RF-48, RF-56).
  */
 const crearEvento = async (req, res) => {
   const client = await pool.connect();
@@ -34,45 +45,67 @@ const crearEvento = async (req, res) => {
       tipo_evento,
       duracion_horas,
       asistentes,
+      hora_inicio,
       observaciones_generales,
       productos = [],           // IDs de alimentos o bebidas predeterminadas
       servicios_adicionales = [] // DJ, música, sonido, requerimientos de mobiliario
     } = req.body;
 
-    // Inicia la transacción: a partir de aquí todo se confirma junto (COMMIT) o se deshace (ROLLBACK)
+    // Inicia la transacción
     await client.query('BEGIN');
+
+    // RN-13 / COR-02: máximo 3 eventos por fecha
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`eventos-fecha-${fecha_evento}`]);
+    const resConteoFecha = await client.query(
+      `SELECT COUNT(*)::int AS total
+       FROM eventos
+       WHERE fecha_evento = $1 AND estado <> 'cancelado'`,
+      [fecha_evento]
+    );
+
+    if (resConteoFecha.rows[0].total >= 3) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Regla de negocio no cumplida (RN-13 / RF-51)',
+        detalle: 'Ya existen 3 eventos programados para esta fecha. El máximo permitido por día es 3.'
+      });
+    }
 
     // 1. Insertar el evento base (RF-01, RF-02)
     const queryEvento = `
-      INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO eventos (nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, observaciones_generales, hora_inicio)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *;
     `;
     const resEvento = await client.query(queryEvento, [
-      nombre_evento,
+      nombre_evento.trim(),
       fecha_evento,
       tipo_evento,
       duracion_horas,
       asistentes,
-      observaciones_generales || null
+      (typeof observaciones_generales === 'string' && observaciones_generales.trim()) || null,
+      hora_inicio || null
     ]);
     const nuevoEvento = resEvento.rows[0];
 
     // 2. Procesar alimentos y bebidas predeterminadas con motor de cálculo (10% margen y redondeo)
     for (const item of productos) {
-      // Consultar especificaciones del catálogo (RN-10)
       const resProd = await client.query(
         'SELECT * FROM catalogo_productos WHERE id = $1 AND activo = true',
         [item.producto_id]
       );
 
       if (resProd.rows.length === 0) {
-        throw new Error(`El producto con ID ${item.producto_id} no existe en el catálogo.`);
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: 'Datos inválidos',
+          detalle: `El producto con ID ${item.producto_id} no existe en el catálogo o está desactivado.`
+        });
       }
 
       const prod = resProd.rows[0];
 
-      // QA-04: el valor unitario puede escribirse al registrar el evento. Si no viene, se usa el del catálogo.
+      // QA-04: el valor unitario puede escribirse al registrar el evento
       let precioUnitario = Number(prod.precio_unitario);
       if (item.precio_unitario !== undefined && item.precio_unitario !== null) {
         const p = item.precio_unitario;
@@ -86,31 +119,55 @@ const crearEvento = async (req, res) => {
         precioUnitario = p;
       }
 
-      const porcion = Number(item.porcion_por_persona || prod.porcion_por_persona);
+      let porcion = Number(prod.porcion_por_persona);
+      if (prod.tipo_calculo === 'porcion_persona') {
+        const enviadaAlimento = item.porcion_por_persona;
+        if (enviadaAlimento !== undefined && enviadaAlimento !== null) porcion = Number(enviadaAlimento);
+        if (!Number.isFinite(porcion) || porcion < 1 || porcion > LIMITES.gramosPorPersonaMax) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Datos inválidos',
+            detalle: `La porción de «${prod.nombre}» debe ser un número de 1 a ${formatearCantidad(LIMITES.gramosPorPersonaMax)} gramos por persona.`
+          });
+        }
+      }
+
+      if (prod.tipo_calculo === 'unidad_persona') {
+        const enviado = item.porcion_por_persona;
+        const hayEnviado = enviado !== undefined && enviado !== null;
+        porcion = !hayEnviado
+          ? Number(prod.porcion_por_persona)
+          : typeof enviado === 'number' || typeof enviado === 'string'
+            ? Number(enviado)
+            : NaN;
+        if (!esUnidadesPorPersonaValida(porcion)) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Datos inválidos',
+            detalle: `Las unidades por persona de «${prod.nombre}» deben ser un número entero de 1 a 10.`
+          });
+        }
+      }
+
       let cantidadNeta = 0;
       let cantidadConMargen = 0;
       let unidadEntrega = prod.unidad_medida;
 
-      // Aplicación de fórmulas según clasificación y tipo de cálculo (RN-10, RN-09, RN-11)
       if (prod.tipo_calculo === 'porcion_persona') {
-        // Ej: carne en gramos -> asistentes * porción. Si pasa de 1000 g se entrega en kg. Margen 10%.
         const totalGramos = asistentes * porcion;
         cantidadNeta = totalGramos >= 1000 ? totalGramos / 1000 : totalGramos;
         unidadEntrega = totalGramos >= 1000 ? 'kg' : 'g';
         cantidadConMargen = Number((cantidadNeta * 1.10).toFixed(2));
       } else if (prod.tipo_calculo === 'unidad_persona') {
-        // Ej: Cervezas individuales -> asistentes * unidades_persona. Margen 10% y redondeo hacia arriba.
         cantidadNeta = asistentes * porcion;
         cantidadConMargen = redondearArriba(cantidadNeta * 1.10);
       } else if (prod.tipo_calculo === 'botella_compartida') {
-        // Ej: Vino/Whisky -> Porciones por botella = volumen / tamaño copa. Margen 10% y ceil.
         const porcionesPorBotella = Number(prod.volumen_botella_ml) / Number(prod.tamano_porcion_ml);
         cantidadNeta = asistentes / porcionesPorBotella;
         cantidadConMargen = redondearArriba(cantidadNeta * 1.10);
         unidadEntrega = 'botellas';
       }
 
-      // El costo se calcula sobre la cantidad con margen (lo que realmente se compra)
       const costoEstimado = cantidadConMargen * precioUnitario;
 
       const queryProdEvento = `
@@ -130,17 +187,30 @@ const crearEvento = async (req, res) => {
       ]);
     }
 
-    // 3. Registrar servicios adicionales (DJ, música, mobiliario) sin cálculo (RF-06, RF-47, RF-48).
-    //    El mobiliario llega con tipo 'mobiliario'; el resto con su tipo de servicio (dj, sonido...).
-    //    HU-12: el mobiliario puede traer el producto_id de un elemento del inventario.
+    // 3. Registrar servicios adicionales y mobiliario (HU-05, HU-12, HU-48, RN-18, RF-56)
     const elementosUsados = new Set();
+    const duracionEvento = Number(duracion_horas);
+
     for (const servicio of servicios_adicionales) {
       const esMobiliario = servicio.tipo === 'mobiliario';
+
+      // Validación de mobiliario (HU-12)
+      if (esMobiliario) {
+        const maximoMobiliario = MAXIMO_POR_CATEGORIA['Mobiliario'];
+        const cantidadPedida = servicio.cantidad;
+        if (typeof cantidadPedida !== 'number' || !Number.isInteger(cantidadPedida) || cantidadPedida < 1 || cantidadPedida > maximoMobiliario) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Datos inválidos',
+            detalle: `La cantidad de mobiliario debe ser un número entero de 1 a ${formatearCantidad(maximoMobiliario)}.`
+          });
+        }
+      }
+
       const productoId = esMobiliario && servicio.producto_id != null ? Number(servicio.producto_id) : null;
       let descripcion = servicio.descripcion;
 
       if (productoId !== null) {
-        // Solo se aceptan elementos de la categoría Mobiliario y sin repetir dentro del mismo evento
         const resElemento = await client.query(
           `SELECT nombre FROM catalogo_productos WHERE id = $1 AND categoria_inventario = 'Mobiliario'`,
           [Number.isInteger(productoId) ? productoId : 0]
@@ -155,20 +225,82 @@ const crearEvento = async (req, res) => {
           });
         }
         elementosUsados.add(productoId);
-        descripcion = resElemento.rows[0].nombre; // Se guarda el nombre actual del inventario
+        descripcion = resElemento.rows[0].nombre;
+      }
+
+      // Reglas RN-18 y cálculo HU-48 para servicios opcionales (DJ, música, animación, etc.)
+      let tipoCobro = servicio.tipo_cobro || (servicio.horas !== undefined && servicio.horas !== null ? 'por_hora' : 'por_servicio');
+      let valorUnitario = 0;
+      let horasServicio = null;
+      let cantidadServicio = servicio.cantidad != null ? Number(servicio.cantidad) : 1;
+      let costoServicio = 0;
+
+      if (!esMobiliario) {
+        if (servicio.valor_unitario !== undefined && servicio.valor_unitario !== null) {
+          valorUnitario = Number(servicio.valor_unitario);
+          if (!Number.isFinite(valorUnitario) || valorUnitario <= 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              error: 'Regla de negocio no cumplida (RN-18 / HU-48)',
+              detalle: `El servicio «${descripcion || servicio.tipo}» debe tener una tarifa o valor unitario mayor a 0.`
+            });
+          }
+        } else {
+          valorUnitario = 0;
+        }
+
+        // RN-18: Unidades de 1 a 5
+        if (!Number.isInteger(cantidadServicio) || cantidadServicio < 1 || cantidadServicio > 5) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            error: 'Regla de negocio no cumplida (RN-18)',
+            detalle: `La cantidad del servicio «${descripcion || servicio.tipo}» debe ser un número entero entre 1 y 5.`
+          });
+        }
+
+        // Validación de horas: SOLAMENTE si la modalidad es 'por_hora'
+        if (tipoCobro === 'por_hora') {
+          horasServicio = Number(servicio.horas);
+          if (!Number.isFinite(horasServicio) || horasServicio <= 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              error: 'Regla de negocio no cumplida (RN-18)',
+              detalle: `Las horas del servicio «${descripcion || servicio.tipo}» deben ser un número mayor a 0.`
+            });
+          }
+          if (horasServicio > duracionEvento) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              error: 'Regla de negocio no cumplida (RN-18)',
+              detalle: `Las horas del servicio «${descripcion || servicio.tipo}» no pueden superar la duración del evento (${duracionEvento} h).`
+            });
+          }
+          costoServicio = Number((valorUnitario * horasServicio).toFixed(2));
+        } else {
+          // Si es por servicio (tarifa fija), horas es null y el cálculo va por cantidad
+          horasServicio = null;
+          costoServicio = Number((valorUnitario * cantidadServicio).toFixed(2));
+        }
       }
 
       const queryServicio = `
-        INSERT INTO requerimientos_adicionales (evento_id, tipo, descripcion, cantidad, notas, producto_id)
-        VALUES ($1, $2, $3, $4, $5, $6);
+        INSERT INTO requerimientos_adicionales (
+          evento_id, tipo, descripcion, cantidad, horas, notas, producto_id,
+          tipo_cobro, valor_unitario, costo_total
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
       `;
       await client.query(queryServicio, [
         nuevoEvento.id,
         servicio.tipo || 'servicio_opcional',
-        descripcion,
-        servicio.cantidad || null,
-        servicio.notas || null,
-        productoId
+        typeof descripcion === 'string' ? descripcion.trim() : descripcion,
+        cantidadServicio,
+        horasServicio,
+        typeof servicio.notas === 'string' && servicio.notas.trim() ? servicio.notas.trim() : null,
+        productoId,
+        esMobiliario ? null : tipoCobro,
+        esMobiliario ? 0 : valorUnitario,
+        costoServicio
       ]);
     }
 
@@ -176,10 +308,9 @@ const crearEvento = async (req, res) => {
 
     res.status(201).json({
       mensaje: 'Evento registrado con insumos calculados y servicios adicionales exitosamente',
-      evento: nuevoEvento
+      evento: { ...nuevoEvento, hora_inicio: horaCorta(nuevoEvento.hora_inicio) }
     });
   } catch (error) {
-    // Deshace todo lo que se alcanzó a guardar en esta transacción
     await client.query('ROLLBACK');
     console.error('Error en crearEvento:', error);
     res.status(500).json({ error: 'Error al registrar el evento', detalle: error.message });
@@ -191,8 +322,6 @@ const crearEvento = async (req, res) => {
 /**
  * GET /api/eventos
  * Consulta la lista general de eventos registrados (RF-07), ordenada por fecha.
- * Incluye la bandera es_modalidad_buffet cuando hay más de 300 asistentes (RN-02)
- * y aviso_alquiler cuando supera el umbral de alquiler, 200 por defecto (RN-03).
  */
 const listarEventos = async (req, res) => {
   try {
@@ -206,6 +335,7 @@ const listarEventos = async (req, res) => {
         asistentes,
         estado,
         observaciones_generales,
+        to_char(hora_inicio, 'HH24:MI') AS hora_inicio,
         creado_en,
         CASE 
           WHEN asistentes > 300 THEN true 
@@ -225,12 +355,14 @@ const listarEventos = async (req, res) => {
 
 /**
  * GET /api/eventos/:id
- * Consulta el detalle completo de un evento por ID (RF-07)
- * Retorna la información general, los productos calculados y los servicios adicionales.
+ * Consulta el detalle completo de un evento por ID (RF-07, RF-47, RF-48, RF-56)
  */
 const obtenerDetalleEvento = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1 || id > 2147483647) {
+      return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del evento no es válido.' });
+    }
 
     // 1. Datos básicos del evento
     const queryEvento = `SELECT * FROM eventos WHERE id = $1;`;
@@ -240,7 +372,7 @@ const obtenerDetalleEvento = async (req, res) => {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
-    // 2. Alimentos y bebidas seleccionadas con sus cálculos (RF-21 a RF-27)
+    // 2. Alimentos y bebidas seleccionadas con sus cálculos
     const queryProductos = `
       SELECT 
         ep.id,
@@ -251,8 +383,6 @@ const obtenerDetalleEvento = async (req, res) => {
         ep.cantidad_neta,
         ep.cantidad_con_margen,
         ep.unidad_entrega,
-        -- Precio realmente usado en este evento: el costo guardado entre la cantidad con margen. Así el
-        -- detalle no cambia si después se edita el precio del catálogo ni cuando se escribió en el evento.
         CASE WHEN ep.cantidad_con_margen > 0
           THEN ROUND(ep.costo_estimado / ep.cantidad_con_margen, 2)
           ELSE cp.precio_unitario END AS precio_unitario,
@@ -264,22 +394,29 @@ const obtenerDetalleEvento = async (req, res) => {
     `;
     const resProductos = await pool.query(queryProductos, [id]);
 
-    // 3. Servicios adicionales y mobiliario (RF-06, RF-47, RF-48).
-    //    HU-12 (RF-14): para el mobiliario se compara la cantidad pedida con el stock actual
-    //    del inventario. Lo que alcanza son unidades propias y el resto hay que alquilarlo.
-    //    Si el mobiliario no está relacionado con el inventario, o el elemento está marcado como
-    //    alquilado (es_propio = false), todo va a alquiler: ese stock no es de la organización.
+    // 3. Servicios adicionales y mobiliario con columnas de HU-48
     const queryServicios = `
       SELECT
-        r.id, r.tipo, r.descripcion, r.cantidad, r.notas, r.creado_en, r.producto_id,
+        r.id,
+        r.tipo,
+        r.descripcion,
+        r.cantidad,
+        r.horas,
+        r.tipo_cobro,
+        r.valor_unitario,
+        r.costo_total,
+        r.notas,
+        r.creado_en,
+        r.producto_id,
         c.cantidad_propia AS disponible_inventario,
         c.es_propio AS inventario_es_propio,
-        CASE WHEN r.tipo = 'mobiliario'
-          THEN LEAST(COALESCE(r.cantidad, 0), CASE WHEN c.es_propio IS FALSE THEN 0 ELSE COALESCE(c.cantidad_propia, 0) END)
+        CASE
+          WHEN r.tipo = 'mobiliario' THEN
+            LEAST(COALESCE(r.cantidad, 0), CASE WHEN c.es_propio IS FALSE THEN 0 ELSE COALESCE(c.cantidad_propia, 0) END)
         END AS unidades_propias,
-        CASE WHEN r.tipo = 'mobiliario'
-          THEN COALESCE(r.cantidad, 0)
-            - LEAST(COALESCE(r.cantidad, 0), CASE WHEN c.es_propio IS FALSE THEN 0 ELSE COALESCE(c.cantidad_propia, 0) END)
+        CASE
+          WHEN r.tipo = 'mobiliario' THEN
+            COALESCE(r.cantidad, 0) - LEAST(COALESCE(r.cantidad, 0), CASE WHEN c.es_propio IS FALSE THEN 0 ELSE COALESCE(c.cantidad_propia, 0) END)
         END AS unidades_alquilar
       FROM requerimientos_adicionales r
       LEFT JOIN catalogo_productos c ON c.id = r.producto_id
@@ -288,14 +425,33 @@ const obtenerDetalleEvento = async (req, res) => {
     `;
     const resServicios = await pool.query(queryServicios, [id]);
 
-    // RN-03: estado de alquiler del evento. requiere_alquiler sigue la regla de asistentes;
-    // inventario_insuficiente avisa además cuando el mobiliario pedido no alcanza con el stock propio.
     const asistentes = resEvento.rows[0].asistentes;
     const umbralSuperado = asistentes > UMBRAL_ALQUILER;
     const unidadesAlquilar = resServicios.rows.reduce((suma, s) => suma + Number(s.unidades_alquilar || 0), 0);
 
+    // Consolidación de presupuesto (HU-48, RF-56)
+    const costoAlimentosBebidas = Number(
+      resProductos.rows.reduce((sum, p) => sum + Number(p.costo_estimado || 0), 0).toFixed(2)
+    );
+    let costoServicios = 0;
+    for (const s of resServicios.rows) {
+      if (s.tipo !== 'mobiliario') {
+        let costo = s.costo_total != null ? Number(s.costo_total) : null;
+        if (costo == null && s.valor_unitario != null) {
+          costo = s.tipo_cobro === 'por_hora'
+            ? Number(s.valor_unitario) * Number(s.horas || 0)
+            : Number(s.valor_unitario) * Number(s.cantidad || 1);
+          s.costo_total = Number(costo.toFixed(2));
+        }
+        costoServicios += Number(s.costo_total || 0);
+      }
+    }
+    costoServicios = Number(costoServicios.toFixed(2));
+    const costoTotalEstimado = Number((costoAlimentosBebidas + costoServicios).toFixed(2));
+
     res.json({
       ...resEvento.rows[0],
+      hora_inicio: horaCorta(resEvento.rows[0].hora_inicio),
       es_modalidad_buffet: asistentes > 300,
       aviso_alquiler: umbralSuperado,
       estado_alquiler: {
@@ -308,8 +464,30 @@ const obtenerDetalleEvento = async (req, res) => {
           ? `La cantidad de asistentes (${asistentes}) supera la capacidad propia (${UMBRAL_ALQUILER}).`
           : `La cantidad de asistentes (${asistentes}) está dentro de la capacidad propia (${UMBRAL_ALQUILER}).`
       },
+      resumen_presupuesto: {
+        costo_alimentos_bebidas: costoAlimentosBebidas,
+        costo_servicios: costoServicios,
+        costo_total_estimado: costoTotalEstimado
+      },
       productos_calculados: resProductos.rows,
-      servicios_adicionales: resServicios.rows
+      servicios_adicionales: resServicios.rows,
+      logistica: {
+        meseros_requeridos: calcularMeseros(asistentes),
+        asistentes_por_mesero: ASISTENTES_POR_MESERO,
+        relacion_meseros: `1 por cada ${ASISTENTES_POR_MESERO} asistentes`,
+        cocineros_requeridos: calcularCocineros(asistentes),
+        asistentes_por_grupo_cocina: ASISTENTES_POR_GRUPO_COCINA,
+        cocineros_por_grupo: COCINEROS_POR_GRUPO,
+        relacion_cocineros: `${COCINEROS_POR_GRUPO} por cada ${ASISTENTES_POR_GRUPO_COCINA} asistentes`
+      },
+      // Ingredientes a comprar (HU-47 · RF-55, RN-09, RN-20): salen de las recetas de los platos y los asistentes
+      compras_ingredientes: await comprasDeEvento(pool, id, asistentes),
+      // Botellas de licor para coctelería a comprar (HU-45 · RF-53, RN-09, RN-19): salen de las recetas de cócteles
+      compras_cocteles: await comprasCoctelesDeEvento(pool, id, asistentes),
+      // Meseros asignados al evento y cuántos faltan o sobran frente a los requeridos (HU-28 · RF-35)
+      asignacion_meseros: await armarAsignacion(pool, id, asistentes),
+      // Desviaciones y alertas de personal (HU-25 · RF-32)
+      desviaciones_personal: await armarDesviacionesPersonal(pool, id, asistentes)
     });
   } catch (error) {
     console.error('Error al obtener detalle del evento:', error);

@@ -12,17 +12,20 @@ import { PasosRegistro, type Paso } from '@/components/eventos/registro/PasosReg
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
-import { TIPO_MOBILIARIO } from '@/lib/categorias'
+import { etiquetaServicio, TIPO_MOBILIARIO } from '@/lib/categorias'
 import { formatearFecha, formatearNumero } from '@/lib/formato'
-import { validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
+import { MAX_EVENTOS_POR_FECHA, validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
+import { describirHoras, serviciosFueraDeDuracion } from '@/lib/reglasServicios'
 import { ApiError } from '@/services/api'
 import { eventosService } from '@/services/eventosService'
 import { REQUERIMIENTOS_VACIOS, type RequerimientosEvento } from '@/types/registro'
+import { useEventos } from '@/hooks/useEventos'
 
 const VALORES_INICIALES: ValoresEvento = {
   nombre: '',
   tipo: '',
   fecha: '',
+  horaInicio: '',
   duracion: '',
   asistentes: '',
   observaciones: '',
@@ -42,6 +45,7 @@ const TITULOS: Record<Paso, { titulo: string; descripcion: string }> = {
 
 export function NuevoEventoPage() {
   const navigate = useNavigate()
+  const { eventos } = useEventos()
   const [paso, setPaso] = useState<Paso>(1)
   const [valores, setValores] = useState<ValoresEvento>(VALORES_INICIALES)
   const [requerimientos, setRequerimientos] = useState<RequerimientosEvento>(REQUERIMIENTOS_VACIOS)
@@ -49,9 +53,32 @@ export function NuevoEventoPage() {
   const [enviando, setEnviando] = useState(false)
   const [errorServidor, setErrorServidor] = useState<string | null>(null)
 
+  // Cuenta cuántos eventos hay ya registrados en esa misma fecha
+  const eventosEnFecha = valores.fecha
+    ? eventos.filter((e) => e.fecha_evento.slice(0, 10) === valores.fecha && e.estado !== 'cancelado').length
+    : 0
+
   // Los errores del paso 1 solo se muestran después del primer intento de avanzar,
   // para no llenar de rojo el formulario mientras el usuario apenas empieza a escribir.
-  const errores: ErroresEvento = intentoAvanzar ? validarEvento(valores) : {}
+  const errores: ErroresEvento = intentoAvanzar
+    ? validarEvento(valores, eventosEnFecha)
+    : eventosEnFecha >= MAX_EVENTOS_POR_FECHA
+      ? { fecha: `Ya no se puede registrar más. Esta fecha ya tiene el límite máximo de ${MAX_EVENTOS_POR_FECHA} eventos programados.` }
+      : {}
+
+  // RN-18 / HU-48: Validar horas ÚNICAMENTE en servicios cuya modalidad sea 'por_hora'.
+  // Los servicios de tarifa fija ('por_servicio') no tienen horas y no deben evaluarse aquí.
+  const duracionNumero = valores.duracion.trim() === '' ? Number.NaN : Number(valores.duracion)
+  const serviciosPorHora = requerimientos.servicios.filter((s) => s.tipo_cobro === 'por_hora' && typeof s.horas === 'number')
+  const serviciosPasados = serviciosFueraDeDuracion(serviciosPorHora, duracionNumero)
+  const descripcionPasados = serviciosPasados
+    .map((s) => `${etiquetaServicio(s.tipo)} (${describirHoras(s.horas ?? 0)})`)
+    .join(', ')
+  const avisoDuracion =
+    serviciosPasados.length > 0
+      ? `Con ${formatearNumero(duracionNumero)} h de duración, estos servicios ya no caben: ${descripcionPasados}. Corrige sus horas en el paso 2.`
+      : null
+
   const asistentes = validarAsistentes(valores.asistentes)
   const asistentesFueraDeRango = asistentes.estado === 'bajo' || asistentes.estado === 'alto'
 
@@ -66,11 +93,22 @@ export function NuevoEventoPage() {
 
   function avanzarDesdeDatos() {
     setIntentoAvanzar(true)
-    if (Object.keys(validarEvento(valores)).length === 0) irAPaso(2)
+    if (Object.keys(validarEvento(valores, eventosEnFecha)).length === 0) irAPaso(2)
+  }
+
+  // Pasa al resumen solo si los servicios por hora caben en la duración del evento (RN-18)
+  function irAlResumen() {
+    if (serviciosPasados.length > 0) {
+      setErrorServidor(
+        `No se puede continuar: ${descripcionPasados} dura${serviciosPasados.length === 1 ? '' : 'n'} más que el evento (${formatearNumero(duracionNumero)} h). Corrige las horas o quita el servicio.`,
+      )
+      return
+    }
+    irAPaso(3)
   }
 
   // Envía todo el evento en una sola petición: datos, productos (alimentos y bebidas)
-  // y requerimientos adicionales (mobiliario y servicios). El backend calcula y guarda todo junto.
+  // y requerimientos adicionales (mobiliario y servicios con modalidad y tarifa HU-48).
   async function guardar() {
     setEnviando(true)
     setErrorServidor(null)
@@ -79,6 +117,7 @@ export function NuevoEventoPage() {
         nombre_evento: valores.nombre.trim(),
         tipo_evento: valores.tipo,
         fecha_evento: valores.fecha,
+        hora_inicio: valores.horaInicio,
         duracion_horas: Number(valores.duracion),
         asistentes: Number(valores.asistentes),
         observaciones_generales: valores.observaciones.trim() || undefined,
@@ -91,7 +130,6 @@ export function NuevoEventoPage() {
           ...requerimientos.bebidas.map((b) => ({
             producto_id: b.producto.id,
             porcion_por_persona: b.porcion,
-            // El valor unitario puede haberse escrito en el evento (QA-04); queda guardado con el costo
             precio_unitario: Number(b.producto.precio_unitario),
           })),
         ],
@@ -101,12 +139,15 @@ export function NuevoEventoPage() {
             descripcion: m.elemento,
             cantidad: m.cantidad,
             notas: m.referencia || undefined,
-            producto_id: m.productoId ?? undefined, // HU-12: elemento del inventario (si no hay, va a alquiler)
+            producto_id: m.productoId ?? undefined,
           })),
           ...requerimientos.servicios.map((s) => ({
             tipo: s.tipo,
             descripcion: s.descripcion,
-            cantidad: s.cantidad ?? undefined,
+            tipo_cobro: s.tipo_cobro || 'por_servicio',
+            valor_unitario: Number(s.valor_unitario) || 0,
+            cantidad: Number(s.cantidad || 1),
+            horas: s.tipo_cobro === 'por_hora' ? (s.horas !== undefined ? Number(s.horas) : null) : null,
             notas: s.notas || undefined,
           })),
         ],
@@ -134,7 +175,7 @@ export function NuevoEventoPage() {
 
       <header className="flex flex-wrap items-end justify-between gap-6">
         <div className="flex flex-col gap-1.5">
-          <h1 className="font-display text-4xl font-extrabold tracking-tight">{titulo}</h1>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">{titulo}</h1>
           <p className="text-[15px] text-subtle">
             {paso === 1
               ? descripcion
@@ -148,11 +189,18 @@ export function NuevoEventoPage() {
       {errorServidor && <Alert variant="error">{errorServidor}</Alert>}
 
       {paso === 1 && (
-        <PasoDatos valores={valores} errores={errores} mostrarVacio={intentoAvanzar} onCambio={cambiarValor} />
+        <PasoDatos
+          valores={valores}
+          errores={errores}
+          mostrarVacio={intentoAvanzar}
+          avisoDuracion={avisoDuracion}
+          onCambio={cambiarValor}
+        />
       )}
       {paso === 2 && (
         <PasoRequerimientos
           asistentes={asistentes.cantidad ?? 0}
+          duracionHoras={duracionNumero}
           requerimientos={requerimientos}
           onCambio={setRequerimientos}
         />
@@ -179,13 +227,17 @@ export function NuevoEventoPage() {
           )}
           {paso === 1 && (
             <Button size="lg" onClick={avanzarDesdeDatos} disabled={asistentesFueraDeRango}>
-              Siguiente: Requerimientos
+              <span>
+                Siguiente<span className="hidden sm:inline">: Requerimientos</span>
+              </span>
               <ChevronRight aria-hidden="true" />
             </Button>
           )}
           {paso === 2 && (
-            <Button size="lg" onClick={() => irAPaso(3)}>
-              Siguiente: Resumen
+            <Button size="lg" onClick={irAlResumen}>
+              <span>
+                Siguiente<span className="hidden sm:inline">: Resumen</span>
+              </span>
               <ChevronRight aria-hidden="true" />
             </Button>
           )}

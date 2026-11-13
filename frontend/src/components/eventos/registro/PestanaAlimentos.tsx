@@ -14,9 +14,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useCatalogo } from '@/hooks/useCatalogo'
 import { calcularProducto } from '@/lib/calculos'
 import { formatearMoneda, formatearNumero } from '@/lib/formato'
+import { GRAMOS_POR_PERSONA_MAX } from '@/lib/limites'
 import type { AlimentoAgregado } from '@/types/registro'
 
-const COLUMNAS = 'grid grid-cols-[minmax(0,1fr)_76px_84px_96px_108px_36px] items-center gap-2.5'
+// Tabla en pantallas medianas y grandes; en celular cada alimento es una tarjeta con sus datos etiquetados
+const COLUMNAS = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1.5 md:grid-cols-[minmax(0,1fr)_76px_84px_96px_108px_36px]'
+const CELDA =
+  'before:mr-1 before:text-muted-foreground before:content-[attr(data-etiqueta)] md:text-right md:before:content-none'
 
 interface PestanaAlimentosProps {
   asistentes: number
@@ -37,7 +41,16 @@ export function PestanaAlimentos({ asistentes, alimentos, onAgregar, onQuitar }:
   const disponibles = productos.filter((p) => !agregados.has(p.id))
   const producto = productos.find((p) => p.id === Number(productoId)) ?? null
   const porcionNumero = Number(porcion)
-  const porcionValida = porcion.trim() !== '' && Number.isFinite(porcionNumero) && porcionNumero > 0
+  const porcionValida = porcion.trim() !== '' && Number.isFinite(porcionNumero) && porcionNumero >= 1 && porcionNumero <= GRAMOS_POR_PERSONA_MAX
+  // Se avisa apenas se escribe: un alimento va de 1 a 1.000 g por persona (el servidor también lo exige)
+  const errorPorcion =
+    porcion.trim() === ''
+      ? undefined
+      : !Number.isFinite(porcionNumero) || porcionNumero < 1
+        ? 'La porción debe ser de al menos 1 g.'
+        : porcionNumero > GRAMOS_POR_PERSONA_MAX
+          ? `Máximo ${formatearNumero(GRAMOS_POR_PERSONA_MAX)} g por persona: un alimento no pasa de 1 kg (escribiste ${formatearNumero(porcionNumero)}).`
+          : undefined
   // Cálculo en vivo mientras el usuario escribe (mismas fórmulas que el backend)
   const vistaPrevia = producto && porcionValida ? calcularProducto(producto, porcionNumero, asistentes) : null
   const subtotal = alimentos.reduce((suma, a) => suma + calcularProducto(a.producto, a.porcion, asistentes).costo, 0)
@@ -53,7 +66,7 @@ export function PestanaAlimentos({ asistentes, alimentos, onAgregar, onQuitar }:
   function agregar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault()
     if (!producto) return setErrorForm('Selecciona un alimento del catálogo.')
-    if (!porcionValida) return setErrorForm('La porción por persona debe ser mayor a 0.')
+    if (!porcionValida) return setErrorForm(errorPorcion ?? `La porción por persona debe ser de 1 a ${formatearNumero(GRAMOS_POR_PERSONA_MAX)} g.`)
 
     onAgregar({ producto, porcion: porcionNumero, componentes: componentes.trim() })
     setProductoId('')
@@ -104,16 +117,21 @@ export function PestanaAlimentos({ asistentes, alimentos, onAgregar, onQuitar }:
                     </Select>
                   </FormField>
 
-                  <FormField id="alimento-porcion" label="Porción por persona">
+                  <FormField id="alimento-porcion" label="Porción por persona" error={errorPorcion}>
                     <div className="relative">
                       <Input
                         id="alimento-porcion"
                         type="number"
-                        min={0}
+                        min={1}
+                        max={GRAMOS_POR_PERSONA_MAX}
+                        aria-invalid={Boolean(errorPorcion)}
                         step="any"
                         inputMode="decimal"
                         value={porcion}
-                        onChange={(e) => setPorcion(e.target.value)}
+                        onChange={(e) => {
+                          setPorcion(e.target.value)
+                          setErrorForm(null)
+                        }}
                         disabled={!producto}
                         className="pr-14"
                       />
@@ -165,7 +183,7 @@ export function PestanaAlimentos({ asistentes, alimentos, onAgregar, onQuitar }:
 
       <Card className="overflow-hidden rounded-[14px]">
         <div
-          className={`${COLUMNAS} border-b border-border bg-muted px-[18px] py-3 text-[11.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase`}
+          className={`${COLUMNAS} hidden border-b border-border bg-muted px-[18px] py-3 text-[11.5px] font-bold tracking-[0.04em] text-muted-foreground uppercase md:grid`}
         >
           <span>Producto</span>
           <span className="text-right">Porción</span>
@@ -191,22 +209,26 @@ export function PestanaAlimentos({ asistentes, alimentos, onAgregar, onQuitar }:
                       </span>
                     )}
                   </span>
-                  <span className="text-right">
-                    {formatearNumero(alimento.porcion)} {alimento.producto.unidad_medida}
+                  <span className="col-span-2 row-start-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] md:contents md:text-sm">
+                    <span data-etiqueta="Porción:" className={CELDA}>
+                      {formatearNumero(alimento.porcion)} {alimento.producto.unidad_medida}
+                    </span>
+                    <span data-etiqueta="Neto:" className={CELDA}>
+                      {formatearNumero(calculo.neto)} {calculo.unidad}
+                    </span>
+                    <span data-etiqueta="Con margen:" className={`${CELDA} font-bold`}>
+                      {formatearNumero(calculo.conMargen)} {calculo.unidad}
+                    </span>
+                    <span data-etiqueta="Costo:" className={CELDA}>
+                      {formatearMoneda(calculo.costo)}
+                    </span>
                   </span>
-                  <span className="text-right">
-                    {formatearNumero(calculo.neto)} {calculo.unidad}
-                  </span>
-                  <span className="text-right font-bold">
-                    {formatearNumero(calculo.conMargen)} {calculo.unidad}
-                  </span>
-                  <span className="text-right">{formatearMoneda(calculo.costo)}</span>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => onQuitar(alimento.producto.id)}
                     aria-label={`Quitar ${alimento.producto.nombre}`}
-                    className="size-8 text-muted-foreground"
+                    className="col-start-2 row-start-1 size-8 text-muted-foreground md:col-start-auto md:row-start-auto"
                   >
                     <Trash2 className="!size-4" />
                   </Button>
