@@ -2,7 +2,7 @@
 
 **Proyecto:** SIGEV (Sistema de Gestión de Eventos)  
 **Sprint:** 4  
-**Tarea asociada:** Conectar HU-25 con los meseros asignados y diseñar el modelo de datos del balance ([04_Plan_de_Entregas_y_Sprints_SIGEV_v2_5.md](04_Plan_de_Entregas_y_Sprints_SIGEV_v2_5.md#L255))  
+**Tarea asociada:** Conectar HU-25 con los meseros asignados y diseñar el modelo de datos del balance ([04_Plan_de_Entregas_y_Sprints_SIGEV_v2_6.md](04_Plan_de_Entregas_y_Sprints_SIGEV_v2_6.md#L347))  
 **Responsable:** Jhon  
 **Propósito:** Cumplir los criterios de la **HU-25** (*Alertar desviaciones de personal*) y mitigar el **Riesgo R4** adelantando el diseño relacional y de contratos para la **Épica 6** (*Balance logístico: HU-31 a HU-35*).
 
