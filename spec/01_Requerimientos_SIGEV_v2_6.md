@@ -4,7 +4,7 @@
 
 **INTRODUCCIÓN A LA GESTIÓN DE PROYECTOS DE SOFTWARE**
 
-Sistema SIGEV — Versión 2.5
+Sistema SIGEV — Versión 2.6
 
 ***Oscar Eduardo Jimenez Morales \- 2264419***
 
@@ -22,7 +22,7 @@ Sistema SIGEV — Versión 2.5
 
 **Tuluá, Valle del Cauca**
 
-**20 de octubre de 2026**
+**12 de noviembre de 2026**
 
 # **Control de versiones**
 
@@ -35,6 +35,7 @@ Sistema SIGEV — Versión 2.5
 | 2.3 | 9 oct 2026 | Se agrega RNF-05: el acceso se controla con usuarios creados en la base de datos, sin módulo de registro. Queda registrada la decisión sobre la validación del MVP, que se hará con los datos de un evento real ya ejecutado. |
 | 2.4 | 14 oct 2026 | Retroalimentación de la sustentación de la Entrega 1 (13 oct): hallazgos del profesor y del equipo. Se reescriben RF-02, RF-06, RF-10 a RF-14, RF-22, RF-47 y RF-48 con validaciones y límites. Nuevos RF-51 a RF-56 (máximo de eventos por fecha, recetas de cóctel, recetas de platos y costo de servicios) y RN-13 a RN-20. Se agrega la sección de lo que queda fuera de alcance. |
 | 2.5 | 20 oct 2026 | Decisión del equipo del 20 de octubre: el cliente siempre elige qué comer, así que se elimina el tipo de servicio de comida (almuerzo, cena, buffet) como dato del evento y el personal de cocina se calcula con una sola regla general, ⌈asistentes ÷ 25⌉ × 2, que queda en el promedio de las tres reglas anteriores. RN-02 se conserva: más de 300 asistentes se atienden tipo buffet, y el sistema lo indica sin cambiar cálculos. Se eliminan RF-30, RF-31, RN-06 y RN-07; se reescriben RF-29, RF-49, RN-02 y RN-05. Se corrige una fila duplicada de RN-12 en la trazabilidad. |
+| 2.6 | 12 nov 2026 | Hallazgos del QA del Sprint 4 (12 nov): nuevos RF-57 (editar todos los datos de un evento), RF-58 (cambiar el estado del evento: Planificación, Confirmado, Realizado o Cancelado; un evento cancelado puede volver a planificación y uno realizado ya no cambia de estado) y RN-21 (el estado "no puede" de un mesero lo deshabilita para los eventos de ese día, no para los demás días). La duración máxima del evento pasa de 12 a 8 horas (RF-02, RN-14). Se actualizan las decisiones y la trazabilidad. |
 
 **Índice**
 
@@ -56,7 +57,7 @@ Sistema SIGEV — Versión 2.5
 
 [1.7. Balance logístico	6](#heading=)
 
-[1.8. Calendario	6](#heading=)
+[1.8. Calendario	7](#heading=)
 
 [1.9. Servicios opcionales	7](#heading=)
 
@@ -66,7 +67,7 @@ Sistema SIGEV — Versión 2.5
 
 [**4\. Decisiones tomadas (antes pendientes)	8**](#heading=)
 
-[**5\. Lo que queda fuera de alcance	9**](#heading=)
+[**5\. Lo que queda fuera de alcance	10**](#heading=)
 
 [**6\. Trazabilidad: requerimientos, historias y sprints	10**](#heading=)
 
@@ -77,7 +78,7 @@ Sistema SIGEV — Versión 2.5
 | ID | Descripción | Prioridad |
 | :---- | :---- | :---- |
 | **RF-01** | El sistema debe permitir registrar un evento. | Alta |
-| **RF-02** | El sistema debe permitir registrar la fecha, tipo de evento, número de asistentes y duración. La fecha debe ser el día actual o posterior y la duración debe estar entre 3 y 12 horas (RN-14). El tipo de evento se elige de una lista: boda, corporativo, cumpleaños, quinceaños, gala u otro. | Alta |
+| **RF-02** | El sistema debe permitir registrar la fecha, tipo de evento, número de asistentes y duración. La fecha debe ser el día actual o posterior y la duración debe estar entre 3 y 8 horas (RN-14). El tipo de evento se elige de una lista: boda, corporativo, cumpleaños, quinceaños, gala u otro. | Alta |
 | **RF-49** | El sistema debe indicar automáticamente que un evento de más de 300 asistentes se atiende tipo buffet (RN-02). Es informativo: no se registra un tipo de comida y no cambia ningún cálculo. | Alta |
 | **RF-03** | El sistema debe permitir registrar los requerimientos de alimentos del evento. | Alta |
 | **RF-04** | El sistema debe permitir registrar las bebidas generales del evento. | Alta |
@@ -86,10 +87,14 @@ Sistema SIGEV — Versión 2.5
 | **RF-07** | El sistema debe permitir consultar los eventos registrados. | Alta |
 | **RF-08** | El sistema debe validar que el número de asistentes esté entre 40 y 600 personas. | Alta |
 | **RF-51** | El sistema debe permitir como máximo 3 eventos en una misma fecha (RN-13). | Alta |
+| **RF-57** | El sistema debe permitir editar todos los datos de un evento registrado. Al guardar se aplican las mismas validaciones del registro (RN-01, RN-13, RN-14, RN-18) y, si cambia el número de asistentes, se recalculan alimentos, bebidas, cócteles, ingredientes y personal. | Media |
+| **RF-58** | El sistema debe permitir cambiar desde la interfaz el estado de un evento. Los estados son: Planificación, Confirmado, Realizado y Cancelado. Un evento Cancelado puede volver a Planificación; un evento Realizado ya no puede cambiar a ningún otro estado. | Alta |
 
-*Desde la versión 2.4 el registro del evento valida la fecha (día actual o posterior), la duración (3 a 12 horas) y el número de eventos por fecha (máximo 3). Estas validaciones salieron de las pruebas del equipo y de la sustentación de la Entrega 1\.*
+*Desde la versión 2.4 el registro del evento valida la fecha (día actual o posterior), la duración (3 a 8 horas desde la versión 2.6; antes 3 a 12\) y el número de eventos por fecha (máximo 3). Estas validaciones salieron de las pruebas del equipo y de la sustentación de la Entrega 1\.*
 
 *Desde la versión 2.5 no se registra el tipo de servicio de comida: el cliente siempre elige qué comer y el cálculo de cocina es uno solo para todos los eventos (RN-05). El tipo de evento (boda, corporativo, cumpleaños, quinceaños, gala, otro) sigue siendo informativo. RF-49 queda para indicar el servicio tipo buffet en eventos de más de 300 asistentes (RN-02).*
+
+*Desde la versión 2.6 un evento registrado se puede editar completo (RF-57) y su estado se cambia desde la pantalla (RF-58). Las dos son necesidades nuevas encontradas en el QA del Sprint 4; un evento cancelado puede volver a planificación, pero uno realizado ya no puede cambiar a ningún otro estado.*
 
 ## **1.2. Gestión de inventario**
 
@@ -178,7 +183,7 @@ Los valores de porción, volumen, unidades por persona y precio corresponden a l
 | **RF-33** | El sistema debe permitir registrar meseros con nombre y datos de contacto. | Alta |
 | **RF-34** | El sistema debe permitir eliminar registros de meseros. | Media |
 | **RF-35** | El sistema debe permitir asignar meseros registrados a un evento específico. | Alta |
-| **RF-36** | El sistema debe permitir establecer el estado de asignación de cada mesero: confirmado, por confirmar o no puede. | Alta |
+| **RF-36** | El sistema debe permitir establecer el estado de asignación de cada mesero: confirmado, por confirmar o no puede. El estado "no puede" aplica solo a la fecha de ese evento (RN-21). | Alta |
 | **RF-37** | El sistema debe generar una lista de meseros programados para cada evento. | Alta |
 | **RF-38** | El sistema no debe mantener un historial de asignaciones de meseros entre eventos. | Alta |
 
@@ -239,17 +244,18 @@ Los valores de porción, volumen, unidades por persona y precio corresponden a l
 | **RN-11** | Las cantidades que requieran unidades completas deben redondearse hacia arriba. | Alta |
 | **RN-12** | Las cantidades de personal (meseros y cocineros) se redondean hacia arriba. Es preferible que sobre personal a que falte. | Alta |
 | **RN-13** | Se permiten como máximo 3 eventos en una misma fecha. | Alta |
-| **RN-14** | La fecha del evento debe ser el día actual o posterior, al crearlo y al cambiar su fecha. Un evento ya pasado se puede consultar, pero no se puede reprogramar a una fecha pasada. La duración del evento va de 3 a 12 horas. | Alta |
+| **RN-14** | La fecha del evento debe ser el día actual o posterior, al crearlo y al cambiar su fecha. Un evento ya pasado se puede consultar, pero no se puede reprogramar a una fecha pasada. La duración del evento va de 3 a 8 horas. | Alta |
 | **RN-15** | Las unidades por persona de las bebidas individuales y los cócteles por persona son números enteros entre 1 y 10\. No se aceptan decimales (por ejemplo, 1,4 gaseosas por persona). | Alta |
 | **RN-16** | Cantidad máxima por elemento del inventario: mobiliario 2.000, vajilla 6.000, bebidas generales y licores 4.000. Aplica al registrar, al actualizar y al adquirir. Base: 600 asistentes × 3 eventos al día \= 1.800 personas, por las piezas que usa cada persona, más 10 %. | Alta |
 | **RN-17** | Solo se alquilan elementos de mobiliario y vajilla; las bebidas nunca se alquilan. La cantidad a alquilar no puede superar lo que falta para el evento: lo requerido menos lo propio disponible. | Alta |
 | **RN-18** | Cada servicio adicional admite una cantidad de 1 a 5, unas horas de servicio que no superen la duración del evento y un valor obligatorio mayor que 0, por hora o por servicio. | Alta |
 | **RN-19** | Licor de coctelería: botellas \= (asistentes × cócteles por persona × mililitros por cóctel × 1,10) ÷ volumen de la botella, redondeado hacia arriba. Si varios cócteles usan el mismo licor, se suma en un solo total. | Alta |
 | **RN-20** | Ingredientes: cantidad \= asistentes × cantidad por porción × 1,10, convertida a la unidad de compra y redondeada hacia arriba. Equivalencias: 1 kg \= 1.000 g; 1 libra \= 500 g; 1 arroba \= 12,5 kg. Si varios platos usan el mismo ingrediente, se suma en un solo total. | Alta |
+| **RN-21** | Un mesero marcado "no puede" queda no disponible para todos los eventos de esa fecha; en las demás fechas sigue disponible para asignarlo. | Alta |
 
 # **4\. Decisiones tomadas (antes pendientes)**
 
-Los seis aspectos que la versión 2.0 dejó abiertos quedaron definidos el 30 de septiembre de 2026\. Los hallazgos del QA del Sprint 2 se resolvieron el 9 de octubre, los de la sustentación de la Entrega 1 el 14 de octubre y el cálculo general de cocina el 20 de octubre. No queda ningún requerimiento pendiente de definición.
+Los seis aspectos que la versión 2.0 dejó abiertos quedaron definidos el 30 de septiembre de 2026\. Los hallazgos del QA del Sprint 2 se resolvieron el 9 de octubre, los de la sustentación de la Entrega 1 el 14 de octubre, el cálculo general de cocina el 20 de octubre y los hallazgos del QA del Sprint 4 el 12 de noviembre. No queda ningún requerimiento pendiente de definición.
 
 | ID | Aspecto | Decisión | Fecha |
 | :---- | :---- | :---- | :---- |
@@ -276,6 +282,10 @@ Los seis aspectos que la versión 2.0 dejó abiertos quedaron definidos el 30 de
 | **P10** | Turnos de meseros. | Queda fuera de alcance, declarado de forma explícita (RNF-03). | 14 oct 2026 |
 | **P2** | Mobiliario sin datos. | La funcionalidad existe; faltó cargar los datos de prueba en el entorno de la demo. Se corrige con COR-07. | 14 oct 2026 |
 | **COC** | Servicio de comida y cálculo de cocina. | Se elimina el tipo de servicio de comida y las tres reglas de cocina. Cocineros \= ⌈asistentes ÷ 25⌉ × 2 para todos (RN-05). RN-02 se conserva: más de 300 asistentes \= buffet, indicado por el sistema sin cambiar cálculos (RF-49). | 20 oct 2026 |
+| **DUR** | Duración máxima del evento. | Pasa de 12 a 8 horas; el mínimo sigue en 3 (RN-14). Cambio del equipo confirmado por el PO. | 12 nov 2026 |
+| **QA4-1** | Editar eventos. | Necesidad nueva del QA del Sprint 4 (gravedad media): se pueden editar todos los datos del evento (RF-57, HU-50). Entra al Sprint 5\. | 12 nov 2026 |
+| **QA4-2** | Estado del evento. | Necesidad nueva del QA del Sprint 4 (gravedad alta): el estado se cambia desde la interfaz entre Planificación, Confirmado, Realizado y Cancelado (RF-58, HU-51). Un evento Cancelado puede volver a Planificación; un evento Realizado ya no puede cambiar a ningún otro estado. Entra al Sprint 5\. | 12 nov 2026 |
+| **QA4-3** | Mesero "no puede" en varios días. | Es un defecto (crítico): el "no puede" bloqueaba al mesero en los días siguientes. Se corrige con DEF-02 en el Sprint 5 y queda la regla RN-21: el "no puede" lo deshabilita para los eventos de ese día, no para los demás días. | 12 nov 2026 |
 
 # **5\. Lo que queda fuera de alcance**
 
@@ -294,7 +304,7 @@ El profesor pidió en la sustentación declarar de forma explícita lo que el si
 
 # **6\. Trazabilidad: requerimientos, historias y sprints**
 
-Todos los requerimientos funcionales y reglas de negocio están cubiertos por al menos una historia de usuario. RF-38 se cubre como restricción (RNF-03). Las reglas nuevas de la versión 2.4 que tocan historias ya finalizadas se implementan en el Sprint 3 con las correcciones COR-01 a COR-09.
+Todos los requerimientos funcionales y reglas de negocio están cubiertos por al menos una historia de usuario. RF-38 se cubre como restricción (RNF-03). Las reglas nuevas de la versión 2.4 que tocan historias ya finalizadas se implementan en el Sprint 3 con las correcciones COR-01 a COR-09. Lo nuevo de la versión 2.6 entra al Sprint 5: RF-57 con HU-50, RF-58 con HU-51 y RN-21 con la corrección DEF-02 de HU-29.
 
 | Requerimiento / Regla | Historias de usuario | Sprint |
 | :---- | :---- | :---- |
@@ -332,7 +342,7 @@ Todos los requerimientos funcionales y reglas de negocio están cubiertos por al
 | RF-33 | HU-26 | 4 |
 | RF-34 | HU-27 | 4 |
 | RF-35 | HU-28 | 4 |
-| RF-36 | HU-29 | 4 |
+| RF-36 | HU-29 | 4 (corrección en el 5, DEF-02) |
 | RF-37 | HU-30 | 4 |
 | RF-38 | Restricción RNF-03 | Todos |
 | RF-39 | HU-31 | 5 |
@@ -352,7 +362,9 @@ Todos los requerimientos funcionales y reglas de negocio están cubiertos por al
 | RF-54 | HU-46 | 3 |
 | RF-55 | HU-47 | 3 |
 | RF-56 | HU-48 | 3 |
-| RN-01 | HU-07 | 1 |
+| RF-57 | HU-50 | 5 |
+| RF-58 | HU-51 | 5 |
+| RN-01 | HU-07, HU-50 | 1, 5 |
 | RN-02 | HU-01 | 1 (ajuste en el 3\) |
 | RN-03 | HU-12 | 2 |
 | RN-04 | HU-21 | 3 |
@@ -361,14 +373,15 @@ Todos los requerimientos funcionales y reglas de negocio están cubiertos por al
 | RN-09 | HU-18, HU-45, HU-47 | 3 |
 | RN-10 | HU-15, HU-16, HU-17 | 3 |
 | RN-11 | HU-19 | 3 |
-| RN-13 | HU-01 | 1 |
-| RN-14 | HU-01 | 1 |
+| RN-13 | HU-01, HU-50 | 1, 5 |
+| RN-14 | HU-01, HU-50 | 1, 5 |
 | RN-15 | HU-03, HU-16, HU-43, HU-45 | 1, 3, Int. 1 |
 | RN-16 | HU-08, HU-11 | 2 |
 | RN-17 | HU-12 | 2 |
 | RN-18 | HU-05, HU-48 | 1, 3 |
 | RN-19 | HU-45 | 3 |
 | RN-20 | HU-47 | 3 |
+| RN-21 | HU-29 (DEF-02) | 5 |
 | RN-12 | HU-21, HU-22 | 3 |
 
 [image1]: <data:image/png;base64,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>
