@@ -4,7 +4,7 @@
 
 **INTRODUCCIÓN A LA GESTIÓN DE PROYECTOS DE SOFTWARE**
 
-Sistema SIGEV — Versión 2.5
+Sistema SIGEV — Versión 2.6
 
 ***Oscar Eduardo Jimenez Morales \- 2264419***
 
@@ -22,7 +22,7 @@ Sistema SIGEV — Versión 2.5
 
 **Tuluá, Valle del Cauca**
 
-**20 de octubre de 2026**
+**12 de noviembre de 2026**
 
 # **Control de versiones**
 
@@ -35,6 +35,7 @@ Sistema SIGEV — Versión 2.5
 | 2.3 | 9 oct 2026 | Sin cambios en las historias. Se alinea con RNF-05 (control de acceso) del documento de Requerimientos. |
 | 2.4 | 14 oct 2026 | Retroalimentación de la sustentación de la Entrega 1 (13 oct): hallazgos del profesor y del equipo. Historias nuevas HU-44 a HU-48 (recetas de cóctel, recetas de platos y costo de servicios). Criterios nuevos en HU-01, HU-03, HU-05, HU-08 a HU-12, HU-16, HU-39 y HU-43. HU-10 pasa a llamarse Retirar elementos del inventario. |
 | 2.5 | 20 oct 2026 | Decisión del equipo del 20 de octubre: el cliente siempre elige qué comer, así que se elimina el tipo de servicio de comida (almuerzo, cena, buffet) como dato del evento y el personal de cocina se calcula con una sola regla general, ⌈asistentes ÷ 25⌉ × 2, que queda en el promedio de las tres reglas anteriores. RN-02 se conserva: más de 300 asistentes se atienden tipo buffet, y el sistema lo indica sin cambiar cálculos. HU-22 pasa a llamarse Calcular personal de cocina, con la regla general. HU-23 y HU-24 se eliminan. HU-01 suma un criterio: indicar el servicio tipo buffet en eventos de más de 300 asistentes. |
+| 2.6 | 12 nov 2026 | Hallazgos del QA del Sprint 4 (12 nov): nuevas HU-50 (editar eventos) y HU-51 (cambiar el estado del evento), en la épica 1 y el Sprint 5\. HU-29 suma un criterio por el defecto DEF-02 (RN-21). La duración máxima del evento pasa a 8 horas. Se actualiza el estado de las historias aceptadas en los sprints 3 y 4 y quién las desarrolló. Se agregan DEF-01 y DEF-02 a las correcciones. |
 
 **Índice**
 
@@ -60,97 +61,101 @@ Sistema SIGEV — Versión 2.5
 
 [HU-07 — Validar cantidad de asistentes	5](#heading=)
 
+[HU-50 — Editar eventos	6](#heading=)
+
+[HU-51 — Cambiar el estado del evento	6](#heading=)
+
 [**Épica 2\. Gestión de inventario	6**](#heading=)
 
 [HU-08 — Registrar elementos de inventario	6](#heading=)
 
-[HU-09 — Clasificar inventario	6](#heading=)
+[HU-09 — Clasificar inventario	7](#heading=)
 
-[HU-10 — Retirar elementos del inventario	6](#heading=)
+[HU-10 — Retirar elementos del inventario	7](#heading=)
 
 [HU-11 — Registrar nuevas adquisiciones	7](#heading=)
 
 [HU-12 — Diferenciar elementos propios y alquilados	7](#heading=)
 
-[**Épica 3\. Gestión y cálculo de alimentos y bebidas	7**](#heading=)
+[**Épica 3\. Gestión y cálculo de alimentos y bebidas	8**](#heading=)
 
-[HU-13 — Separar bebidas de coctelería y bebidas generales	7](#heading=)
+[HU-13 — Separar bebidas de coctelería y bebidas generales	8](#heading=)
 
 [HU-14 — Registrar valores de alimentos y bebidas	8](#heading=)
 
 [HU-15 — Calcular alimentos por persona	8](#heading=)
 
-[HU-16 — Calcular bebidas individuales	8](#heading=)
+[HU-16 — Calcular bebidas individuales	9](#heading=)
 
-[HU-17 — Calcular bebidas por botella	8](#heading=)
+[HU-17 — Calcular bebidas por botella	9](#heading=)
 
-[HU-18 — Aplicar margen de pérdida	8](#heading=)
+[HU-18 — Aplicar margen de pérdida	9](#heading=)
 
 [HU-19 — Redondear cantidades	9](#heading=)
 
-[HU-20 — Calcular valor estimado	9](#heading=)
+[HU-20 — Calcular valor estimado	10](#heading=)
 
-[HU-43 — Administrar el catálogo de bebidas y alimentos	9](#heading=)
+[HU-43 — Administrar el catálogo de bebidas y alimentos	10](#heading=)
 
 [HU-44 — Registrar recetas de cóctel	10](#heading=)
 
-[HU-45 — Calcular el licor por cóctel	10](#heading=)
+[HU-45 — Calcular el licor por cóctel	11](#heading=)
 
-[HU-46 — Registrar recetas de platos	10](#heading=)
+[HU-46 — Registrar recetas de platos	11](#heading=)
 
 [HU-47 — Calcular los ingredientes a comprar	11](#heading=)
 
-[**Épica 4\. Cálculo de personal	11**](#heading=)
+[**Épica 4\. Cálculo de personal	12**](#heading=)
 
-[HU-21 — Calcular meseros	11](#heading=)
+[HU-21 — Calcular meseros	12](#heading=)
 
-[HU-22 — Calcular personal de cocina	11](#heading=)
+[HU-22 — Calcular personal de cocina	12](#heading=)
 
 [HU-25 — Alertar desviaciones de personal	12](#heading=)
 
-[**Épica 5\. Gestión de meseros	12**](#heading=)
+[**Épica 5\. Gestión de meseros	13**](#heading=)
 
-[HU-26 — Registrar meseros	12](#heading=)
+[HU-26 — Registrar meseros	13](#heading=)
 
-[HU-27 — Eliminar meseros	12](#heading=)
+[HU-27 — Eliminar meseros	13](#heading=)
 
-[HU-28 — Asignar meseros a un evento	12](#heading=)
+[HU-28 — Asignar meseros a un evento	13](#heading=)
 
-[HU-29 — Gestionar estado de asignación	12](#heading=)
+[HU-29 — Gestionar estado de asignación	13](#heading=)
 
-[HU-30 — Consultar lista de meseros programados	13](#heading=)
+[HU-30 — Consultar lista de meseros programados	14](#heading=)
 
-[**Épica 6\. Balance logístico	13**](#heading=)
+[**Épica 6\. Balance logístico	14**](#heading=)
 
-[HU-31 — Generar balance logístico	13](#heading=)
+[HU-31 — Generar balance logístico	14](#heading=)
 
-[HU-32 — Consultar estado de los recursos	13](#heading=)
+[HU-32 — Consultar estado de los recursos	14](#heading=)
 
-[HU-33 — Establecer fechas límite	13](#heading=)
+[HU-33 — Establecer fechas límite	14](#heading=)
 
-[HU-34 — Actualizar estado de un recurso	14](#heading=)
+[HU-34 — Actualizar estado de un recurso	15](#heading=)
 
-[HU-35 — Visualizar anticipadamente los faltantes	14](#heading=)
+[HU-35 — Visualizar anticipadamente los faltantes	15](#heading=)
 
-[**Épica 7\. Calendario	14**](#heading=)
+[**Épica 7\. Calendario	15**](#heading=)
 
-[HU-36 — Consultar eventos en calendario	14](#heading=)
+[HU-36 — Consultar eventos en calendario	15](#heading=)
 
-[HU-37 — Consultar información del evento desde el calendario	14](#heading=)
+[HU-37 — Consultar información del evento desde el calendario	15](#heading=)
 
-[**Épica 8\. Servicios opcionales	15**](#heading=)
+[**Épica 8\. Servicios opcionales	16**](#heading=)
 
-[HU-38 — Registrar servicios opcionales	15](#heading=)
+[HU-38 — Registrar servicios opcionales	16](#heading=)
 
-[HU-39 — Gestionar servicios sin cálculo automático	15](#heading=)
+[HU-39 — Gestionar servicios sin cálculo automático	16](#heading=)
 
-[HU-48 — Sumar el costo de los servicios al evento	15](#heading=)
+[HU-48 — Sumar el costo de los servicios al evento	16](#heading=)
 
-[**Correcciones del Sprint 3 (no son historias nuevas)	15**](#heading=)
+[**Correcciones y defectos (no son historias nuevas)	16**](#heading=)
 
-[**Historias eliminadas	16**](#heading=)
+[**Historias eliminadas	17**](#heading=)
 
-[**Restricciones del sistema (no son historias de usuario)	16**](#heading=)
+[**Restricciones del sistema (no son historias de usuario)	17**](#heading=)
 
 # **1\. Cómo leer este documento**
 
@@ -166,15 +171,15 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Épica | Historias | Cantidad | Sprint |
 | :---- | :---- | :---- | :---- |
-| 1\. Gestión de eventos | HU-01 a HU-07 | 7 | 1 |
+| 1\. Gestión de eventos | HU-01 a HU-07, HU-50 y HU-51 | 9 | 1 y 5 |
 | 2\. Gestión de inventario | HU-08 a HU-12 | 5 | 2 |
 | 3\. Gestión y cálculo de alimentos y bebidas | HU-13 a HU-20, HU-43 a HU-47 | 13 | 2 y 3 y Int. 1 |
 | 4\. Cálculo de personal | HU-21, HU-22 y HU-25 | 3 | 3 y 4 |
-| 5\. Gestión de meseros | HU-26 a HU-30 | 5 | 4 |
+| 5\. Gestión de meseros | HU-26 a HU-30 | 5 | 4 (corrección en el 5\) |
 | 6\. Balance logístico | HU-31 a HU-35 | 5 | 5 |
 | 7\. Calendario | HU-36 a HU-37 | 2 | 6 |
 | 8\. Servicios opcionales | HU-38, HU-39 y HU-48 | 3 | 3 y 6 |
-| **Total** |  | **43** |  |
+| **Total** |  | **45** |  |
 
 # **Épica 1\. Gestión de eventos**
 
@@ -200,7 +205,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 * Nuevo en v2.4 (COR-01): la fecha del evento debe ser el día actual o posterior, al crear y al cambiar la fecha.
 
-* Nuevo en v2.4 (COR-01): la duración debe estar entre 3 y 12 horas.
+* Nuevo en v2.4 (COR-01): la duración debe estar entre 3 y 8 horas (desde la v2.6; antes era de 3 a 12).
 
 * Nuevo en v2.4 (COR-02): no se permite registrar un cuarto evento en una fecha que ya tiene 3\.
 
@@ -313,6 +318,48 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 * Se rechazan cantidades inferiores a 40 y superiores a 600\.
 
 * El sistema informa el rango permitido cuando rechaza un valor.
+
+## **HU-50 — Editar eventos**
+
+**Como** responsable de logística, **quiero** editar todos los datos de un evento ya registrado, **para** corregir o actualizar el evento sin tener que borrarlo y crearlo de nuevo.
+
+| Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| Media | RF-57, RN-01, RN-13, RN-14, RN-18 | 5 | Jhon | Por hacer | 1 h |
+
+**Criterios de aceptación** (propuestos el 12 de noviembre de 2026; se validan con el PO al iniciar la historia):
+
+* Se pueden modificar todos los datos que se registran al crear el evento.
+
+* Al guardar se aplican las mismas validaciones del registro: 40 a 600 asistentes, fecha de hoy en adelante, duración de 3 a 8 horas y máximo 3 eventos por fecha (RN-01, RN-13, RN-14).
+
+* Si cambia el número de asistentes, se recalculan alimentos, bebidas, cócteles, ingredientes y personal.
+
+* Las horas de los servicios adicionales siguen sin poder superar la duración del evento (RN-18).
+
+* Necesidad nueva encontrada en el QA del Sprint 4 (gravedad media).
+
+## **HU-51 — Cambiar el estado del evento**
+
+**Como** responsable de logística, **quiero** cambiar desde la pantalla el estado de un evento, **para** saber en qué punto está cada evento.
+
+| Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
+| :---- | :---- | :---- | :---- | :---- | :---- |
+| Alta | RF-58 | 5 | Jhon | Por hacer | 0.5 h |
+
+**Criterios de aceptación** (propuestos el 12 de noviembre de 2026; se validan con el PO al iniciar la historia):
+
+* El estado se elige entre Planificación, Confirmado, Realizado y Cancelado.
+
+* El cambio se hace desde la interfaz, sin tocar la base de datos.
+
+* El estado nuevo queda guardado y se ve al consultar el evento.
+
+* Un evento Cancelado puede volver a Planificación.
+
+* Un evento Realizado ya no puede cambiar a ningún otro estado.
+
+* Necesidad nueva encontrada en el QA del Sprint 4 (gravedad alta).
 
 # **Épica 2\. Gestión de inventario**
 
@@ -436,7 +483,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-18, RF-20 | 3 | Jhon | Por hacer | 1 h |
+| Alta | RF-18, RF-20 | 3 | Jhon | Finalizada (aprobada por el PO) | 1 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -450,7 +497,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-20, RF-21, RN-10 | 3 | Jhon | Por hacer | 1.5 h |
+| Alta | RF-20, RF-21, RN-10 | 3 | Jhon | Finalizada (aprobada por el PO) | 1.5 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -464,7 +511,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-22, RN-10, RN-15 | 3 | Jhon | Por hacer | 1 h |
+| Alta | RF-22, RN-10, RN-15 | 3 | Jhon | Finalizada (aprobada por el PO) | 1 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -480,7 +527,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-23, RF-24, RN-10 | 3 | Jhon | Por hacer | 1.5 h |
+| Alta | RF-23, RF-24, RN-10 | 3 | Jhon | Finalizada (aprobada por el PO) | 1.5 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -496,7 +543,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-25, RN-09 | 3 | Jhon | Por hacer | 0.5 h |
+| Alta | RF-25, RN-09 | 3 | Jhon | Finalizada (aprobada por el PO) | 0.5 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -510,7 +557,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-26, RN-11 | 3 | Jhon | Por hacer | 0.5 h |
+| Alta | RF-26, RN-11 | 3 | Jhon | Finalizada (aprobada por el PO) | 0.5 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -524,7 +571,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-27 | 3 | Jhon | Por hacer | 1 h |
+| Alta | RF-27 | 3 | Jhon | Finalizada (aprobada por el PO) | 1 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -562,7 +609,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-52 | 3 | Jhon | Por hacer | 1 h |
+| Alta | RF-52 | 3 | Jhon | Finalizada en el Sprint 4 (aprobada por el PO) | 1 h |
 
 **Criterios de aceptación** (propuestos el 14 de octubre de 2026; se validan con el PO al iniciar la historia):
 
@@ -582,7 +629,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-53, RN-09, RN-15, RN-19 | 3 | Jhon | Por hacer | 1.5 h |
+| Alta | RF-53, RN-09, RN-15, RN-19 | 3 | Jhon | Finalizada en el Sprint 4 (aprobada por el PO) | 1.5 h |
 
 **Criterios de aceptación** (propuestos el 14 de octubre de 2026; se validan con el PO al iniciar la historia):
 
@@ -602,7 +649,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-54 | 3 | Jhon | Por hacer | 1 h |
+| Alta | RF-54 | 3 | Javier | Finalizada en el Sprint 4 (aprobada por el PO) | 1 h |
 
 **Criterios de aceptación** (propuestos el 14 de octubre de 2026; se validan con el PO al iniciar la historia):
 
@@ -622,7 +669,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-55, RN-09, RN-20 | 3 | Jhon | Por hacer | 1.5 h |
+| Alta | RF-55, RN-09, RN-20 | 3 | Javier | Finalizada en el Sprint 4 (aprobada por el PO) | 1.5 h |
 
 **Criterios de aceptación** (propuestos el 14 de octubre de 2026; se validan con el PO al iniciar la historia):
 
@@ -644,7 +691,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-28, RN-04 | 3 | Javier | Por hacer | 1 h |
+| Alta | RF-28, RN-04 | 3 | Javier | Finalizada (aprobada por el PO) | 1 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -660,7 +707,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-29, RN-05, RN-12 | 3 | Javier | Por hacer | 1 h |
+| Alta | RF-29, RN-05, RN-12 | 3 | Javier | Finalizada (aprobada por el PO) | 1 h |
 
 **Criterios de aceptación** (propuestos el 20 de octubre de 2026; se validan con el PO al iniciar la historia):
 
@@ -680,7 +727,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-32 | 4 | Jhon | Por hacer | 1.5 h |
+| Alta | RF-32 | 4 | Jhon | Finalizada (aprobada por el PO) | 1.5 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -698,7 +745,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-33 | 4 | Jhon | Por hacer | 1 h |
+| Alta | RF-33 | 4 | Javier | Finalizada (aprobada por el PO) | 1 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -712,7 +759,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Media | RF-34 | 4 | Javier | Por hacer | 0.5 h |
+| Media | RF-34 | 4 | Javier | Finalizada (aprobada por el PO) | 0.5 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -726,7 +773,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-35 | 4 | Jhon | Por hacer | 1.5 h |
+| Alta | RF-35 | 4 | Javier | Finalizada (aprobada por el PO) | 1.5 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -740,7 +787,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-36 | 4 | Javier | Por hacer | 1 h |
+| Alta | RF-36, RN-21 | 4 | Javier | Finalizada; con corrección en el Sprint 5 (DEF-02) | 1 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -748,13 +795,15 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 * El estado de una asignación se puede cambiar.
 
+* Nuevo en v2.6 (DEF-02): el estado "no puede" deshabilita al mesero para todos los eventos de ese día; en los demás días sigue disponible (RN-21).
+
 ## **HU-30 — Consultar lista de meseros programados**
 
 **Como** responsable de logística, **quiero** visualizar la lista de meseros programados para cada evento, **para** realizar el seguimiento del personal requerido.
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-37 | 4 | Javier | Por hacer | 1 h |
+| Alta | RF-37 | 4 | Javier | Finalizada (aprobada por el PO) | 1 h |
 
 **Criterios de aceptación** (borrador: se validan en el Sprint Planning correspondiente):
 
@@ -900,7 +949,7 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 | Prioridad | Requerimientos | Sprint | Desarrolla | Estado | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| Alta | RF-47, RF-48, RF-56, RN-18 | 3 | Jhon | Por hacer | 1 h |
+| Alta | RF-47, RF-48, RF-56, RN-18 | 3 | Jhon | Finalizada en el Sprint 4 (aprobada por el PO) | 1 h |
 
 **Criterios de aceptación** (propuestos el 14 de octubre de 2026; se validan con el PO al iniciar la historia):
 
@@ -912,21 +961,23 @@ Todas las historias tienen como usuario al **responsable de logística**. Cada h
 
 * Ejemplo: DJ a \$100.000 la hora por 5 horas → \$500.000 en el costo total.
 
-# **Correcciones del Sprint 3 (no son historias nuevas)**
+# **Correcciones y defectos (no son historias nuevas)**
 
-Son ajustes sobre historias ya finalizadas, para cumplir los criterios nuevos de la versión 2.4. La historia sigue finalizada; la corrección es una tarjeta aparte en el Sprint 3\.
+Son ajustes sobre historias ya finalizadas, para cumplir los criterios nuevos de la versión 2.4. La historia sigue finalizada; la corrección es una tarjeta aparte en el Sprint 3\. COR-03 y COR-06 las desarrolló Javier. Los defectos (DEF) salen del QA del Sprint 4: DEF-01 se corrigió en ese sprint y DEF-02 entra al Sprint 5\.
 
 | ID | Corrección | Historia | Desarrolla | Horas | QA |
 | :---- | :---- | :---- | :---- | :---- | :---- |
 | **COR-01** | Validar fecha y duración del evento | HU-01 | Jhon | 1,5 | 0,5 |
 | **COR-02** | Limitar a 3 eventos por fecha | HU-01 | Jhon | 2 | 0,5 |
-| **COR-03** | Bebidas individuales solo en unidades enteras | HU-03 y HU-43 | Jhon | 1 | 0,5 |
+| **COR-03** | Bebidas individuales solo en unidades enteras | HU-03 y HU-43 | Javier | 1 | 0,5 |
 | **COR-04** | Topes de cantidad en inventario y adquisiciones | HU-08 y HU-11 | Javier | 2 | 0,5 |
 | **COR-05** | Tipos de elemento por categoría | HU-09 | Javier | 4 | 1 |
-| **COR-06** | Validar cantidad y horas de los servicios | HU-05 | Jhon | 3 | 1 |
+| **COR-06** | Validar cantidad y horas de los servicios | HU-05 | Javier | 3 | 1 |
 | **COR-07** | Cargar datos de prueba en el entorno de la demo | HU-04 | Javier | 1 | 0,5 |
 | **COR-08** | Restringir el alquiler a mobiliario y vajilla | HU-12 | Javier | 2,5 | 0,5 |
 | **COR-09** | Renombrar "baja" por "retiro" | HU-10 | Javier | 0,5 | 0,5 |
+| **DEF-01** | Error al actualizar un cóctel (corregido en el Sprint 4; real 0:15\) | HU-44 y HU-45 | Jhon | — | — |
+| **DEF-02** | El mesero marcado "no puede" queda bloqueado también en los días siguientes (crítico; Sprint 5\) | HU-29 | Javier | 3 | 1 |
 
 # **Historias eliminadas**
 
