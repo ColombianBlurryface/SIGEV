@@ -49,4 +49,15 @@ export const eventosService = {
       body: { productos: [], servicios_adicionales: [], ...evento },
     })
   },
+
+  actualizar(id: number, evento: NuevoEvento) {
+    return apiRequest<CrearEventoResponse>(`/eventos/${id}`, {
+      method: 'PUT',
+      body: { productos: [], servicios_adicionales: [], ...evento },
+    })
+  },
+
+  editar(id: number, evento: NuevoEvento) {
+    return this.actualizar(id, evento)
+  },
 }

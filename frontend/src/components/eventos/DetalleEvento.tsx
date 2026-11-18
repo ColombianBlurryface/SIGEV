@@ -5,10 +5,12 @@
  * y las de coctelería se muestran en secciones separadas, cada una con su costo (HU-13).
  */
 import { describirHorario } from '@/lib/horario'
-import { ChefHat, RotateCw, Users } from 'lucide-react'
+import { ChefHat, Pencil, RotateCw, Users } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AsignacionMeseros, type MensajeAsignacion } from '@/components/eventos/AsignacionMeseros'
@@ -180,13 +182,22 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
 
   return (
     <Card aria-label="Detalle del evento" aria-live="polite" className="flex flex-col gap-5 p-6">
-      <div className="flex flex-col gap-2.5">
-        <div className="flex items-center gap-2">
-          <EstadoBadge estado={evento.estado} />
-          {evento.es_modalidad_buffet && <BuffetBadge className="rounded-full px-2.5 py-1 text-[12.5px]" />}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2">
+            <EstadoBadge estado={evento.estado} />
+            {evento.es_modalidad_buffet && <BuffetBadge className="rounded-full px-2.5 py-1 text-[12.5px]" />}
+          </div>
+          <h2 className="font-display text-2xl leading-tight font-bold break-words">{evento.nombre_evento}</h2>
+          <span className="text-sm text-subtle">{capitalizar(evento.tipo_evento)}</span>
         </div>
-        <h2 className="font-display text-2xl leading-tight font-bold break-words">{evento.nombre_evento}</h2>
-        <span className="text-sm text-subtle">{capitalizar(evento.tipo_evento)}</span>
+        <Link
+          to={`/eventos/${evento.id}/editar`}
+          className={buttonVariants({ variant: 'secondary', size: 'sm', className: 'shrink-0 gap-1.5' })}
+        >
+          <Pencil aria-hidden="true" className="size-3.5" />
+          Editar evento
+        </Link>
       </div>
 
       <dl className="grid grid-cols-2 gap-3">

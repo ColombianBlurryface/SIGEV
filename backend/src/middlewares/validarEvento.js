@@ -74,7 +74,7 @@ const validarCreacionEvento = (req, res, next) => {
   }
 
   if (hayValor(observaciones_generales) &&
-      (typeof observaciones_generales !== 'string' || observaciones_generales.length > LIMITES.observacionesMax)) {
+    (typeof observaciones_generales !== 'string' || observaciones_generales.length > LIMITES.observacionesMax)) {
     return rechazar(res, `Las observaciones deben ser texto de máximo ${formatearCantidad(LIMITES.observacionesMax)} caracteres.`);
   }
 
@@ -187,4 +187,12 @@ const validarCreacionEvento = (req, res, next) => {
   next();
 };
 
-module.exports = { validarCreacionEvento };
+const validarEdicionEvento = (req, res, next) => {
+  const id = Number(req.params?.id);
+  if (!Number.isInteger(id) || id < 1 || id > 2147483647) {
+    return rechazar(res, 'El identificador del evento no es válido.');
+  }
+  return validarCreacionEvento(req, res, next);
+};
+
+module.exports = { validarCreacionEvento, validarEdicionEvento };

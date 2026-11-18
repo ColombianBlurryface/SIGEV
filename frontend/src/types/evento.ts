@@ -68,6 +68,7 @@ export type ClasificacionProducto = 'alimento' | 'bebida_general' | 'bar_coctele
 
 export interface ProductoCalculado {
   id: number
+  producto_id?: number
   nombre: string
   clasificacion: ClasificacionProducto
   porcion_por_persona: string
