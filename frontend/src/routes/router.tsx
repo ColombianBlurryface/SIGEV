@@ -9,6 +9,7 @@ import { LoginPage } from '@/pages/auth/LoginPage'
 import { CatalogoPage } from '@/pages/catalogo/CatalogoPage'
 import { EventosPage } from '@/pages/eventos/EventosPage'
 import { NuevoEventoPage } from '@/pages/eventos/NuevoEventoPage'
+import { EditarEventoPage } from '@/pages/eventos/EditarEventoPage'
 import { InventarioPage } from '@/pages/inventario/InventarioPage'
 import { PersonalPage } from '@/pages/personal/PersonalPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/eventos', element: <EventosPage /> },
           { path: '/eventos/nuevo', element: <NuevoEventoPage /> },
+          { path: '/eventos/:id/editar', element: <EditarEventoPage /> },
           { path: '/inventario', element: <InventarioPage /> },
           { path: '/catalogo', element: <CatalogoPage /> },
           { path: '/personal', element: <PersonalPage /> },
