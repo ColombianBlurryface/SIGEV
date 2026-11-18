@@ -5,8 +5,8 @@
  * superar la duración del evento: no hay «DJ ilimitados» ni 300 horas de DJ en un evento de 3 horas.
  * Las horas van en horas completas o medias horas.
  *
- * COR-06: además, las horas de un servicio van de 1 a 5 (aunque el evento dure más) y cada tipo de servicio tiene un
- * tope de unidades por evento, sumando todas sus líneas: 3 DJs, no seis líneas de DJ.
+ * RN-18: cada servicio admite de 1 a 5 unidades y sus horas van desde 1 hora hasta la duración completa del evento (máximo 8 h).
+ * Además, cada tipo de servicio tiene un tope de unidades por evento, sumando todas sus líneas: 3 DJs, no seis líneas de DJ.
  */
 import { formatearNumero } from './formato'
 
@@ -14,7 +14,7 @@ export const UNIDADES_SERVICIO_MIN = 1
 export const UNIDADES_SERVICIO_MAX = 5
 
 export const HORAS_SERVICIO_MIN = 1
-export const HORAS_SERVICIO_MAX = 5
+export const HORAS_SERVICIO_MAX = 8
 
 // Tope de unidades de cada tipo en todo el evento (debe coincidir con backend/src/config/reglasEvento.js)
 export const MAXIMO_UNIDADES_POR_TIPO: Record<string, number> = {
@@ -26,9 +26,9 @@ export const MAXIMO_UNIDADES_POR_TIPO: Record<string, number> = {
   otro: 5,
 }
 
-/** Horas máximas de un servicio: 5, o menos si el evento dura menos. */
+/** Horas máximas de un servicio: la duración del evento (de 1 a 8 h). */
 export const maximoHoras = (duracionHoras: number) =>
-  Number.isFinite(duracionHoras) ? Math.min(HORAS_SERVICIO_MAX, duracionHoras) : HORAS_SERVICIO_MAX
+  Number.isFinite(duracionHoras) ? duracionHoras : HORAS_SERVICIO_MAX
 
 /** Unidades que todavía se pueden agregar de un tipo (según lo ya agregado al evento). */
 export function unidadesDisponibles(tipo: string, servicios: { tipo: string; cantidad: number }[]): number {
@@ -92,11 +92,11 @@ export function errorHoras(
   if (num === null || num <= 0) {
     return 'Las horas deben ser un número mayor a 0, en horas completas o medias horas.'
   }
+  if (num < HORAS_SERVICIO_MIN) {
+    return `Las horas de un servicio deben ser de al menos ${HORAS_SERVICIO_MIN} hora.`
+  }
   if (Number.isFinite(duracionHoras) && num > duracionHoras) {
     return `Las horas no pueden superar la duración del evento (${formatearNumero(duracionHoras)} h).`
-  }
-  if (num < HORAS_SERVICIO_MIN || num > HORAS_SERVICIO_MAX) {
-    return `Las horas de un servicio van de ${HORAS_SERVICIO_MIN} a ${HORAS_SERVICIO_MAX}.`
   }
   return undefined
 }

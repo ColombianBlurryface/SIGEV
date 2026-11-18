@@ -209,7 +209,7 @@ export function PestanaServicios({ servicios, duracionHoras, onAgregar, onQuitar
                 label="Horas de servicio"
                 hint={
                   Number.isFinite(duracionHoras)
-                    ? `De ${HORAS_SERVICIO_MIN} a ${formatearNumero(maximoHoras(duracionHoras))} h${duracionHoras < 5 ? ': duración del evento' : ''}`
+                    ? `De ${HORAS_SERVICIO_MIN} a ${formatearNumero(maximoHoras(duracionHoras))} h (duración del evento)`
                     : 'Indica primero la duración del evento'
                 }
                 error={errorDeHoras}

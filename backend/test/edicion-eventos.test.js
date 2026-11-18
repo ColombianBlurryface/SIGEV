@@ -188,6 +188,56 @@ test('HU-50 / RN-18: las horas de servicios adicionales no pueden superar la nue
   );
   assert.equal(resExacto.nextLlamado, true);
 
+  // Evento con duración máxima de 8 horas: un servicio de 6 u 8 horas es permitido (hasta la duración total)
+  const res8Horas = simularEdicion(
+    { id: '1' },
+    payloadValido({
+      duracion_horas: 8,
+      servicios_adicionales: [
+        { tipo: 'dj', descripcion: 'DJ', tipo_cobro: 'por_hora', horas: 8, valor_unitario: 50000, cantidad: 1 }
+      ]
+    })
+  );
+  assert.equal(res8Horas.nextLlamado, true);
+
+  const res6Horas = simularEdicion(
+    { id: '1' },
+    payloadValido({
+      duracion_horas: 8,
+      servicios_adicionales: [
+        { tipo: 'musica_en_vivo', descripcion: 'Banda en vivo', tipo_cobro: 'por_hora', horas: 6, valor_unitario: 120000, cantidad: 1 }
+      ]
+    })
+  );
+  assert.equal(res6Horas.nextLlamado, true);
+
+  // Evento de 8 horas con servicio de 8.5 horas -> rechazado
+  const res8yMedia = simularEdicion(
+    { id: '1' },
+    payloadValido({
+      duracion_horas: 8,
+      servicios_adicionales: [
+        { tipo: 'dj', descripcion: 'DJ', tipo_cobro: 'por_hora', horas: 8.5, valor_unitario: 50000, cantidad: 1 }
+      ]
+    })
+  );
+  assert.equal(res8yMedia.nextLlamado, false);
+  assert.equal(res8yMedia.status, 400);
+
+  // Servicio con menos del mínimo permitido (1 hora), ej. 0.5 horas -> rechazado
+  const resMenorMinimo = simularEdicion(
+    { id: '1' },
+    payloadValido({
+      duracion_horas: 8,
+      servicios_adicionales: [
+        { tipo: 'dj', descripcion: 'DJ', tipo_cobro: 'por_hora', horas: 0.5, valor_unitario: 50000, cantidad: 1 }
+      ]
+    })
+  );
+  assert.equal(resMenorMinimo.nextLlamado, false);
+  assert.equal(resMenorMinimo.status, 400);
+  assert.match(resMenorMinimo.respuesta.detalle, /al menos 1 hora/);
+
   // Servicios de tarifa fija (por_servicio) no tienen horas y no se ven limitados por la duración
   const resFijo = simularEdicion(
     { id: '1' },
