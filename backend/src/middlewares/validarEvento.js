@@ -152,19 +152,18 @@ const validarCreacionEvento = (req, res, next) => {
           if (typeof horas !== 'number' || !Number.isFinite(horas) || horas <= 0 || !Number.isInteger(horas * 2)) {
             return rechazar(res, `Las horas del servicio «${etiqueta}» deben ser un número mayor a 0, en horas completas o medias horas.`, 'Regla de negocio no cumplida (RN-18)');
           }
+          if (horas < HORAS_SERVICIO_MIN) {
+            return rechazar(
+              res,
+              `Las horas del servicio «${etiqueta}» deben ser de al menos ${HORAS_SERVICIO_MIN} hora; se pidieron ${horas}.`,
+              'Regla de negocio no cumplida (RN-18)'
+            );
+          }
           if (horas > duracion) {
             return rechazar(
               res,
               `El servicio «${etiqueta}» no puede durar más que el evento: el evento dura ${duracion} ${duracion === 1 ? 'hora' : 'horas'} y se pidieron ${horas}.`,
               'Regla de negocio no cumplida (RN-18)'
-            );
-          }
-          // COR-06: de 1 a 5 horas por servicio, aunque el evento dure más
-          if (horas < HORAS_SERVICIO_MIN || horas > HORAS_SERVICIO_MAX) {
-            return rechazar(
-              res,
-              `Las horas del servicio «${etiqueta}» deben estar entre ${HORAS_SERVICIO_MIN} y ${HORAS_SERVICIO_MAX}; se pidieron ${horas}.`,
-              'Regla de negocio no cumplida (COR-06)'
             );
           }
         }
