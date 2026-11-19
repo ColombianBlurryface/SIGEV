@@ -240,7 +240,7 @@ export function DetalleEvento({ evento, onCambio }: { evento: EventoListado; onC
       <div className="flex flex-col gap-2.5 rounded-[10px] bg-background p-3.5">
         <div className="flex items-center justify-between gap-2">
           <label htmlFor="cambiar-estado-evento" className="text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase">
-            Estado del evento (HU-51)
+            Estado del evento
           </label>
           {guardandoEstado && (
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -264,12 +264,12 @@ export function DetalleEvento({ evento, onCambio }: { evento: EventoListado; onC
 
         {estadoLocal === 'realizado' && (
           <p className="text-[12px] text-muted-foreground">
-            Un evento Realizado ya no puede cambiar a ningún otro estado (RF-58).
+            Un evento Realizado ya no puede cambiar a ningún otro estado.
           </p>
         )}
         {estadoLocal === 'cancelado' && (
           <p className="text-[12px] text-muted-foreground">
-            Un evento Cancelado puede volver a Planificación (RF-58).
+            Un evento Cancelado puede volver a Planificación.
           </p>
         )}
 
