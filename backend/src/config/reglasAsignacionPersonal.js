@@ -15,7 +15,7 @@
 // Estado de cada asignación (HU-29 · RF-36). Los códigos de la historia (PENDING, CONFIRMED, UNAVAILABLE) también se entienden.
 const ESTADOS_ASIGNACION = ['por_confirmar', 'confirmado', 'no_puede'];
 const ESTADO_POR_DEFECTO = 'por_confirmar';
-const ESTADO_NO_CUENTA = 'no_puede';   // un mesero que «no puede» no cuenta para el estándar ni bloquea su horario
+const ESTADO_NO_CUENTA = 'no_puede';   // un mesero que «no puede» no cuenta para el estándar y queda no disponible ESE día (RN-21)
 const ALIAS_ESTADO = {
   por_confirmar: 'por_confirmar', 'por confirmar': 'por_confirmar', pending: 'por_confirmar',
   confirmado: 'confirmado', confirmed: 'confirmado',
