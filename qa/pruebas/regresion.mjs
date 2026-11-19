@@ -2103,15 +2103,50 @@ await t('HU-29: sincronizar la lista conserva el estado de los que se quedan, ag
   igual(de(a.id), 'confirmado'); igual(de(b.id), 'no_puede'); igual(de(c.id), 'por_confirmar')
   e = (await asignar(ev.id, [a.id, c.id])).cuerpo.meseros_asignados; igual(e.length, 2, 'los que salen se quitan:'); cierto(!e.some((m) => m.id === b.id), 'siguió b')
 })
-await t('HU-29: «no puede» libera un lugar del tope (un sexto entra) y no bloquea el horario en otro evento; volver a contar con el cupo lleno da 400 y con cruce da 409', async () => {
+await t('HU-29: «no puede» libera un lugar del tope (un sexto entra); volver a contar con el cupo lleno da 400', async () => {
   const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(6, 'Cupo Estado'); await asignar(ev.id, ms.slice(0, 5).map((m) => m.id))
   await cambiarEstado(ev.id, ms[0].id, { estado: 'no_puede' })
   igual((await asignar(ev.id, ms.map((m) => m.id))).estado, 200, 'un sexto con uno que no puede:')
   const lleno = await cambiarEstado(ev.id, ms[0].id, { estado: 'confirmado' }); igual(lleno.estado, 400, 'cupo lleno:'); cierto(/no puede volver a contar/.test(lleno.cuerpo.detalle), lleno.cuerpo.detalle)
-  const dia = fechaLibre(); const [x] = await crearMeseros(1, 'Cruce Estado'); const uno = await eventoA('Uno29', dia, '18:00'), dos = await eventoA('Dos29', dia, '19:00')
-  await asignar(uno.id, [x.id]); await cambiarEstado(uno.id, x.id, { estado: 'no_puede' })
-  igual((await asignar(dos.id, [x.id])).estado, 200, 'otro evento que se cruza:')
-  const cruce = await cambiarEstado(uno.id, x.id, { estado: 'por_confirmar' }); igual(cruce.estado, 409, 'volver a contar con cruce:')
+})
+
+// DEF-02 · RN-21: «no puede» deshabilita al mesero para los eventos de ESA fecha; en las demás fechas sigue disponible
+const fechaSiguiente = (d) => new Date(Date.parse(d) + 86400000).toISOString().slice(0, 10)
+// Dos eventos en días seguidos (si el día siguiente ya está lleno, se prueba con otra fecha)
+const eventosEnDiasSeguidos = async (nombre) => {
+  for (let i = 0; i < 12; i++) {
+    const d = fechaLibre(); const uno = await eventoA(`${nombre}Uno`, d, '18:00'); const dos = uno && (await eventoA(`${nombre}Dos`, fechaSiguiente(d), '18:00'))
+    if (uno && dos) return { d, uno, dos }
+  }
+  throw new Error('no se pudieron crear dos eventos en días seguidos')
+}
+await t('HU-29 (RN-21): «no puede» deja al mesero no disponible para los otros eventos de esa fecha (cruce o no) y disponible en los demás días; en su evento sigue «no puede»', async () => {
+  const { d, uno, dos } = await eventosEnDiasSeguidos('Dia')
+  const sinCruce = await eventoA('Manana', d, '08:00'), conCruce = await eventoA('Cruza', d, '19:00'), lejano = await eventoA('Lejano', fechaLibre(), '18:00')
+  cierto(sinCruce && conCruce && lejano, 'no se pudieron crear los eventos de la prueba')
+  const [x] = await crearMeseros(1, 'Regla Dia'); await asignar(uno.id, [x.id]); await cambiarEstado(uno.id, x.id, { estado: 'no_puede' })
+  for (const [nombre, e] of [['misma fecha sin cruce de horario', sinCruce], ['misma fecha con cruce de horario', conCruce]]) {
+    const r = await asignar(e.id, [x.id]); igual(r.estado, 409, `${nombre}:`); cierto(/no puede/i.test(r.cuerpo.detalle) && /ese día/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+    igual(r.cuerpo.conflictos[0].motivo, 'no_puede', `${nombre}, motivo:`)
+    const disp = (await api(`/eventos/${e.id}/meseros/disponibles`)).cuerpo.meseros.find((m) => m.id === x.id)
+    igual(disp.ocupado_en.length, 1, `${nombre}, ocupado_en:`); igual(disp.ocupado_en[0].motivo, 'no_puede')
+    igual((await estadosDe(e.id))[x.id], undefined, `${nombre}: no debe quedar asignado:`)
+  }
+  igual((await asignar(dos.id, [x.id])).estado, 200, 'día siguiente:'); igual((await asignar(lejano.id, [x.id])).estado, 200, 'otra fecha:')
+  const dispDos = (await api(`/eventos/${dos.id}/meseros/disponibles`)).cuerpo.meseros.find((m) => m.id === x.id); igual(dispDos.ocupado_en.length, 0, 'día siguiente, ocupado_en:')
+  igual((await estadosDe(uno.id))[x.id], 'no_puede', 'en su evento sigue «no puede»:')
+})
+await t('HU-29 (RN-21): las asignaciones que ya existían conservan su estado y se pueden seguir sincronizando; volver a contar con otro «no puede» ese día da 409', async () => {
+  const { d, uno } = await eventosEnDiasSeguidos('Previo'); const manana = await eventoA('Previo Manana', d, '08:00'); cierto(manana, 'no se pudo crear el evento de la mañana')
+  const [x, y] = await crearMeseros(2, 'Previo Dia'); await asignar(uno.id, [x.id]); await asignar(manana.id, [x.id]); await cambiarEstado(manana.id, x.id, { estado: 'confirmado' })
+  igual((await cambiarEstado(uno.id, x.id, { estado: 'no_puede' })).estado, 200, 'marcar «no puede» con otra asignación ese día:')
+  igual((await estadosDe(manana.id))[x.id], 'confirmado', 'la asignación de la mañana cambió de estado:')
+  igual((await asignar(manana.id, [x.id, y.id])).estado, 200, 'sincronizar la mañana con él ya asignado:'); igual((await estadosDe(manana.id))[x.id], 'confirmado', 'conserva el estado tras sincronizar:')
+  const disp = (await api(`/eventos/${manana.id}/meseros/disponibles`)).cuerpo.meseros.find((m) => m.id === x.id); igual(disp.asignado, true); igual(disp.ocupado_en.length, 0, 'el ya asignado no se marca ocupado:')
+  igual((await cambiarEstado(uno.id, x.id, { estado: 'por_confirmar' })).estado, 200, 'volver a contar si en el otro evento no está «no puede»:')
+  await cambiarEstado(uno.id, x.id, { estado: 'no_puede' }); await cambiarEstado(manana.id, x.id, { estado: 'no_puede' })
+  const bloqueo = await cambiarEstado(uno.id, x.id, { estado: 'por_confirmar' }); igual(bloqueo.estado, 409, 'volver a contar con otro «no puede» ese día:'); cierto(/no puede/i.test(bloqueo.cuerpo.detalle), bloqueo.cuerpo.detalle)
+  igual((await estadosDe(uno.id))[x.id], 'no_puede', 'no cambió:')
 })
 await t('Pantalla HU-29: cada mesero muestra su estado y se cambia desde el selector; «no puede» baja el «X de Y» y avisa el déficit', async () => {
   const ev = (await eventoMeseros(100)).cuerpo.evento; const ms = await crearMeseros(5, 'Pantalla Estado'); await asignar(ev.id, ms.map((m) => m.id)); await abrirDetalleEvento(ev.id)
@@ -2131,6 +2166,20 @@ await t('Pantalla HU-29: el editor de asignación no cuenta a quien «no puede»
   cierto((await lista.locator('label', { hasText: ms[0].nombre_completo }).innerText()).includes('No puede'), 'no se avisa que «no puede»')
   await sexto.locator('input[type=checkbox]').check(); await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click(); await page.waitForSelector('text=Asignación guardada: 5 de 5 meseros')
   igual((await estadosDe(ev.id))[ms[0].id], 'no_puede', 'se perdió el estado al guardar:')
+})
+await t('Pantalla HU-29 (RN-21): el mesero «no puede» de otro evento de esa fecha sale bloqueado con «No disponible ese día»; en un evento de otro día se puede marcar', async () => {
+  const dia = fechaLibre(); const [x] = await crearMeseros(1, 'Dia Estado')
+  const origen = await eventoA('Origen', dia, '18:00'), mismo = await eventoA('MismoDia', dia, '08:00'), otro = await eventoA('OtroDia', fechaLibre(), '18:00')
+  await asignar(origen.id, [x.id]); await cambiarEstado(origen.id, x.id, { estado: 'no_puede' })
+  const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' })
+  await abrirDetalleEvento(mismo.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', 'Dia Estado'); await lista.waitFor()
+  const fila = lista.locator('label', { hasText: x.nombre_completo }); await fila.waitFor()
+  igual(await fila.locator('input[type=checkbox]').isDisabled(), true, 'el mesero «no puede» de ese día no está bloqueado:')
+  cierto((await fila.innerText()).includes(`No disponible ese día: marcado «No puede» en «Origen ${LETRAS}»`), 'sin el aviso «No disponible ese día…»: ' + (await fila.innerText()))
+  await abrirDetalleEvento(otro.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', 'Dia Estado'); await lista.waitFor()
+  const filaOtro = lista.locator('label', { hasText: x.nombre_completo }); await filaOtro.waitFor()
+  igual(await filaOtro.locator('input[type=checkbox]').isDisabled(), false, 'en otro día el mesero está bloqueado:')
+  await filaOtro.locator('input[type=checkbox]').check(); await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click(); await page.waitForSelector('text=Asignación guardada: 1 de 5 meseros')
 })
 
 // ============ HU-30 · Consultar lista de meseros programados (RF-37 / RF-38) ============

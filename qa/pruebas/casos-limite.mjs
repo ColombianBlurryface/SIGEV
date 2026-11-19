@@ -561,15 +561,44 @@ await caso('Quien «no puede» libera un lugar: con 5 requeridos y uno «no pued
   const vuelve = await estadoDe(e.id, ms[0].id, { estado: 'confirmado' })
   return { s: seis.s === 200 && seis.c?.total_utiles === 5 && vuelve.s === 400 ? 400 : `${seis.s}/${vuelve.s}`, nota: `seis ${seis.s}, vuelve ${vuelve.s}` }
 })
-await caso('Un mesero «no puede» en un evento no bloquea ese horario en otro evento que se cruza; al volver a contar sí da 409', [409], async () => {
-  const dia = (await evH('18:00')).c.evento.fecha_evento.slice(0, 10)
-  const e1 = (await evH('18:00', { fecha_evento: dia, duracion_horas: 4 })).c, e2 = (await evH('19:00', { fecha_evento: dia, duracion_horas: 3 })).c
-  if (!e1.evento || !e2.evento) return { s: 'SIN EVENTOS', nota: `${e1.error} / ${e2.error}` }
-  const [a] = await mesN(1)
-  await put(e1.evento.id, { personal_ids: [a.id] }); await estadoDe(e1.evento.id, a.id, { estado: 'no_puede' })
-  const libre = await put(e2.evento.id, { personal_ids: [a.id] })
-  const vuelve = await estadoDe(e1.evento.id, a.id, { estado: 'por_confirmar' })
-  return { s: libre.s === 200 && vuelve.s === 409 ? 409 : `${libre.s}/${vuelve.s}`, nota: `otro evento ${libre.s}, volver a contar ${vuelve.s}` }
+const diaSiguiente = (d) => new Date(Date.parse(d) + 86400000).toISOString().slice(0, 10)
+await caso('RN-21: un mesero «no puede» queda no disponible para los otros eventos de esa fecha, se crucen o no en horario: asignarlo da 409 y el aviso lo explica', [409], async () => {
+  const e1 = (await evH('18:00')).c.evento
+  if (!e1) return { s: 'SIN EVENTOS' }
+  const dia = e1.fecha_evento.slice(0, 10)
+  const sinCruce = (await evH('08:00', { fecha_evento: dia, duracion_horas: 4 })).c.evento, conCruce = (await evH('19:00', { fecha_evento: dia, duracion_horas: 3 })).c.evento
+  if (!sinCruce || !conCruce) return { s: 'SIN EVENTOS' }
+  const [a] = await mesN(1); await put(e1.id, { personal_ids: [a.id] }); await estadoDe(e1.id, a.id, { estado: 'no_puede' })
+  const r1 = await put(sinCruce.id, { personal_ids: [a.id] }), r2 = await put(conCruce.id, { personal_ids: [a.id] })
+  const explica = [r1, r2].every((r) => /no puede/i.test(r.c?.detalle ?? '') && /ese día/.test(r.c?.detalle ?? '') && r.c?.conflictos?.[0]?.motivo === 'no_puede')
+  const libre = (await call(`/eventos/${sinCruce.id}/meseros`)).c?.total_asignados === 0
+  return { s: r1.s === 409 && r2.s === 409 && explica && libre ? 409 : `${r1.s}/${r2.s}${explica ? '' : ' sin aviso claro'}${libre ? '' : ' quedó asignado'}`, nota: `sin cruce ${r1.s}, con cruce ${r2.s}` }
+})
+await caso('RN-21: en otras fechas (día siguiente y una fecha lejana) el mesero «no puede» de otro evento sigue disponible (200) y en su evento conserva «no puede»', [200], async () => {
+  const e1 = (await evH('18:00')).c.evento
+  if (!e1) return { s: 'SIN EVENTOS' }
+  const siguiente = (await evH('18:00', { fecha_evento: diaSiguiente(e1.fecha_evento.slice(0, 10)) })).c.evento, lejano = (await evH('18:00')).c.evento
+  if (!siguiente || !lejano) return { s: 'SIN EVENTOS' }
+  const [a] = await mesN(1); await put(e1.id, { personal_ids: [a.id] }); await estadoDe(e1.id, a.id, { estado: 'no_puede' })
+  const disp = (await call(`/eventos/${siguiente.id}/meseros/disponibles`)).c?.meseros?.find((x) => x.id === a.id)
+  const r1 = await put(siguiente.id, { personal_ids: [a.id] }), r2 = await put(lejano.id, { personal_ids: [a.id] })
+  const sigue = (await call(`/eventos/${e1.id}/meseros`)).c?.meseros_asignados?.find((x) => x.id === a.id)?.estado === 'no_puede'
+  return { s: r1.s === 200 && r2.s === 200 && disp?.ocupado_en?.length === 0 && sigue ? 200 : `${r1.s}/${r2.s}${sigue ? '' : ' perdió el no puede'}`, nota: `día siguiente ${r1.s}, fecha lejana ${r2.s}` }
+})
+await caso('RN-21: las asignaciones que ya existían conservan su estado (y se pueden seguir sincronizando); al volver a contar, otro «no puede» ese día da 409', [409], async () => {
+  const e1 = (await evH('18:00')).c.evento
+  if (!e1) return { s: 'SIN EVENTOS' }
+  const manana = (await evH('08:00', { fecha_evento: e1.fecha_evento.slice(0, 10), duracion_horas: 4 })).c.evento
+  if (!manana) return { s: 'SIN EVENTOS' }
+  const [a, b] = await mesN(2); await put(e1.id, { personal_ids: [a.id] }); await put(manana.id, { personal_ids: [a.id] }); await estadoDe(manana.id, a.id, { estado: 'confirmado' })
+  const marca = await estadoDe(e1.id, a.id, { estado: 'no_puede' })
+  const intacto = (await call(`/eventos/${manana.id}/meseros`)).c?.meseros_asignados?.find((x) => x.id === a.id)?.estado === 'confirmado'
+  const sync = await put(manana.id, { personal_ids: [a.id, b.id] })
+  const sigue = sync.c?.meseros_asignados?.find((x) => x.id === a.id)?.estado === 'confirmado'
+  const vuelve = await estadoDe(e1.id, a.id, { estado: 'por_confirmar' })
+  await estadoDe(e1.id, a.id, { estado: 'no_puede' }); await estadoDe(manana.id, a.id, { estado: 'no_puede' })
+  const bloqueado = await estadoDe(e1.id, a.id, { estado: 'por_confirmar' })
+  return { s: marca.s === 200 && intacto && sync.s === 200 && sigue && vuelve.s === 200 && bloqueado.s === 409 ? 409 : `${marca.s}/${intacto}/${sync.s}/${sigue}/${vuelve.s}/${bloqueado.s}`, nota: `marcar ${marca.s}, sincronizar ${sync.s}, volver a contar ${vuelve.s}, con otro «no puede» ${bloqueado.s}` }
 })
 await caso('Eliminar a un mesero (HU-27) lo saca del conteo del evento, tenga el estado que tenga', [0], async () => {
   const e = await evAsig(); const [a] = await mesN(1); await put(e.id, { personal_ids: [a.id] }); await estadoDe(e.id, a.id, { estado: 'confirmado' })

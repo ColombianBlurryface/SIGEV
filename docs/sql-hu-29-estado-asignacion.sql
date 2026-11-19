@@ -10,7 +10,7 @@
 -- =====================================================================================================
 
 -- Estado de cada mesero asignado a un evento (HU-29): por_confirmar (al asignar), confirmado o no_puede. Quien «no_puede»
--- no cuenta para el estándar de personal (HU-25) ni bloquea su horario en otro evento.
+-- no cuenta para el estándar de personal (HU-25) y queda no disponible para los demás eventos de esa fecha (RN-21).
 ALTER TABLE evento_personal ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'por_confirmar';
 ALTER TABLE evento_personal DROP CONSTRAINT IF EXISTS chk_evento_personal_estado;
 ALTER TABLE evento_personal ADD CONSTRAINT chk_evento_personal_estado CHECK (estado IN ('por_confirmar', 'confirmado', 'no_puede'));

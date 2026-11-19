@@ -5,6 +5,7 @@
  *
  * HU-29 (RF-36): cada mesero asignado tiene un estado (por confirmar, confirmado o no puede) que se cambia aquí mismo.
  * Quien «no puede» sigue en la lista pero no cuenta para el estándar: el «X de Y» y las alertas solo suman a los demás.
+ * Además queda no disponible para los demás eventos de esa fecha (en el selector sale «No disponible ese día»); en otras fechas sigue disponible.
  */
 import { LoaderCircle, Search, UserCheck, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -290,6 +291,9 @@ function EditorAsignacion({ eventoId, requeridos, inicial, onCancelar, onGuardad
           const sinCupo = !marcado && topeAlcanzado
           const noPuede = marcado && p.estado === 'no_puede'
           const bloqueado = ocupado || sinCupo
+          // Dos motivos para estar bloqueado: se cruza con otro evento, o marcó «No puede» en otro evento de esta misma fecha
+          const porCruce = p.ocupado_en.filter((o) => o.motivo !== 'no_puede')
+          const porNoPuede = p.ocupado_en.filter((o) => o.motivo === 'no_puede')
           return (
             <li key={p.id}>
               <label className={cn('flex items-center gap-3 rounded-[8px] px-2 py-2', bloqueado ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-muted')}>
@@ -304,9 +308,14 @@ function EditorAsignacion({ eventoId, requeridos, inicial, onCancelar, onGuardad
                   <span className="truncate text-[13.5px] font-semibold">{p.nombre_completo}</span>
                   <span className="truncate text-xs text-muted-foreground">{p.contacto}</span>
                   {noPuede && <span className="text-xs font-semibold text-warning-foreground">Marcado como «No puede»: no cuenta para el estándar</span>}
-                  {ocupado && (
+                  {ocupado && porNoPuede.length > 0 && (
                     <span className="text-xs font-semibold text-warning-foreground">
-                      Ocupado en {p.ocupado_en.map((o) => `«${o.nombre_evento}» (${o.horario})`).join(', ')}
+                      No disponible ese día: marcado «No puede» en {porNoPuede.map((o) => `«${o.nombre_evento}»`).join(', ')}
+                    </span>
+                  )}
+                  {ocupado && porCruce.length > 0 && (
+                    <span className="text-xs font-semibold text-warning-foreground">
+                      Ocupado en {porCruce.map((o) => `«${o.nombre_evento}» (${o.horario})`).join(', ')}
                     </span>
                   )}
                 </span>
