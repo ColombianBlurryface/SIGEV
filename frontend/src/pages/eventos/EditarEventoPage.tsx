@@ -24,6 +24,7 @@ import { ApiError } from '@/services/api'
 import { catalogoService } from '@/services/catalogoService'
 import { eventosService } from '@/services/eventosService'
 import type { ProductoCatalogo } from '@/types/catalogo'
+import type { EstadoEvento } from '@/types/evento'
 import { REQUERIMIENTOS_VACIOS, type RequerimientosEvento } from '@/types/registro'
 import { useEventos } from '@/hooks/useEventos'
 
@@ -64,6 +65,7 @@ export function EditarEventoPage() {
 
   const [paso, setPaso] = useState<Paso>(1)
   const [valores, setValores] = useState<ValoresEvento>(VALORES_VACIOS)
+  const [estado, setEstado] = useState<EstadoEvento>('planificacion')
   const [requerimientos, setRequerimientos] = useState<RequerimientosEvento>(REQUERIMIENTOS_VACIOS)
   const [intentoAvanzar, setIntentoAvanzar] = useState(false)
   const [enviando, setEnviando] = useState(false)
@@ -96,6 +98,7 @@ export function EditarEventoPage() {
           asistentes: String(detalle.asistentes),
           observaciones: detalle.observaciones_generales || '',
         })
+        setEstado(detalle.estado)
 
         // Reconstruir requerimientos desde los productos y servicios guardados
         const alimentos = detalle.productos_calculados
@@ -251,6 +254,7 @@ export function EditarEventoPage() {
         duracion_horas: Number(valores.duracion),
         asistentes: Number(valores.asistentes),
         observaciones_generales: valores.observaciones.trim() || undefined,
+        estado,
         productos: [
           ...requerimientos.alimentos.map((a) => ({
             producto_id: a.producto.id,
@@ -372,6 +376,9 @@ export function EditarEventoPage() {
           errores={errores}
           mostrarVacio={intentoAvanzar}
           avisoDuracion={avisoDuracion}
+          esEdicion={true}
+          estado={estado}
+          onEstadoChange={setEstado}
           onCambio={cambiarValor}
         />
       )}

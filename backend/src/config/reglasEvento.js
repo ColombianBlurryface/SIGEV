@@ -29,6 +29,56 @@ const MAXIMO_UNIDADES_POR_TIPO = {
   otro: 5
 };
 
+// Estados posibles de un evento (RF-58 · HU-51)
+const ESTADOS_EVENTO = ['planificacion', 'confirmado', 'realizado', 'cancelado'];
+
+const ETIQUETAS_ESTADO = {
+  planificacion: 'Planificación',
+  confirmado: 'Confirmado',
+  realizado: 'Realizado',
+  cancelado: 'Cancelado'
+};
+
+/**
+ * Normaliza cualquier texto de estado a su código canónico en minúsculas.
+ * Acepta 'planificacion', 'Planificación', 'confirmado', 'Confirmado', etc.
+ */
+const normalizarEstadoEvento = (valor) => {
+  if (typeof valor !== 'string') return null;
+  const limpio = valor.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (limpio === 'planificacion') return 'planificacion';
+  if (limpio === 'confirmado') return 'confirmado';
+  if (limpio === 'realizado') return 'realizado';
+  if (limpio === 'cancelado') return 'cancelado';
+  return null;
+};
+
+/**
+ * Valida la transición entre estados de un evento según las reglas de RF-58 (HU-51):
+ * - Un evento Cancelado puede volver a Planificación.
+ * - Un evento Realizado ya no puede cambiar a ningún otro estado.
+ */
+const validarTransicionEstado = (estadoActual, nuevoEstado) => {
+  if (estadoActual === nuevoEstado) {
+    return { valido: true };
+  }
+  if (estadoActual === 'realizado') {
+    return {
+      valido: false,
+      error: 'Regla de negocio no cumplida (RF-58)',
+      detalle: 'Un evento en estado Realizado ya no puede cambiar a ningún otro estado.'
+    };
+  }
+  if (estadoActual === 'cancelado' && nuevoEstado !== 'planificacion') {
+    return {
+      valido: false,
+      error: 'Regla de negocio no cumplida (RF-58)',
+      detalle: 'Un evento cancelado solo puede volver al estado de Planificación.'
+    };
+  }
+  return { valido: true };
+};
+
 const LIMITES = {
   anticipacionAnios: 5,        // un evento no se registra para más de 5 años adelante
   observacionesMax: 2000,      // caracteres
@@ -44,5 +94,6 @@ const LIMITES = {
 
 module.exports = {
   TIPOS_EVENTO, TIPOS_SERVICIO, ETIQUETA_SERVICIO, LIMITES,
-  HORAS_SERVICIO_MIN, HORAS_SERVICIO_MAX, MAXIMO_UNIDADES_POR_TIPO
+  HORAS_SERVICIO_MIN, HORAS_SERVICIO_MAX, MAXIMO_UNIDADES_POR_TIPO,
+  ESTADOS_EVENTO, ETIQUETAS_ESTADO, normalizarEstadoEvento, validarTransicionEstado
 };
