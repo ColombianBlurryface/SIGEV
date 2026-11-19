@@ -5,7 +5,7 @@
  * que revisa los datos básicos antes de llegar al controlador.
  */
 const { Router } = require('express');
-const { crearEvento, actualizarEvento, listarEventos, obtenerDetalleEvento } = require('../controllers/eventosController');
+const { crearEvento, actualizarEvento, listarEventos, obtenerDetalleEvento, cambiarEstadoEvento } = require('../controllers/eventosController');
 const { validarCreacionEvento, validarEdicionEvento } = require('../middlewares/validarEvento');
 const { calcularComprasPrevio } = require('../controllers/comprasController');
 const { calcularComprasCoctelesPrevio } = require('../controllers/comprasCoctelesController');
@@ -44,6 +44,10 @@ router.get('/:id/staff-deviations', obtenerDesviacionesPersonal);
 
 // GET /api/eventos/:id -> detalle de un evento con sus requerimientos calculados
 router.get('/:id', obtenerDetalleEvento);
+
+// PATCH /api/eventos/:id/estado -> cambia el estado del evento (HU-51 · RF-58)
+router.patch('/:id/estado', cambiarEstadoEvento);
+router.patch('/:id/status', cambiarEstadoEvento);
 
 // PUT /api/eventos/:id -> actualiza un evento con sus productos y servicios adicionales (HU-50)
 router.put('/:id', validarEdicionEvento, actualizarEvento);

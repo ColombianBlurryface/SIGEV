@@ -5,13 +5,14 @@
  * y las de coctelería se muestran en secciones separadas, cada una con su costo (HU-13).
  */
 import { describirHorario } from '@/lib/horario'
-import { ChefHat, Pencil, RotateCw, Users } from 'lucide-react'
-import { useState } from 'react'
+import { ChefHat, LoaderCircle, Pencil, RotateCw, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { Card } from '@/components/ui/card'
+import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AsignacionMeseros, type MensajeAsignacion } from '@/components/eventos/AsignacionMeseros'
 import { ComprasIngredientes } from '@/components/eventos/ComprasIngredientes'
@@ -28,6 +29,7 @@ import {
   type ConfigCategoria,
   type TipoBebida,
 } from '@/lib/categorias'
+import { ESTADOS_EVENTO } from '@/lib/estadosEvento'
 import { capitalizar, formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
 import {
   calcularCocineros,
@@ -39,7 +41,9 @@ import {
 } from '@/lib/reglasPersonal'
 import { describirHoras } from '@/lib/reglasServicios'
 import { cn } from '@/lib/utils'
-import type { EventoDetalle, EventoListado } from '@/types/evento'
+import { ApiError } from '@/services/api'
+import { eventosService } from '@/services/eventosService'
+import type { EstadoEvento, EventoDetalle, EventoListado } from '@/types/evento'
 import { AvisoAlquiler, OrigenBadge } from './AlquilerMobiliario'
 import { BuffetBadge, EstadoBadge } from './EstadoBadge'
 
@@ -166,11 +170,43 @@ function agruparRequerimientos(detalle: EventoDetalle) {
   }
 }
 
-export function DetalleEvento({ evento }: { evento: EventoListado }) {
+export function DetalleEvento({ evento, onCambio }: { evento: EventoListado; onCambio?: () => void }) {
   const { detalle, cargando, error, recargar } = useEventoDetalle(evento.id)
   const requerimientos = detalle ? agruparRequerimientos(detalle) : null
   // Mensaje de la asignación de meseros: se guarda aquí (y con el id del evento) porque el detalle se recarga al guardar
   const [mensajeAsignacion, setMensajeAsignacion] = useState<{ eventoId: number; mensaje: MensajeAsignacion } | null>(null)
+
+  // Estado del evento (HU-51 · RF-58)
+  const [estadoLocal, setEstadoLocal] = useState<EstadoEvento>(evento.estado)
+  const [guardandoEstado, setGuardandoEstado] = useState(false)
+  const [errorEstado, setErrorEstado] = useState<string | null>(null)
+  const [exitoEstado, setExitoEstado] = useState<string | null>(null)
+
+  useEffect(() => {
+    setEstadoLocal(evento.estado)
+    setErrorEstado(null)
+    setExitoEstado(null)
+  }, [evento.id, evento.estado])
+
+  async function manejarCambioEstado(nuevo: EstadoEvento) {
+    if (nuevo === estadoLocal) return
+    setErrorEstado(null)
+    setExitoEstado(null)
+    setGuardandoEstado(true)
+    try {
+      await eventosService.cambiarEstado(evento.id, nuevo)
+      setEstadoLocal(nuevo)
+      setExitoEstado(`Estado actualizado a «${ESTADOS_EVENTO[nuevo]?.etiqueta ?? nuevo}».`)
+      recargar()
+      onCambio?.()
+    } catch (err) {
+      const mensaje = err instanceof ApiError ? err.message : 'Error al cambiar el estado del evento.'
+      setErrorEstado(mensaje)
+      setEstadoLocal(evento.estado)
+    } finally {
+      setGuardandoEstado(false)
+    }
+  }
 
   const datos = [
     { etiqueta: 'Fecha', valor: formatearFecha(evento.fecha_evento) },
@@ -185,7 +221,7 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-2.5">
           <div className="flex items-center gap-2">
-            <EstadoBadge estado={evento.estado} />
+            <EstadoBadge estado={estadoLocal} />
             {evento.es_modalidad_buffet && <BuffetBadge className="rounded-full px-2.5 py-1 text-[12.5px]" />}
           </div>
           <h2 className="font-display text-2xl leading-tight font-bold break-words">{evento.nombre_evento}</h2>
@@ -198,6 +234,55 @@ export function DetalleEvento({ evento }: { evento: EventoListado }) {
           <Pencil aria-hidden="true" className="size-3.5" />
           Editar evento
         </Link>
+      </div>
+
+      {/* HU-51 · Cambiar el estado del evento (RF-58) */}
+      <div className="flex flex-col gap-2.5 rounded-[10px] bg-background p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="cambiar-estado-evento" className="text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase">
+            Estado del evento
+          </label>
+          {guardandoEstado && (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+              Guardando…
+            </span>
+          )}
+        </div>
+        <Select
+          id="cambiar-estado-evento"
+          value={estadoLocal}
+          disabled={guardandoEstado}
+          onChange={(e) => manejarCambioEstado(e.target.value as EstadoEvento)}
+          className="h-10 text-[13.5px]"
+        >
+          <option value="planificacion">Planificación</option>
+          <option value="confirmado">Confirmado</option>
+          <option value="realizado">Realizado</option>
+          <option value="cancelado">Cancelado</option>
+        </Select>
+
+        {estadoLocal === 'realizado' && (
+          <p className="text-[12px] text-muted-foreground">
+            Un evento Realizado ya no puede cambiar a ningún otro estado.
+          </p>
+        )}
+        {estadoLocal === 'cancelado' && (
+          <p className="text-[12px] text-muted-foreground">
+            Un evento Cancelado puede volver a Planificación.
+          </p>
+        )}
+
+        {errorEstado && (
+          <Alert variant="error" className="py-2 text-xs">
+            {errorEstado}
+          </Alert>
+        )}
+        {exitoEstado && (
+          <Alert variant="success" className="py-2 text-xs">
+            {exitoEstado}
+          </Alert>
+        )}
       </div>
 
       <dl className="grid grid-cols-2 gap-3">

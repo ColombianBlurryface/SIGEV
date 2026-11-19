@@ -49,6 +49,7 @@ export interface NuevoEvento {
   hora_inicio?: string
   asistentes: number
   observaciones_generales?: string
+  estado?: EstadoEvento
   productos?: ProductoEventoPayload[]
   servicios_adicionales?: RequerimientoAdicionalPayload[]
 }

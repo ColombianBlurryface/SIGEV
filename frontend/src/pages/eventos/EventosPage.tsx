@@ -127,7 +127,7 @@ export function EventosPage() {
           </div>
           {seleccionado && (
             <div className="xl:sticky xl:top-0">
-              <DetalleEvento evento={seleccionado} />
+              <DetalleEvento evento={seleccionado} onCambio={recargar} />
             </div>
           )}
         </div>

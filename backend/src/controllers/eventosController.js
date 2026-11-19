@@ -11,7 +11,7 @@
 const pool = require('../config/db');
 const { esUnidadesPorPersonaValida } = require('../config/reglasBebidas');
 const { MAXIMO_POR_CATEGORIA, formatearCantidad } = require('../config/limitesInventario');
-const { LIMITES } = require('../config/reglasEvento');
+const { LIMITES, normalizarEstadoEvento, validarTransicionEstado } = require('../config/reglasEvento');
 const {
   ASISTENTES_POR_MESERO, calcularMeseros,
   ASISTENTES_POR_GRUPO_COCINA, COCINEROS_POR_GRUPO, calcularCocineros
@@ -402,7 +402,29 @@ const actualizarEvento = async (req, res) => {
       });
     }
 
-    // 1. Actualizar el evento base (RF-57, RN-01, RN-14)
+    // 1. Actualizar el evento base (RF-57, RN-01, RN-14, RF-58)
+    const estadoEnviado = req.body?.estado !== undefined ? req.body.estado : req.body?.status;
+    let nuevoEstado = resExistente.rows[0].estado;
+    if (estadoEnviado !== undefined && estadoEnviado !== null && (typeof estadoEnviado !== 'string' || estadoEnviado.trim() !== '')) {
+      const normalizado = normalizarEstadoEvento(estadoEnviado);
+      if (!normalizado) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: 'Datos inválidos',
+          detalle: 'El estado debe ser uno de: Planificación, Confirmado, Realizado o Cancelado.'
+        });
+      }
+      const transicion = validarTransicionEstado(resExistente.rows[0].estado, normalizado);
+      if (!transicion.valido) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: transicion.error,
+          detalle: transicion.detalle
+        });
+      }
+      nuevoEstado = normalizado;
+    }
+
     const queryEvento = `
       UPDATE eventos
       SET nombre_evento = $1,
@@ -411,8 +433,9 @@ const actualizarEvento = async (req, res) => {
           duracion_horas = $4,
           asistentes = $5,
           observaciones_generales = $6,
-          hora_inicio = $7
-      WHERE id = $8
+          hora_inicio = $7,
+          estado = $8
+      WHERE id = $9
       RETURNING *;
     `;
     const resEvento = await client.query(queryEvento, [
@@ -423,6 +446,7 @@ const actualizarEvento = async (req, res) => {
       asistentes,
       (typeof observaciones_generales === 'string' && observaciones_generales.trim()) || null,
       hora_inicio || null,
+      nuevoEstado,
       id
     ]);
     const eventoActualizado = resEvento.rows[0];
@@ -635,9 +659,106 @@ const obtenerDetalleEvento = async (req, res) => {
   }
 };
 
+/**
+ * PATCH /api/eventos/:id/estado
+ * Cambia el estado de un evento (HU-51 · RF-58).
+ * Estados: Planificación, Confirmado, Realizado y Cancelado.
+ * Reglas de transición:
+ * - Un evento Cancelado puede volver a Planificación.
+ * - Un evento Realizado ya no puede cambiar a ningún otro estado.
+ */
+const cambiarEstadoEvento = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1 || id > 2147483647) {
+    return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del evento no es válido.' });
+  }
+
+  const bruto = req.body?.estado !== undefined ? req.body.estado : req.body?.status;
+  if (bruto === undefined || bruto === null || (typeof bruto === 'string' && bruto.trim() === '')) {
+    return res.status(400).json({
+      error: 'Datos inválidos',
+      detalle: 'El estado es obligatorio: Planificación, Confirmado, Realizado o Cancelado.'
+    });
+  }
+
+  const nuevoEstado = normalizarEstadoEvento(bruto);
+  if (!nuevoEstado) {
+    return res.status(400).json({
+      error: 'Datos inválidos',
+      detalle: 'El estado debe ser uno de: Planificación, Confirmado, Realizado o Cancelado.'
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Bloqueo de fila para evitar condiciones de carrera
+    const resEvento = await client.query('SELECT * FROM eventos WHERE id = $1 FOR UPDATE', [id]);
+    if (resEvento.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    const eventoActual = resEvento.rows[0];
+    const transicion = validarTransicionEstado(eventoActual.estado, nuevoEstado);
+    if (!transicion.valido) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: transicion.error,
+        detalle: transicion.detalle
+      });
+    }
+
+    // Si estaba cancelado y pasa a un estado activo, verificar tope de 3 eventos por fecha (RN-13 / RF-51)
+    if (eventoActual.estado === 'cancelado' && nuevoEstado !== 'cancelado') {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`eventos-fecha-${eventoActual.fecha_evento}`]);
+      const resConteoFecha = await client.query(
+        `SELECT COUNT(*)::int AS total
+         FROM eventos
+         WHERE fecha_evento = $1 AND estado <> 'cancelado' AND id <> $2`,
+        [eventoActual.fecha_evento, id]
+      );
+      if (resConteoFecha.rows[0].total >= 3) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: 'Regla de negocio no cumplida (RN-13 / RF-51)',
+          detalle: 'No se puede reactivar el evento porque ya existen 3 eventos programados para esa fecha.'
+        });
+      }
+    }
+
+    const resUpdate = await client.query(
+      `UPDATE eventos
+       SET estado = $1
+       WHERE id = $2
+       RETURNING id, nombre_evento, fecha_evento, tipo_evento, duracion_horas, asistentes, estado, observaciones_generales, to_char(hora_inicio, 'HH24:MI') AS hora_inicio`,
+      [nuevoEstado, id]
+    );
+
+    await client.query('COMMIT');
+
+    const eventoActualizado = resUpdate.rows[0];
+    res.status(200).json({
+      mensaje: 'Estado del evento actualizado exitosamente',
+      evento: {
+        ...eventoActualizado,
+        hora_inicio: horaCorta(eventoActualizado.hora_inicio)
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error al cambiar el estado del evento (HU-51):', error);
+    res.status(500).json({ error: 'Error al cambiar el estado del evento', detalle: error.message });
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   crearEvento,
   actualizarEvento,
   listarEventos,
-  obtenerDetalleEvento
+  obtenerDetalleEvento,
+  cambiarEstadoEvento
 };

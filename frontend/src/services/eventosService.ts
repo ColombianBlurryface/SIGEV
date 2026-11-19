@@ -1,7 +1,7 @@
 /**
  * Llamadas a la API de eventos: listar, ver el detalle y registrar.
  */
-import type { AsignacionMeseros, CambioEstadoMesero, ComprasCocteles, ComprasIngredientes, EstadoMesero, CrearEventoResponse, EventStaffDeviationResponse, MeserosDisponibles, EventoDetalle, EventoListado, NuevoEvento } from '@/types/evento'
+import type { AsignacionMeseros, CambioEstadoMesero, ComprasCocteles, ComprasIngredientes, EstadoEvento, EstadoMesero, CrearEventoResponse, EventStaffDeviationResponse, MeserosDisponibles, EventoDetalle, EventoListado, NuevoEvento } from '@/types/evento'
 import { apiRequest } from './api'
 
 export const eventosService = {
@@ -59,5 +59,13 @@ export const eventosService = {
 
   editar(id: number, evento: NuevoEvento) {
     return this.actualizar(id, evento)
+  },
+
+  // HU-51 (RF-58): cambiar el estado de un evento (Planificación, Confirmado, Realizado, Cancelado)
+  cambiarEstado(id: number, estado: EstadoEvento) {
+    return apiRequest<{ mensaje: string; evento: EventoListado }>(`/eventos/${id}/estado`, {
+      method: 'PATCH',
+      body: { estado },
+    })
   },
 }

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { fechaMaxima, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
-import { TIPOS_EVENTO } from '@/types/evento'
+import { TIPOS_EVENTO, type EstadoEvento } from '@/types/evento'
 import { hoyIso } from '@/lib/formato'
 interface PasoDatosProps {
   valores: ValoresEvento
@@ -18,10 +18,22 @@ interface PasoDatosProps {
   mostrarVacio: boolean
   // Aviso cuando la duración escrita es menor que las horas de algún servicio ya agregado (RN-18)
   avisoDuracion?: string | null
+  esEdicion?: boolean
+  estado?: EstadoEvento
+  onEstadoChange?: (estado: EstadoEvento) => void
   onCambio: (campo: keyof ValoresEvento, valor: string) => void
 }
 
-export function PasoDatos({ valores, errores, mostrarVacio, avisoDuracion, onCambio }: PasoDatosProps) {
+export function PasoDatos({
+  valores,
+  errores,
+  mostrarVacio,
+  avisoDuracion,
+  esEdicion,
+  estado,
+  onEstadoChange,
+  onCambio
+}: PasoDatosProps) {
   const propsError = (campo: keyof ValoresEvento) => ({
     'aria-invalid': Boolean(errores[campo]),
     'aria-describedby': errores[campo] ? `${campo}-error` : undefined,
@@ -103,11 +115,32 @@ export function PasoDatos({ valores, errores, mostrarVacio, avisoDuracion, onCam
         </FormField>
 
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-semibold">Estado inicial</span>
-          <span className="mt-2.5 inline-flex items-center gap-1.5 self-start rounded-full bg-accent px-3 py-1 text-[13px] font-bold text-accent-foreground">
-            <span className="size-1.5 rounded-full bg-accent-foreground" />
-            Planificación
-          </span>
+          <span className="text-sm font-semibold">{esEdicion ? 'Estado del evento' : 'Estado inicial'}</span>
+          {esEdicion ? (
+            <div className="flex flex-col gap-1.5">
+              <Select
+                id="estado"
+                value={estado || 'planificacion'}
+                onChange={(e) => onEstadoChange?.(e.target.value as EstadoEvento)}
+              >
+                <option value="planificacion">Planificación</option>
+                <option value="confirmado">Confirmado</option>
+                <option value="realizado">Realizado</option>
+                <option value="cancelado">Cancelado</option>
+              </Select>
+              {estado === 'realizado' && (
+                <span className="text-[12px] text-muted-foreground">Un evento Realizado ya no puede cambiar a ningún otro estado.</span>
+              )}
+              {estado === 'cancelado' && (
+                <span className="text-[12px] text-muted-foreground">Un evento Cancelado puede volver a Planificación.</span>
+              )}
+            </div>
+          ) : (
+            <span className="mt-2.5 inline-flex items-center gap-1.5 self-start rounded-full bg-accent px-3 py-1 text-[13px] font-bold text-accent-foreground">
+              <span className="size-1.5 rounded-full bg-accent-foreground" />
+              Planificación
+            </span>
+          )}
         </div>
 
         <div className="md:col-span-2">
