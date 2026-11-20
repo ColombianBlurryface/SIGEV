@@ -11,6 +11,7 @@ const { calcularComprasPrevio } = require('../controllers/comprasController');
 const { calcularComprasCoctelesPrevio } = require('../controllers/comprasCoctelesController');
 const { listarMeserosDelEvento, listarMeserosDisponibles, asignarMeseros, cambiarEstadoAsignacion, listarChecklistMeseros } = require('../controllers/asignacionMeserosController');
 const { obtenerDesviacionesPersonal } = require('../controllers/desviacionesPersonalController');
+const { obtenerBalanceEvento, sincronizarBalanceEvento } = require('../controllers/balanceController');
 
 const router = Router();
 
@@ -41,6 +42,11 @@ router.get('/:id/staff/waiters', listarChecklistMeseros);
 router.get('/:id/desviaciones-personal', obtenerDesviacionesPersonal);
 router.get('/:id/desviaciones', obtenerDesviacionesPersonal);
 router.get('/:id/staff-deviations', obtenerDesviacionesPersonal);
+
+// Balance logístico del evento (Épica 6 · HU-31 · RF-39, RF-40)
+router.get('/:id/balance', obtenerBalanceEvento);
+router.post('/:id/balance/sincronizar', sincronizarBalanceEvento);
+router.post('/:id/balance/generar', sincronizarBalanceEvento);
 
 // GET /api/eventos/:id -> detalle de un evento con sus requerimientos calculados
 router.get('/:id', obtenerDetalleEvento);
