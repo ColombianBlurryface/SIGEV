@@ -407,3 +407,201 @@ test('HU-31 / RF-40: los licores para cócteles descuentan o cubren con stock de
   assert.equal(licor.estado, 'disponible', 'Al haber suficiente stock en inventario, el estado debe ser disponible');
   assert.match(licor.notas, /Cubierto con inventario/);
 });
+
+test('HU-31 / QA Contrato: parseEventoId valida y normaliza identificadores numéricos y prefijados', () => {
+  const { parseEventoId } = require('../src/controllers/balanceController');
+
+  assert.equal(parseEventoId(201), 201);
+  assert.equal(parseEventoId('201'), 201);
+  assert.equal(parseEventoId('evt-201'), 201);
+  assert.equal(parseEventoId('EVT-50'), 50);
+  assert.equal(parseEventoId('event-12'), 12);
+
+  // Casos inválidos
+  assert.equal(parseEventoId('abc'), null);
+  assert.equal(parseEventoId(0), null);
+  assert.equal(parseEventoId(-10), null);
+  assert.equal(parseEventoId('evt-'), null);
+  assert.equal(parseEventoId('evt-abc'), null);
+  assert.equal(parseEventoId(null), null);
+  assert.equal(parseEventoId(undefined), null);
+});
+
+test('HU-31 / QA Escenario 1: Generación completa con estructura jerárquica LogisticsBalanceResponse', () => {
+  const filasMock = [
+    {
+      id: 1,
+      evento_id: 101,
+      categoria: 'personal',
+      recurso_nombre: 'Meseros',
+      origen_tipo: 'personal',
+      origen_id: null,
+      cantidad_requerida: '5.00',
+      cantidad_disponible: '3.00',
+      unidad_medida: 'personas',
+      estado: 'por_conseguir',
+      notas: 'Asignados: 3'
+    },
+    {
+      id: 2,
+      evento_id: 101,
+      categoria: 'alimento',
+      recurso_nombre: 'Lomo de res',
+      origen_tipo: 'ingrediente',
+      origen_id: 1,
+      cantidad_requerida: '20.00',
+      cantidad_disponible: '0.00',
+      unidad_medida: 'kilos',
+      estado: 'por_comprar',
+      notas: 'Para menú principal'
+    },
+    {
+      id: 3,
+      evento_id: 101,
+      categoria: 'bebida',
+      recurso_nombre: 'Vino Tinto',
+      origen_tipo: 'producto_catalogo',
+      origen_id: 2,
+      cantidad_requerida: '15.00',
+      cantidad_disponible: '15.00',
+      unidad_medida: 'botellas',
+      estado: 'disponible',
+      notas: 'Stock disponible en inventario: 20'
+    },
+    {
+      id: 4,
+      evento_id: 101,
+      categoria: 'mobiliario',
+      recurso_nombre: 'Sillas Tiffany',
+      origen_tipo: 'producto_catalogo',
+      origen_id: 3,
+      cantidad_requerida: '50.00',
+      cantidad_disponible: '50.00',
+      unidad_medida: 'unidades',
+      estado: 'disponible',
+      notas: 'Stock en inventario propio: 50'
+    },
+    {
+      id: 5,
+      evento_id: 101,
+      categoria: 'servicio',
+      recurso_nombre: 'Sonido e Iluminación',
+      origen_tipo: 'servicio_adicional',
+      origen_id: 4,
+      cantidad_requerida: '1.00',
+      cantidad_disponible: '0.00',
+      unidad_medida: 'servicios',
+      estado: 'pendiente',
+      notas: 'Servicio tarifa fija'
+    }
+  ];
+
+  const infoEvento = { id: 101, nombre_evento: 'Gala Corporativa', asistentes: 100 };
+  const respuesta = estructurarRespuestaBalance(101, filasMock, infoEvento);
+
+  // Verificación DTO raíz
+  assert.equal(respuesta.event_id, '101');
+  assert.equal(respuesta.event_name, 'Gala Corporativa');
+  assert.equal(respuesta.guest_count, 100);
+  assert.ok(Array.isArray(respuesta.categories));
+
+  // Verificación de categorías requeridas por el contrato técnico
+  const categoryNames = respuesta.categories.map((c) => c.category_name);
+  assert.ok(categoryNames.includes('STAFF'), 'Debe incluir STAFF');
+  assert.ok(categoryNames.includes('FOOD'), 'Debe incluir FOOD');
+  assert.ok(categoryNames.includes('DRINKS'), 'Debe incluir DRINKS');
+  assert.ok(categoryNames.includes('FURNITURE'), 'Debe incluir FURNITURE');
+  assert.ok(categoryNames.includes('OTHER'), 'Debe incluir OTHER');
+
+  // Verificación de estructura interna de cada ítem
+  const staffCat = respuesta.categories.find((c) => c.category_name === 'STAFF');
+  assert.ok(staffCat.items.length > 0);
+  const meseroItem = staffCat.items[0];
+  assert.equal(meseroItem.item_name, 'Meseros');
+  assert.equal(meseroItem.required_quantity, 5);
+  assert.equal(meseroItem.available_quantity, 3);
+  assert.equal(meseroItem.deficit_quantity, 2);
+  assert.equal(meseroItem.unit, 'personas');
+});
+
+test('HU-31 / QA Escenario 2: Cálculo de déficit para 100 asistentes con 5 meseros requeridos y 3 asignados', async () => {
+  const mockClient = {
+    query: async (sql, params) => {
+      if (sql.includes('FROM eventos WHERE id')) {
+        return {
+          rows: [
+            { id: 201, nombre_evento: 'Boda Campestre', asistentes: 100, duracion_horas: 6, estado: 'planificacion' }
+          ]
+        };
+      }
+      if (sql.includes('FROM evento_personal ep')) {
+        // 3 meseros asignados confirmados o por confirmar (no_puede no cuenta)
+        return {
+          rows: [
+            { rol: 'mesero', asignados: 3 }
+          ]
+        };
+      }
+      return { rows: [] };
+    }
+  };
+
+  const recursos = await calcularRecursosEvento(mockClient, 201);
+  const meseros = recursos.find((r) => r.categoria === 'personal' && r.recurso_nombre === 'Meseros');
+  assert.ok(meseros, 'Debe calcular el requerimiento de meseros');
+
+  const dto = estructurarRespuestaBalance(201, [meseros], { id: 201, nombre_evento: 'Boda Campestre', asistentes: 100 });
+  const staff = dto.categories.find((c) => c.category_name === 'STAFF');
+  const meserosItem = staff.items.find((i) => i.item_name === 'Meseros');
+
+  // Verificaciones exactas del criterio de aceptación:
+  // - required_quantity: 5
+  // - available_quantity: 3
+  // - deficit_quantity: 2
+  assert.equal(meserosItem.required_quantity, 5);
+  assert.equal(meserosItem.available_quantity, 3);
+  assert.equal(meserosItem.deficit_quantity, 2);
+});
+
+test('HU-31 / QA Escenario 3: Consulta de balance para evento inexistente responde 404 con mensaje exacto', async () => {
+  const pool = require('../src/config/db');
+  const originalConnect = pool.connect;
+
+  pool.connect = async () => ({
+    query: async (sql, params) => {
+      if (sql.includes('FROM eventos WHERE id')) {
+        return { rows: [] }; // No existe
+      }
+      return { rows: [] };
+    },
+    release: () => {}
+  });
+
+  try {
+    let statusEnviado = null;
+    let bodyEnviado = null;
+
+    const req = {
+      params: { eventId: '999999' }
+    };
+    const res = {
+      status: (code) => {
+        statusEnviado = code;
+        return {
+          json: (payload) => {
+            bodyEnviado = payload;
+          }
+        };
+      }
+    };
+
+    await obtenerBalanceEvento(req, res);
+
+    assert.equal(statusEnviado, 404, 'Debe retornar código 404');
+    assert.equal(bodyEnviado.error, 'Evento no encontrado');
+    assert.equal(bodyEnviado.detalle, 'No es posible generar un balance para un evento inexistente.');
+  } finally {
+    pool.connect = originalConnect;
+  }
+});
+

@@ -334,25 +334,60 @@ const sincronizarTablaBalance = async (cliente, eventoId, recursosCalculados) =>
 };
 
 /**
- * Agrupa los recursos y genera las métricas de resumen del balance.
+ * Normaliza y valida el ID de evento, aceptando enteros o códigos como 'evt-201'
  */
-const estructurarRespuestaBalance = (eventoId, filas) => {
-  const recursos = filas.map((r) => ({
-    id: r.id,
-    evento_id: r.evento_id,
-    categoria: r.categoria,
-    recurso_nombre: r.recurso_nombre,
-    origen_tipo: r.origen_tipo,
-    origen_id: r.origen_id,
-    cantidad_requerida: parseFloat(r.cantidad_requerida) || 0,
-    cantidad_disponible: parseFloat(r.cantidad_disponible) || 0,
-    unidad_medida: r.unidad_medida,
-    estado: r.estado,
-    fecha_limite: r.fecha_limite ? String(r.fecha_limite).slice(0, 10) : null,
-    notas: r.notas,
-    creado_en: r.creado_en,
-    actualizado_en: r.actualizado_en
-  }));
+const parseEventoId = (raw) => {
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw > 0 && raw <= 2147483647) {
+    return raw;
+  }
+  const str = String(raw || '').trim();
+  const match = str.match(/^(?:evt-|event-)?(\d+)$/i);
+  if (match) {
+    const num = Number(match[1]);
+    if (Number.isInteger(num) && num > 0 && num <= 2147483647) {
+      return num;
+    }
+  }
+  return null;
+};
+
+/**
+ * Agrupa los recursos y genera las métricas de resumen y el DTO jerárquico del balance
+ * (HU-31 · RF-39, RF-40).
+ *
+ * @param {number} eventoId
+ * @param {Array<object>} filas
+ * @param {object} [infoEvento] - Información básica del evento (id, nombre_evento, asistentes)
+ */
+const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
+  const recursos = filas.map((r) => {
+    const cantReq = parseFloat(r.cantidad_requerida) || 0;
+    const cantDisp = parseFloat(r.cantidad_disponible) || 0;
+    const deficit = Math.max(0, cantReq - cantDisp);
+
+    return {
+      id: r.id,
+      evento_id: r.evento_id,
+      categoria: r.categoria,
+      recurso_nombre: r.recurso_nombre,
+      item_name: r.recurso_nombre,
+      origen_tipo: r.origen_tipo,
+      origen_id: r.origen_id,
+      cantidad_requerida: cantReq,
+      required_quantity: cantReq,
+      cantidad_disponible: cantDisp,
+      available_quantity: cantDisp,
+      deficit_quantity: deficit,
+      unidad_medida: r.unidad_medida,
+      unit: r.unidad_medida,
+      estado: r.estado,
+      status: r.estado,
+      fecha_limite: r.fecha_limite ? String(r.fecha_limite).slice(0, 10) : null,
+      notas: r.notas,
+      creado_en: r.creado_en,
+      actualizado_en: r.actualizado_en
+    };
+  });
 
   const recursosPorCategoria = {
     personal: [],
@@ -380,7 +415,76 @@ const estructurarRespuestaBalance = (eventoId, filas) => {
   const total = recursos.length;
   const porcentaje = total > 0 ? Math.round((disponibles / total) * 100) : 100;
 
+  // DTO jerárquico por categoría (LogisticsBalanceResponse - QA Sprint 5 / RF-40)
+  const categories = [
+    {
+      category_name: 'STAFF',
+      category_label: 'Personal',
+      items: recursosPorCategoria.personal.map((i) => ({
+        item_name: i.item_name,
+        required_quantity: i.required_quantity,
+        available_quantity: i.available_quantity,
+        deficit_quantity: i.deficit_quantity,
+        unit: i.unit
+      }))
+    },
+    {
+      category_name: 'FOOD',
+      category_label: 'Alimentos',
+      items: recursosPorCategoria.alimento.map((i) => ({
+        item_name: i.item_name,
+        required_quantity: i.required_quantity,
+        available_quantity: i.available_quantity,
+        deficit_quantity: i.deficit_quantity,
+        unit: i.unit
+      }))
+    },
+    {
+      category_name: 'DRINKS',
+      category_label: 'Bebidas',
+      items: recursosPorCategoria.bebida.map((i) => ({
+        item_name: i.item_name,
+        required_quantity: i.required_quantity,
+        available_quantity: i.available_quantity,
+        deficit_quantity: i.deficit_quantity,
+        unit: i.unit
+      }))
+    },
+    {
+      category_name: 'FURNITURE',
+      category_label: 'Mobiliario',
+      items: recursosPorCategoria.mobiliario.map((i) => ({
+        item_name: i.item_name,
+        required_quantity: i.required_quantity,
+        available_quantity: i.available_quantity,
+        deficit_quantity: i.deficit_quantity,
+        unit: i.unit
+      }))
+    }
+  ];
+
+  if (recursosPorCategoria.servicio && recursosPorCategoria.servicio.length > 0) {
+    categories.push({
+      category_name: 'OTHER',
+      category_label: 'Servicios',
+      items: recursosPorCategoria.servicio.map((i) => ({
+        item_name: i.item_name,
+        required_quantity: i.required_quantity,
+        available_quantity: i.available_quantity,
+        deficit_quantity: i.deficit_quantity,
+        unit: i.unit
+      }))
+    });
+  }
+
   return {
+    // 1. DTO oficial del contrato técnico (QA Sprint 5)
+    event_id: infoEvento ? String(infoEvento.id) : String(eventoId),
+    event_name: infoEvento?.nombre_evento || 'Evento',
+    guest_count: infoEvento ? Number(infoEvento.asistentes) : 0,
+    categories,
+
+    // 2. Propiedades de retrocompatibilidad con la UI de la aplicación (HU-31)
     evento_id: eventoId,
     resumen: {
       total_recursos: total,
@@ -398,28 +502,34 @@ const estructurarRespuestaBalance = (eventoId, filas) => {
 
 /**
  * GET /api/eventos/:id/balance
+ * GET /api/v1/events/:eventId/logistics-balance
  * Obtiene el balance logístico del evento (HU-31 · RF-39, RF-40).
- * Si aún no se ha generado en base de datos, lo genera y persiste automáticamente.
  */
 const obtenerBalanceEvento = async (req, res) => {
-  const eventoId = Number(req.params.id);
-  if (!Number.isInteger(eventoId) || eventoId <= 0 || eventoId > 2147483647) {
+  const rawId = req.params.id || req.params.eventId;
+  const eventoId = parseEventoId(rawId);
+  if (!eventoId) {
     return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del evento no es válido.' });
   }
 
   const client = await pool.connect();
   try {
     // 1. Verificar si el evento existe
-    const resEvento = await client.query('SELECT id FROM eventos WHERE id = $1', [eventoId]);
+    const resEvento = await client.query('SELECT id, nombre_evento, asistentes FROM eventos WHERE id = $1', [eventoId]);
     if (resEvento.rows.length === 0) {
-      return res.status(404).json({ error: 'Evento no encontrado' });
+      return res.status(404).json({
+        error: 'Evento no encontrado',
+        detalle: 'No es posible generar un balance para un evento inexistente.'
+      });
     }
+
+    const infoEvento = resEvento.rows[0];
 
     // 2. Calcular automáticamente y mantener sincronizado el balance
     const calculados = await calcularRecursosEvento(client, eventoId);
     const filas = await sincronizarTablaBalance(client, eventoId, calculados || []);
 
-    res.json(estructurarRespuestaBalance(eventoId, filas));
+    res.json(estructurarRespuestaBalance(eventoId, filas, infoEvento));
   } catch (error) {
     console.error('Error al obtener balance logístico (HU-31):', error);
     res.status(500).json({ error: 'Error al obtener el balance logístico', detalle: error.message });
@@ -433,22 +543,27 @@ const obtenerBalanceEvento = async (req, res) => {
  * Regenera o sincroniza el balance con los requerimientos actuales del evento.
  */
 const sincronizarBalanceEvento = async (req, res) => {
-  const eventoId = Number(req.params.id);
-  if (!Number.isInteger(eventoId) || eventoId <= 0 || eventoId > 2147483647) {
+  const rawId = req.params.id || req.params.eventId;
+  const eventoId = parseEventoId(rawId);
+  if (!eventoId) {
     return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del evento no es válido.' });
   }
 
   const client = await pool.connect();
   try {
-    const resEvento = await client.query('SELECT id FROM eventos WHERE id = $1', [eventoId]);
+    const resEvento = await client.query('SELECT id, nombre_evento, asistentes FROM eventos WHERE id = $1', [eventoId]);
     if (resEvento.rows.length === 0) {
-      return res.status(404).json({ error: 'Evento no encontrado' });
+      return res.status(404).json({
+        error: 'Evento no encontrado',
+        detalle: 'No es posible generar un balance para un evento inexistente.'
+      });
     }
 
+    const infoEvento = resEvento.rows[0];
     const calculados = await calcularRecursosEvento(client, eventoId);
     const filas = await sincronizarTablaBalance(client, eventoId, calculados || []);
 
-    res.json(estructurarRespuestaBalance(eventoId, filas));
+    res.json(estructurarRespuestaBalance(eventoId, filas, infoEvento));
   } catch (error) {
     console.error('Error al sincronizar balance logístico (HU-31):', error);
     res.status(500).json({ error: 'Error al sincronizar el balance logístico', detalle: error.message });
@@ -458,6 +573,7 @@ const sincronizarBalanceEvento = async (req, res) => {
 };
 
 module.exports = {
+  parseEventoId,
   calcularRecursosEvento,
   sincronizarTablaBalance,
   estructurarRespuestaBalance,

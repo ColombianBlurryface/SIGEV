@@ -45,6 +45,8 @@ router.get('/:id/staff-deviations', obtenerDesviacionesPersonal);
 
 // Balance logístico del evento (Épica 6 · HU-31 · RF-39, RF-40)
 router.get('/:id/balance', obtenerBalanceEvento);
+router.get('/:id/logistics-balance', obtenerBalanceEvento);
+router.get('/:eventId/logistics-balance', obtenerBalanceEvento);
 router.post('/:id/balance/sincronizar', sincronizarBalanceEvento);
 router.post('/:id/balance/generar', sincronizarBalanceEvento);
 
