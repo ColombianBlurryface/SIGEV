@@ -41,7 +41,7 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
     `SELECT p.rol, COALESCE(ep.estado, 'confirmado') AS estado_asignacion, COUNT(*)::int AS asignados
      FROM evento_personal ep
      JOIN personal p ON p.id = ep.personal_id
-     WHERE ep.evento_id = $1 AND p.activo = true AND ep.estado <> 'no_puede'
+     WHERE ep.evento_id = $1 AND p.activo = true AND COALESCE(ep.estado, 'por_confirmar') <> 'no_puede'
      GROUP BY p.rol, COALESCE(ep.estado, 'confirmado')`,
     [eventoId]
   );
@@ -274,7 +274,7 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
  * @param {number} eventoId
  * @param {Array<object>} recursosCalculados
  */
-const sincronizarTablaBalance = async (cliente, eventoId, recursosCalculados) => {
+const sincronizarTablaBalance = async (cliente, eventoId, recursosCalculados, forzarRecalculo = false) => {
   // Asegurar columna estado_manual
   try {
     await cliente.query('ALTER TABLE evento_balance_recursos ADD COLUMN IF NOT EXISTS estado_manual BOOLEAN DEFAULT false');
@@ -302,10 +302,21 @@ const sincronizarTablaBalance = async (cliente, eventoId, recursosCalculados) =>
     const existente = (claveOrigen && mapaExistentes.get(claveOrigen)) || mapaExistentes.get(claveNombre);
 
     if (existente) {
-      // Si el estado fue cambiado manualmente por el usuario y las cantidades siguen igual o es servicio, preservarlo
-      const estadoFinal = existente.estado_manual ? existente.estado : rec.estado;
+      let estadoFinal = rec.estado;
+      let estadoManualFinal = false;
 
-      // Actualizar cantidades, estado y notas
+      // Si no se fuerza la sincronización y el usuario modificó manualmente el estado,
+      // solo se conserva si las cantidades requeridas y disponibles NO han cambiado.
+      if (!forzarRecalculo && existente.estado_manual) {
+        const reqIgual = Number(existente.cantidad_requerida) === Number(rec.cantidad_requerida);
+        const dispIgual = Number(existente.cantidad_disponible) === Number(rec.cantidad_disponible);
+        if (reqIgual && dispIgual) {
+          estadoFinal = existente.estado;
+          estadoManualFinal = true;
+        }
+      }
+
+      // Actualizar cantidades, estado, estado_manual y notas
       await cliente.query(
         `UPDATE evento_balance_recursos
          SET recurso_nombre = $1,
@@ -313,15 +324,17 @@ const sincronizarTablaBalance = async (cliente, eventoId, recursosCalculados) =>
              cantidad_disponible = $3,
              unidad_medida = $4,
              estado = $5,
-             notas = COALESCE($6, notas),
+             estado_manual = $6,
+             notas = COALESCE($7, notas),
              actualizado_en = CURRENT_TIMESTAMP
-         WHERE id = $7`,
+         WHERE id = $8`,
         [
           rec.recurso_nombre,
           rec.cantidad_requerida,
           rec.cantidad_disponible,
           rec.unidad_medida,
           estadoFinal,
+          estadoManualFinal,
           rec.notas,
           existente.id
         ]
@@ -597,7 +610,7 @@ const sincronizarBalanceEvento = async (req, res) => {
 
     const infoEvento = resEvento.rows[0];
     const calculados = await calcularRecursosEvento(client, eventoId);
-    const filas = await sincronizarTablaBalance(client, eventoId, calculados || []);
+    const filas = await sincronizarTablaBalance(client, eventoId, calculados || [], true);
 
     res.json(estructurarRespuestaBalance(eventoId, filas, infoEvento));
   } catch (error) {

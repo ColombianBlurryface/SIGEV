@@ -287,6 +287,13 @@ const asignarMeseros = async (req, res) => {
       [id, datos.ids, ESTADO_POR_DEFECTO]
     );
     const respuesta = await armarAsignacion(cliente, id, evento.asistentes);
+    try {
+      const { calcularRecursosEvento, sincronizarTablaBalance } = require('./balanceController');
+      const calculados = await calcularRecursosEvento(cliente, id);
+      await sincronizarTablaBalance(cliente, id, calculados, false);
+    } catch (eBalance) {
+      console.warn('Advertencia al sincronizar balance en asignacion de meseros:', eBalance.message);
+    }
     await cliente.query('COMMIT');
     res.json(respuesta);
   } catch (error) {
@@ -353,6 +360,13 @@ const cambiarEstadoAsignacion = async (req, res) => {
 
     await cliente.query('UPDATE evento_personal SET estado = $3 WHERE evento_id = $1 AND personal_id = $2', [id, personalId, datos.estado]);
     const asignacion = await armarAsignacion(cliente, id, evento.asistentes);
+    try {
+      const { calcularRecursosEvento, sincronizarTablaBalance } = require('./balanceController');
+      const calculados = await calcularRecursosEvento(cliente, id);
+      await sincronizarTablaBalance(cliente, id, calculados, false);
+    } catch (eBalance) {
+      console.warn('Advertencia al sincronizar balance en cambio de estado de mesero:', eBalance.message);
+    }
     await cliente.query('COMMIT');
     res.json({
       evento_id: id,
