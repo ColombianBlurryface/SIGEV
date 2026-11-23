@@ -30,8 +30,11 @@ export function EventosPage() {
 
   // ...y se borra del historial del navegador para que no vuelva a salir al recargar la página
   useEffect(() => {
-    if (aviso) navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
-  }, [aviso, location.pathname, location.search, navigate])
+    if (aviso) {
+      recargar()
+      navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
+    }
+  }, [aviso, location.pathname, location.search, navigate, recargar])
 
   // Eventos que cumplen la búsqueda (sin importar tildes ni mayúsculas) y el filtro de estado
   const filtrados = useMemo(() => {

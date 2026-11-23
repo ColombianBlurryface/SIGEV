@@ -31,24 +31,52 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
   const recursos = [];
 
   // ===========================================================================
-  // 1. PERSONAL (HU-21, HU-22, HU-25, HU-28)
+  // 1. PERSONAL (HU-21, HU-22, HU-25, HU-28, HU-29)
   // ===========================================================================
   const reqMeseros = calcularMeseros(asistentes);
   const reqCocineros = calcularCocineros(asistentes);
 
-  // Consultar personal asignado que no esté en estado 'no_puede'
+  // Consultar personal asignado discriminando por estado de asignación (HU-29)
   const resPersonal = await cliente.query(
-    `SELECT p.rol, COUNT(*)::int AS asignados
+    `SELECT p.rol, COALESCE(ep.estado, 'confirmado') AS estado_asignacion, COUNT(*)::int AS asignados
      FROM evento_personal ep
      JOIN personal p ON p.id = ep.personal_id
      WHERE ep.evento_id = $1 AND p.activo = true AND ep.estado <> 'no_puede'
-     GROUP BY p.rol`,
+     GROUP BY p.rol, COALESCE(ep.estado, 'confirmado')`,
     [eventoId]
   );
-  const asignadosPorRol = { mesero: 0, cocinero: 0 };
+
+  const personalPorRol = {
+    mesero: { confirmados: 0, por_confirmar: 0, total: 0 },
+    cocinero: { confirmados: 0, por_confirmar: 0, total: 0 }
+  };
+
   for (const r of resPersonal.rows) {
-    if (r.rol === 'mesero') asignadosPorRol.mesero = r.asignados;
-    if (r.rol === 'cocinero') asignadosPorRol.cocinero = r.asignados;
+    const rol = r.rol === 'cocinero' ? 'cocinero' : 'mesero';
+    const cant = Number(r.asignados || r.cantidad || 0);
+    const est = String(r.estado_asignacion || r.estado || 'confirmado').trim().toLowerCase();
+
+    if (est === 'confirmado' || est === 'confirmed') {
+      personalPorRol[rol].confirmados += cant;
+    } else if (est === 'por_confirmar' || est === 'pending') {
+      personalPorRol[rol].por_confirmar += cant;
+    } else {
+      personalPorRol[rol].confirmados += cant;
+    }
+    personalPorRol[rol].total += cant;
+  }
+
+  const meserosDisp = Math.min(reqMeseros, personalPorRol.mesero.confirmados);
+  const cocinerosDisp = Math.min(reqCocineros, personalPorRol.cocinero.confirmados);
+
+  let notasMeseros = `1 por cada 20 asistentes. Confirmados: ${personalPorRol.mesero.confirmados}`;
+  if (personalPorRol.mesero.por_confirmar > 0) {
+    notasMeseros += ` · Por confirmar: ${personalPorRol.mesero.por_confirmar}`;
+  }
+
+  let notasCocineros = `2 por cada 25 asistentes. Confirmados: ${personalPorRol.cocinero.confirmados}`;
+  if (personalPorRol.cocinero.por_confirmar > 0) {
+    notasCocineros += ` · Por confirmar: ${personalPorRol.cocinero.por_confirmar}`;
   }
 
   recursos.push({
@@ -57,10 +85,10 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
     origen_tipo: 'personal',
     origen_id: null,
     cantidad_requerida: reqMeseros,
-    cantidad_disponible: Math.min(reqMeseros, asignadosPorRol.mesero),
+    cantidad_disponible: meserosDisp,
     unidad_medida: 'personas',
-    estado: asignadosPorRol.mesero >= reqMeseros ? 'disponible' : 'por_conseguir',
-    notas: `1 por cada 20 asistentes. Asignados: ${asignadosPorRol.mesero}`
+    estado: personalPorRol.mesero.confirmados >= reqMeseros ? 'disponible' : 'por_conseguir',
+    notas: notasMeseros
   });
 
   recursos.push({
@@ -69,10 +97,10 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
     origen_tipo: 'personal',
     origen_id: null,
     cantidad_requerida: reqCocineros,
-    cantidad_disponible: Math.min(reqCocineros, asignadosPorRol.cocinero),
+    cantidad_disponible: cocinerosDisp,
     unidad_medida: 'personas',
-    estado: asignadosPorRol.cocinero >= reqCocineros ? 'disponible' : 'por_conseguir',
-    notas: `2 por cada 25 asistentes. Asignados: ${asignadosPorRol.cocinero}`
+    estado: personalPorRol.cocinero.confirmados >= reqCocineros ? 'disponible' : 'por_conseguir',
+    notas: notasCocineros
   });
 
   // ===========================================================================
@@ -247,6 +275,11 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
  * @param {Array<object>} recursosCalculados
  */
 const sincronizarTablaBalance = async (cliente, eventoId, recursosCalculados) => {
+  // Asegurar columna estado_manual
+  try {
+    await cliente.query('ALTER TABLE evento_balance_recursos ADD COLUMN IF NOT EXISTS estado_manual BOOLEAN DEFAULT false');
+  } catch (_) {}
+
   // Consultar registros ya existentes para preservar posibles fechas límite o notas manuales
   const resExistentes = await cliente.query(
     'SELECT * FROM evento_balance_recursos WHERE evento_id = $1',
@@ -269,7 +302,10 @@ const sincronizarTablaBalance = async (cliente, eventoId, recursosCalculados) =>
     const existente = (claveOrigen && mapaExistentes.get(claveOrigen)) || mapaExistentes.get(claveNombre);
 
     if (existente) {
-      // Actualizar cantidades, estado calculado y notas
+      // Si el estado fue cambiado manualmente por el usuario y las cantidades siguen igual o es servicio, preservarlo
+      const estadoFinal = existente.estado_manual ? existente.estado : rec.estado;
+
+      // Actualizar cantidades, estado y notas
       await cliente.query(
         `UPDATE evento_balance_recursos
          SET recurso_nombre = $1,
@@ -285,7 +321,7 @@ const sincronizarTablaBalance = async (cliente, eventoId, recursosCalculados) =>
           rec.cantidad_requerida,
           rec.cantidad_disponible,
           rec.unidad_medida,
-          rec.estado,
+          estadoFinal,
           rec.notas,
           existente.id
         ]
@@ -572,11 +608,93 @@ const sincronizarBalanceEvento = async (req, res) => {
   }
 };
 
+/**
+ * PATCH /api/eventos/:id/balance/recursos/:recursoId
+ * Modifica manualmente el estado de un recurso del balance logístico (HU-31).
+ * Estados permitidos: disponible (listo / hecho), por_comprar, por_conseguir, pendiente.
+ */
+const cambiarEstadoRecursoBalance = async (req, res) => {
+  const eventoId = parseEventoId(req.params.id || req.params.eventId);
+  const recursoId = Number(req.params.recursoId || req.params.itemId);
+
+  if (!eventoId) {
+    return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del evento no es válido.' });
+  }
+
+  if (!Number.isInteger(recursoId) || recursoId <= 0) {
+    return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del recurso no es válido.' });
+  }
+
+  const estadoCrudo = String(req.body?.estado || req.body?.status || '').trim().toLowerCase();
+  let estadoNormalizado = null;
+
+  if (estadoCrudo === 'disponible' || estadoCrudo === 'listo' || estadoCrudo === 'hecho' || estadoCrudo === 'ready') {
+    estadoNormalizado = 'disponible';
+  } else if (estadoCrudo === 'por_comprar' || estadoCrudo === 'comprar') {
+    estadoNormalizado = 'por_comprar';
+  } else if (estadoCrudo === 'por_conseguir' || estadoCrudo === 'conseguir') {
+    estadoNormalizado = 'por_conseguir';
+  } else if (estadoCrudo === 'pendiente' || estadoCrudo === 'pending') {
+    estadoNormalizado = 'pendiente';
+  }
+
+  if (!estadoNormalizado) {
+    return res.status(400).json({
+      error: 'Datos inválidos',
+      detalle: 'El estado debe ser uno de: disponible (listo), por_comprar, por_conseguir o pendiente.'
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    try {
+      await client.query('ALTER TABLE evento_balance_recursos ADD COLUMN IF NOT EXISTS estado_manual BOOLEAN DEFAULT false');
+    } catch (_) {}
+
+    const resUpdate = await client.query(
+      `UPDATE evento_balance_recursos
+       SET estado = $1,
+           estado_manual = true,
+           actualizado_en = CURRENT_TIMESTAMP
+       WHERE id = $2 AND evento_id = $3
+       RETURNING *`,
+      [estadoNormalizado, recursoId, eventoId]
+    );
+
+    if (resUpdate.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Recurso no encontrado',
+        detalle: 'No se encontró el recurso especificado para este evento.'
+      });
+    }
+
+    // Retornar balance actualizado
+    const resEvento = await client.query('SELECT id, nombre_evento, asistentes FROM eventos WHERE id = $1', [eventoId]);
+    const infoEvento = resEvento.rows[0];
+    const { rows: filas } = await client.query(
+      'SELECT * FROM evento_balance_recursos WHERE evento_id = $1 ORDER BY categoria, id ASC',
+      [eventoId]
+    );
+
+    res.json({
+      mensaje: 'Estado del recurso actualizado exitosamente',
+      recurso: resUpdate.rows[0],
+      balance: estructurarRespuestaBalance(eventoId, filas, infoEvento)
+    });
+  } catch (error) {
+    console.error('Error al cambiar estado del recurso en balance (HU-31):', error);
+    res.status(500).json({ error: 'Error al cambiar estado del recurso', detalle: error.message });
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   parseEventoId,
   calcularRecursosEvento,
   sincronizarTablaBalance,
   estructurarRespuestaBalance,
   obtenerBalanceEvento,
-  sincronizarBalanceEvento
+  sincronizarBalanceEvento,
+  cambiarEstadoRecursoBalance
 };

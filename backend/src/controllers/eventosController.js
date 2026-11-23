@@ -467,6 +467,17 @@ const actualizarEvento = async (req, res) => {
       return res.status(resServs.status).json({ error: resServs.error, detalle: resServs.detalle });
     }
 
+    // 4. Sincronizar reactivamente el balance logístico con las nuevas cantidades (HU-31 · RF-39, RF-40)
+    try {
+      const { calcularRecursosEvento, sincronizarTablaBalance } = require('./balanceController');
+      const calculados = await calcularRecursosEvento(client, id);
+      if (calculados) {
+        await sincronizarTablaBalance(client, id, calculados);
+      }
+    } catch (errBalance) {
+      console.warn('Advertencia al sincronizar balance en edición de evento:', errBalance.message);
+    }
+
     await client.query('COMMIT');
 
     res.status(200).json({

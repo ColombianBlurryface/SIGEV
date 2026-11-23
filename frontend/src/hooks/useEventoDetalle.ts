@@ -12,15 +12,15 @@ interface Resultado {
   error: string | null
 }
 
-export function useEventoDetalle(id: number | null) {
+export function useEventoDetalle(id: number | null, refrescoKey?: unknown) {
   const [intento, setIntento] = useState(0)
   const [resultado, setResultado] = useState<Resultado | null>(null)
-  const clave = id === null ? null : `${id}-${intento}`
+  const clave = id === null ? null : `${id}-${intento}-${String(refrescoKey ?? '')}`
 
   useEffect(() => {
     if (id === null) return
     let activo = true
-    const claveActual = `${id}-${intento}`
+    const claveActual = `${id}-${intento}-${String(refrescoKey ?? '')}`
 
     eventosService
       .obtener(id)
@@ -36,7 +36,7 @@ export function useEventoDetalle(id: number | null) {
     return () => {
       activo = false
     }
-  }, [id, intento])
+  }, [id, intento, refrescoKey])
 
   const recargar = useCallback(() => setIntento((n) => n + 1), [])
   const listo = resultado !== null && resultado.clave === clave

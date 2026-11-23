@@ -21,4 +21,17 @@ export const balanceService = {
       method: 'POST',
     })
   },
+
+  /**
+   * Modifica manualmente el estado de un recurso en el balance logístico.
+   */
+  cambiarEstado(eventoId: number, recursoId: number, estado: string) {
+    return apiRequest<{ mensaje: string; balance: BalanceLogisticoEvento }>(
+      `/eventos/${eventoId}/balance/recursos/${recursoId}`,
+      {
+        method: 'PATCH',
+        body: { estado },
+      }
+    )
+  },
 }

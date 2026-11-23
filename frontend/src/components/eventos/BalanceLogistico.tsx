@@ -7,6 +7,7 @@
  */
 import {
   Armchair,
+  ChevronDown,
   Layers,
   RefreshCw,
   Sparkles,
@@ -51,7 +52,7 @@ const CONFIG_ESTADOS: Record<
   { etiqueta: string; clases: string; punto: string }
 > = {
   disponible: {
-    etiqueta: 'Disponible',
+    etiqueta: 'Listo',
     clases: 'bg-success-soft text-success-foreground',
     punto: 'bg-success-foreground',
   },
@@ -72,18 +73,40 @@ const CONFIG_ESTADOS: Record<
   },
 }
 
-function EstadoRecursoBadge({ estado }: { estado: EstadoRecursoBalance }) {
+function EstadoRecursoSelector({
+  estado,
+  onChange,
+  disabled = false,
+}: {
+  estado: EstadoRecursoBalance
+  onChange: (nuevoEstado: EstadoRecursoBalance) => void
+  disabled?: boolean
+}) {
   const conf = CONFIG_ESTADOS[estado] ?? CONFIG_ESTADOS.pendiente
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-bold whitespace-nowrap',
-        conf.clases
-      )}
-    >
-      <span aria-hidden="true" className={cn('size-1.5 rounded-full', conf.punto)} />
-      {conf.etiqueta}
-    </span>
+    <div className="relative inline-flex items-center">
+      <span
+        aria-hidden="true"
+        className={cn('pointer-events-none absolute left-2.5 size-1.5 rounded-full z-10', conf.punto)}
+      />
+      <select
+        value={estado}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value as EstadoRecursoBalance)}
+        title="Modificar estado del recurso"
+        className={cn(
+          'cursor-pointer appearance-none rounded-full pl-5 pr-6 py-1 text-[11.5px] font-bold transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 border-0 shadow-xs',
+          conf.clases,
+          disabled && 'opacity-60 cursor-not-allowed'
+        )}
+      >
+        <option value="disponible">Listo</option>
+        <option value="por_comprar">Por comprar</option>
+        <option value="por_conseguir">Por conseguir</option>
+        <option value="pendiente">Pendiente</option>
+      </select>
+      <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2 size-3 opacity-60" />
+    </div>
   )
 }
 
@@ -98,6 +121,58 @@ export function BalanceLogistico({
   const [sincronizando, setSincronizando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [categoriaFiltro, setCategoriaFiltro] = useState<CategoriaBalance | 'todas'>('todas')
+  const [actualizandoRecursoId, setActualizandoRecursoId] = useState<number | null>(null)
+  const [errorAccion, setErrorAccion] = useState<string | null>(null)
+
+  const manejarCambioEstadoRecurso = async (recursoId: number, nuevoEstado: EstadoRecursoBalance) => {
+    if (!balance) return
+    setErrorAccion(null)
+    setActualizandoRecursoId(recursoId)
+
+    const balanceAnterior = balance
+    const recursosActualizados = balance.recursos.map((r) =>
+      r.id === recursoId ? { ...r, estado: nuevoEstado, status: nuevoEstado } : r
+    )
+    const porCat = { ...balance.recursos_por_categoria }
+    for (const k of Object.keys(porCat) as CategoriaBalance[]) {
+      porCat[k] = porCat[k].map((r) =>
+        r.id === recursoId ? { ...r, estado: nuevoEstado, status: nuevoEstado } : r
+      )
+    }
+    const total = recursosActualizados.length
+    const disponibles = recursosActualizados.filter((r) => r.estado === 'disponible').length
+    const por_comprar = recursosActualizados.filter((r) => r.estado === 'por_comprar').length
+    const por_conseguir = recursosActualizados.filter((r) => r.estado === 'por_conseguir').length
+    const pendientes = recursosActualizados.filter((r) => r.estado === 'pendiente').length
+    const porcentaje = total > 0 ? Math.round((disponibles / total) * 100) : 100
+
+    // Actualización optimista inmediata
+    setBalance({
+      ...balance,
+      recursos: recursosActualizados,
+      recursos_por_categoria: porCat,
+      resumen: {
+        total_recursos: total,
+        disponibles,
+        por_comprar,
+        por_conseguir,
+        pendientes,
+        porcentaje_completitud: porcentaje,
+      },
+    })
+
+    try {
+      const resp = await balanceService.cambiarEstado(eventoId, recursoId, nuevoEstado)
+      if (resp && resp.balance) {
+        setBalance(resp.balance)
+      }
+    } catch (err) {
+      setBalance(balanceAnterior)
+      setErrorAccion(err instanceof Error ? err.message : 'Error al modificar el estado del recurso.')
+    } finally {
+      setActualizandoRecursoId(null)
+    }
+  }
 
   const cargarBalance = useCallback(
     async (sincronizar = false) => {
@@ -194,13 +269,15 @@ export function BalanceLogistico({
       </div>
 
       {/* Indicadores de Resumen */}
+      {errorAccion && <Alert variant="error">{errorAccion}</Alert>}
+
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
         <div className="flex flex-col gap-0.5 rounded-[10px] bg-background px-3 py-2">
           <span className="text-[11.5px] font-semibold text-muted-foreground">Total Recursos</span>
           <span className="font-display text-xl font-bold">{resumen.total_recursos}</span>
         </div>
         <div className="flex flex-col gap-0.5 rounded-[10px] bg-success-soft/60 px-3 py-2 text-success-foreground">
-          <span className="text-[11.5px] font-semibold">Disponibles</span>
+          <span className="text-[11.5px] font-semibold">Listos</span>
           <span className="font-display text-xl font-bold">{resumen.disponibles}</span>
         </div>
         <div className="flex flex-col gap-0.5 rounded-[10px] bg-warning-soft/60 px-3 py-2 text-warning-foreground">
@@ -316,7 +393,11 @@ export function BalanceLogistico({
                     </span>
                   </div>
 
-                  <EstadoRecursoBadge estado={rec.estado} />
+                  <EstadoRecursoSelector
+                    estado={rec.estado}
+                    onChange={(nuevo) => manejarCambioEstadoRecurso(rec.id, nuevo)}
+                    disabled={actualizandoRecursoId === rec.id}
+                  />
                 </div>
               </div>
             )

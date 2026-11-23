@@ -605,3 +605,86 @@ test('HU-31 / QA Escenario 3: Consulta de balance para evento inexistente respon
   }
 });
 
+test('HU-31 / HU-29: el balance solo cuenta como disponibles a meseros con estado CONFIRMADO', async () => {
+  const mockClient = {
+    query: async (sql, params) => {
+      if (sql.includes('FROM eventos WHERE id')) {
+        // 40 asistentes -> 40/20 = 2 meseros requeridos
+        return {
+          rows: [{ id: 77, nombre_evento: 'Cena Gala', asistentes: 40, duracion_horas: 4, estado: 'planificacion' }]
+        };
+      }
+      if (sql.includes('FROM evento_personal ep')) {
+        // 2 meseros asignados: 1 confirmado y 1 por confirmar
+        return {
+          rows: [
+            { rol: 'mesero', estado_asignacion: 'confirmado', asignados: 1 },
+            { rol: 'mesero', estado_asignacion: 'por_confirmar', asignados: 1 }
+          ]
+        };
+      }
+      return { rows: [] };
+    }
+  };
+
+  const recursos = await calcularRecursosEvento(mockClient, 77);
+  const meseros = recursos.find((r) => r.categoria === 'personal' && r.recurso_nombre === 'Meseros');
+  assert.ok(meseros, 'Debe existir el requerimiento de Meseros');
+
+  // Requeridos: 2. Disponibles: solo 1 (el confirmado). Estado: por_conseguir (déficit 1).
+  assert.equal(meseros.cantidad_requerida, 2);
+  assert.equal(meseros.cantidad_disponible, 1, 'Solo el mesero confirmado debe contar como disponible');
+  assert.equal(meseros.estado, 'por_conseguir', 'Al faltar 1 confirmado, el estado debe ser por_conseguir');
+  assert.match(meseros.notas, /Confirmados: 1 · Por confirmar: 1/);
+});
+
+test('HU-31: cambiarEstadoRecursoBalance actualiza el estado y preserva modificaciones manuales', async () => {
+  const { cambiarEstadoRecursoBalance } = require('../src/controllers/balanceController');
+  const pool = require('../src/config/db');
+  const originalConnect = pool.connect;
+
+  let queryUpdate = null;
+  pool.connect = async () => ({
+    query: async (sql, params) => {
+      if (sql.includes('UPDATE evento_balance_recursos')) {
+        queryUpdate = { sql, params };
+        return {
+          rows: [{ id: 5, evento_id: 10, recurso_nombre: 'Arroz', estado: params[0], estado_manual: true }]
+        };
+      }
+      if (sql.includes('FROM eventos WHERE id')) {
+        return { rows: [{ id: 10, nombre_evento: 'Boda', asistentes: 50 }] };
+      }
+      if (sql.includes('FROM evento_balance_recursos WHERE evento_id = $1')) {
+        return {
+          rows: [{ id: 5, evento_id: 10, categoria: 'alimento', recurso_nombre: 'Arroz', cantidad_requerida: 4, cantidad_disponible: 0, unidad_medida: 'kilo', estado: 'disponible', estado_manual: true }]
+        };
+      }
+      return { rows: [] };
+    },
+    release: () => {}
+  });
+
+  try {
+    let status = null;
+    let body = null;
+    const req = {
+      params: { id: '10', recursoId: '5' },
+      body: { estado: 'listo' } // Acepta sinónimo 'listo'
+    };
+    const res = {
+      status: (code) => { status = code; return { json: (d) => { body = d; } }; },
+      json: (d) => { status = 200; body = d; }
+    };
+
+    await cambiarEstadoRecursoBalance(req, res);
+
+    assert.equal(status, 200);
+    assert.equal(body.mensaje, 'Estado del recurso actualizado exitosamente');
+    assert.equal(queryUpdate.params[0], 'disponible', 'listo se normaliza a disponible');
+    assert.equal(body.recurso.estado, 'disponible');
+  } finally {
+    pool.connect = originalConnect;
+  }
+});
+

@@ -172,7 +172,8 @@ function agruparRequerimientos(detalle: EventoDetalle) {
 }
 
 export function DetalleEvento({ evento, onCambio }: { evento: EventoListado; onCambio?: () => void }) {
-  const { detalle, cargando, error, recargar } = useEventoDetalle(evento.id)
+  const claveDetalle = `${evento.id}-${evento.asistentes}-${evento.estado}-${evento.fecha_evento}`
+  const { detalle, cargando, error, recargar } = useEventoDetalle(evento.id, claveDetalle)
   const requerimientos = detalle ? agruparRequerimientos(detalle) : null
   // Mensaje de la asignación de meseros: se guarda aquí (y con el id del evento) porque el detalle se recarga al guardar
   const [mensajeAsignacion, setMensajeAsignacion] = useState<{ eventoId: number; mensaje: MensajeAsignacion } | null>(null)
