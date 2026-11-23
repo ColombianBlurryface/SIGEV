@@ -10,6 +10,12 @@ export type CategoriaBalance = 'personal' | 'alimento' | 'bebida' | 'mobiliario'
 
 export type EstadoRecursoBalance = 'disponible' | 'por_comprar' | 'por_conseguir' | 'pendiente'
 
+/**
+ * Enumerador estricto para el DTO oficial de la API (HU-32 · RF-41).
+ * Nota de negocio: NO debe existir el valor BOUGHT o COMPRADO.
+ */
+export type ResourceStatus = 'AVAILABLE' | 'TO_BUY' | 'TO_PROCURE' | 'PENDING'
+
 export type OrigenRecursoTipo =
   | 'personal'
   | 'producto_catalogo'
@@ -28,10 +34,33 @@ export interface RecursoBalance {
   cantidad_disponible: number
   unidad_medida: string
   estado: EstadoRecursoBalance
+  status?: ResourceStatus
   fecha_limite?: string | null
   notas?: string | null
   creado_en?: string
   actualizado_en?: string
+}
+
+export interface ResourceItemBalance {
+  item_name: string
+  required_quantity: number
+  available_quantity: number
+  deficit_quantity: number
+  unit: string
+  status: ResourceStatus
+}
+
+export interface ResourceCategoryBalance {
+  category_name: 'STAFF' | 'FOOD' | 'DRINKS' | 'FURNITURE' | 'OTHER'
+  category_label?: string
+  items: ResourceItemBalance[]
+}
+
+export interface LogisticsBalanceResponse {
+  event_id: string
+  event_name: string
+  guest_count: number
+  categories: ResourceCategoryBalance[]
 }
 
 export interface ResumenBalanceLogistico {
