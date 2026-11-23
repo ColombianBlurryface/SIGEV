@@ -386,7 +386,7 @@ export function DetalleEvento({ evento, onCambio }: { evento: EventoListado; onC
         abierto={modalBalanceAbierto}
         onCerrar={() => setModalBalanceAbierto(false)}
         eventoId={evento.id}
-        refrescoKey={requerimientos?.asignacion?.meseros_asignados}
+        refrescoKey={`${requerimientos?.asignacion?.meseros_asignados}-${requerimientos?.asignacion?.confirmados}-${requerimientos?.asignacion?.por_confirmar}-${requerimientos?.asignacion?.estado}`}
       />
 
       <div className="flex flex-col gap-3.5">
