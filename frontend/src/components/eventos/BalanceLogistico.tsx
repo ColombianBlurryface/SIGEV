@@ -388,7 +388,7 @@ export function BalanceLogistico({
                     <span className="text-[13px] font-extrabold text-foreground">
                       {formatearNumero(rec.cantidad_requerida)} {rec.unidad_medida}
                     </span>
-                    {rec.categoria !== 'servicio' && (
+                    {rec.categoria !== 'servicio' && rec.categoria !== 'alimento' && (
                       <span className="text-[11px] text-muted-foreground">
                         Disp: {formatearNumero(rec.cantidad_disponible)} {rec.unidad_medida}
                       </span>
