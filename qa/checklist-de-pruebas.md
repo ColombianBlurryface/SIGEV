@@ -271,6 +271,19 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 
 ---
 
+### HU-53 · Ver el detalle del evento en una ventana (RF-60)
+
+> Solo cambia dónde y cómo se muestra el detalle: no hay cambios de API ni de base de datos (sin SQL nuevo).
+
+- [ ] 🤖👀 **Se abre al hacer clic:** en `/eventos` ya no hay columna angosta al lado de la lista; al hacer clic en un evento se abre una ventana grande (casi toda la pantalla) **encima de la lista**, y la URL pasa a `/eventos?evento=ID`. Sin ese parámetro solo se ve la lista (no se abre ningún evento por defecto).
+- [ ] 🤖👀 **Encabezado y pestañas:** arriba están el nombre, la fecha, el estado (y «Buffet» si aplica), «Editar evento» y la **X**. Las pestañas son **Datos · Alimentos y bebidas · Mobiliario · Servicios · Personal · Costo**; las tres de requerimientos muestran cuántos ítems tienen. Se mueven con el ratón y con el teclado (flechas, Inicio y Fin).
+- [ ] 🤖👀 **Se ve todo lo de antes:** Datos (fecha, duración, horario, asistentes, modalidad, estado, observaciones); Alimentos y bebidas (alimentos, bebidas generales, bar de coctelería, ingredientes y botellas a comprar); Mobiliario (aviso de alquiler y lo propio/a alquilar); Servicios; Personal (meseros y cocineros requeridos y la asignación de meseros con sus estados); Costo (desglose y «Costo total estimado»).
+- [ ] 🤖👀 **Se conservan las acciones:** «Editar evento» lleva a la edición del evento; el estado se cambia en la pestaña Datos (y el encabezado lo refleja); «Asignar meseros» y el cambio de estado de cada mesero funcionan desde la pestaña Personal.
+- [ ] 🤖👀 **Se cierra:** con la **X**, con la tecla **Esc** y con un clic en el fondo oscuro; se vuelve a la lista y la URL pierde `?evento`. Con la ventana abierta, la página de atrás no se desplaza.
+- [ ] 🤖 **Enlace directo:** `/eventos?evento=ID` abre la ventana de ese evento; un id que no existe no abre nada y se ve la lista.
+- [ ] 🤖👀 **Evento grande:** con un evento de muchos alimentos, bebidas y servicios, todo se recorre con el scroll **dentro** de la ventana (no hay que bajar por la página). Revisar también en un celular (390 px) y una tableta (768 px): la ventana ocupa casi toda la pantalla y las pestañas se pueden desplazar a los lados.
+- [ ] 👀 Tras **crear o editar** un evento, la ventana de ese evento se abre sola sobre la lista (el aviso de éxito queda detrás y se ve al cerrarla).
+
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)
 
 | Parte | Resultado |
