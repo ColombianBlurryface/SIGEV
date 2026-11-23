@@ -238,7 +238,11 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **Sincronización completa:** «Cambiar asignación» precarga los asignados; desmarcar uno y guardar lo quita; «Cancelar» no cambia nada; dejar todo desmarcado los quita a todos.
 - [ ] 🤖👀 **Tope:** no se pueden marcar más meseros que los requeridos (1 por cada 20 asistentes; 40 asistentes → 2). Al llegar al número, las demás casillas se bloquean («ya no puedes marcar más») y se liberan al desmarcar. Por la API, enviar más da 400.
 - [ ] 🤖👀 **Cruces de horario:** un mesero ocupado en otro evento que se cruza (mismo día y horas que se pisan) sale bloqueado con «Ocupado en «Evento» (18:00 – 22:00)»; por la API, 409. **Si un evento termina justo cuando empieza el otro (18:00–22:00 y 22:00–02:00), sí se puede.** También se bloquean el mismo horario, un evento dentro de otro, empezar un minuto antes de que termine, y un evento de madrugada del día siguiente a uno que cruza la medianoche. Otro día o en la mañana, no. Un evento sin hora de inicio ocupa todo el día.
-- [ ] 🤖👀 **Hora de inicio del evento:** el registro (paso 1) exige «Hora de inicio» («Indica la hora de inicio»), la vista previa y el resumen muestran el horario («18:00 – 23:00») y el detalle del evento también. Por la API es opcional y solo acepta `HH:MM` (25:61, 18, 6:00 o texto dan 400).
+- [ ] 🤖👀 **Hora de inicio del evento:** el registro (paso 1) exige «Hora de inicio» («Indica la hora de inicio»), la vista previa y el resumen muestran el horario («18:00 – 23:00») y el detalle del evento también. Por la API es opcional y solo acepta `HH:MM` en 24 horas (25:61, 18, 6:00 o texto dan 400).
+- [ ] 🤖👀 **Escribir la hora en 12 horas (HU-52 · RF-59):** en «Hora de inicio» (al registrar y al editar un evento) hay un campo de texto con el ejemplo gris «7:30 p. m.» y, al lado, la elección «a. m. / p. m.»; ya no aparece «--:-- -----». Se escribe con horas y minutos (7:30) y se elige a. m. o p. m.
+- [ ] 🤖👀 **Horas inválidas:** `13:00`, `7:75`, `0:30`, `7` o texto avisan junto al campo (en rojo) y no dejan pasar al paso 2; escribir la hora sin elegir a. m./p. m. avisa «Elige a. m. o p. m.»; dejarla vacía avisa «Indica la hora de inicio».
+- [ ] 🤖👀 **Mediodía y medianoche:** `12:00 p. m.` es mediodía (la vista previa muestra «12:00 – 16:00» con 4 h) y `12:00 a. m.` es medianoche («00:00 – 04:00»); `7:30 p. m.` es «19:30 – 23:30». También se puede pegar «7:30 p. m.» completo en el campo.
+- [ ] 🤖 **Se sigue guardando en 24 horas:** crear un evento con `7:30 p. m.` guarda `19:30` (la API y la base de datos no cambian); al editarlo (HU-50) el campo vuelve a mostrar `7:30` y `p. m.`; los cruces de meseros (HU-28) usan 19:30 (un evento a las 21:00 ese día se pisa; uno a las 23:30 empieza justo cuando termina y sí se puede).
 - [ ] 🤖 **Dos asignaciones a la vez** del mismo mesero a eventos que se cruzan: entra una y la otra recibe 409.
 - [ ] 🤖 **Validaciones:** ids repetidos, de texto, 0, negativos o decimales dan 400; evento inexistente 404; id de evento inválido 400; sin sesión 401. Si se elimina un mesero ya asignado, deja de contar (el déficit sube). 10 asignaciones simultáneas sobre el mismo evento terminan con una lista completa, sin errores 500.
 
@@ -250,7 +254,10 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **Cambiar el estado:** junto a cada mesero hay un selector (Por confirmar, Confirmado, No puede); al elegir uno aparece «… quedó como «No puede»» y el estado queda guardado (recargar la página lo conserva). Por la API: `PATCH /api/eventos/:id/meseros/:personalId/estado` con `{ "estado": "confirmado" }` (o `PENDING`, `CONFIRMED`, `UNAVAILABLE`) da 200 y `{ event_id, staff_id, full_name, assignment_status }`.
 - [ ] 🤖👀 **Escenario (HU-25):** evento de 100 asistentes (5 meseros requeridos) con 5 asignados «por confirmar»; marcar a uno como «No puede» → el detalle dice «4 de 5 · Faltan 1» y la alerta de personal (HU-25) muestra 4 asignados y diferencia −1. El mesero «No puede» sigue en la lista (tachado).
 - [ ] 🤖👀 **Cambiar la asignación conserva los estados:** en «Cambiar asignación», quien «No puede» aparece marcado con el aviso «no cuenta para el estándar» y no ocupa un lugar del tope (se puede marcar un sexto); al guardar, los que se quedan conservan su estado, los nuevos entran «por confirmar» y los desmarcados se quitan.
-- [ ] 🤖 **Volver a contar:** pasar de «No puede» a «Por confirmar»/«Confirmado» da **400** si el cupo ya está lleno y **409** si el mesero se cruza con otro evento; un mesero «No puede» no bloquea su horario en otro evento.
+- [ ] 🤖 **Volver a contar:** pasar de «No puede» a «Por confirmar»/«Confirmado» da **400** si el cupo ya está lleno y **409** si el mesero se cruza con otro evento o está «No puede» en otro evento de esa misma fecha.
+- [ ] 🤖👀 **«No puede» solo vale ese día (RN-21 · DEF-02):** marcar a un mesero «No puede» en un evento lo deja **no disponible para todos los eventos de esa fecha**, aunque no se crucen en horario (por ejemplo 08:00 y 18:00): en «Asignar meseros» sale bloqueado con «No disponible ese día: marcado «No puede» en «Evento»» y por la API asignarlo da **409**.
+- [ ] 🤖👀 **En otros días sigue disponible:** el mismo mesero se puede asignar a un evento del día siguiente, de dos días después o de cualquier otra fecha (200); en el evento donde se marcó sigue «No puede». Probar con dos eventos en días seguidos y con dos eventos en la misma fecha.
+- [ ] 🤖 **Lo que ya existía no cambia:** si el mesero ya estaba asignado a otro evento de esa fecha (por ejemplo «Confirmado» en el de la mañana) y luego se marca «No puede» en el de la tarde, su asignación de la mañana conserva su estado y se puede seguir cambiando la lista de ese evento (200).
 - [ ] 🤖 **Validaciones:** estado inválido, vacío o que no es texto → 400; mesero que no está asignado a ese evento o evento inexistente → 404; ids inválidos → 400; evento realizado o cancelado → 409; sin sesión → 401.
 
 ### HU-30 · Consultar lista de meseros programados (RF-37 / RF-38)
@@ -263,6 +270,19 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖 **Una sola consulta:** la lista se arma con un JOIN; con 5 meseros o con 100 la API hace la misma cantidad de consultas.
 
 ---
+
+### HU-53 · Ver el detalle del evento en una ventana (RF-60)
+
+> Solo cambia dónde y cómo se muestra el detalle: no hay cambios de API ni de base de datos (sin SQL nuevo).
+
+- [ ] 🤖👀 **Se abre al hacer clic:** en `/eventos` ya no hay columna angosta al lado de la lista; al hacer clic en un evento se abre una ventana grande (casi toda la pantalla) **encima de la lista**, y la URL pasa a `/eventos?evento=ID`. Sin ese parámetro solo se ve la lista (no se abre ningún evento por defecto).
+- [ ] 🤖👀 **Encabezado y pestañas:** arriba están el nombre, la fecha, el estado (y «Buffet» si aplica), «Editar evento» y la **X**. Las pestañas son **Datos · Alimentos y bebidas · Mobiliario · Servicios · Personal · Costo**; las tres de requerimientos muestran cuántos ítems tienen. Se mueven con el ratón y con el teclado (flechas, Inicio y Fin).
+- [ ] 🤖👀 **Se ve todo lo de antes:** Datos (fecha, duración, horario, asistentes, modalidad, estado, observaciones); Alimentos y bebidas (alimentos, bebidas generales, bar de coctelería, ingredientes y botellas a comprar); Mobiliario (aviso de alquiler y lo propio/a alquilar); Servicios; Personal (meseros y cocineros requeridos y la asignación de meseros con sus estados); Costo (desglose y «Costo total estimado»).
+- [ ] 🤖👀 **Se conservan las acciones:** «Editar evento» lleva a la edición del evento; el estado se cambia en la pestaña Datos (y el encabezado lo refleja); «Asignar meseros» y el cambio de estado de cada mesero funcionan desde la pestaña Personal.
+- [ ] 🤖👀 **Se cierra:** con la **X**, con la tecla **Esc** y con un clic en el fondo oscuro; se vuelve a la lista y la URL pierde `?evento`. Con la ventana abierta, la página de atrás no se desplaza.
+- [ ] 🤖 **Enlace directo:** `/eventos?evento=ID` abre la ventana de ese evento; un id que no existe no abre nada y se ve la lista.
+- [ ] 🤖👀 **Evento grande:** con un evento de muchos alimentos, bebidas y servicios, todo se recorre con el scroll **dentro** de la ventana (no hay que bajar por la página). Revisar también en un celular (390 px) y una tableta (768 px): la ventana ocupa casi toda la pantalla y las pestañas se pueden desplazar a los lados.
+- [ ] 👀 Tras **crear o editar** un evento, la ventana de ese evento se abre sola sobre la lista (el aviso de éxito queda detrás y se ve al cerrarla).
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)
 

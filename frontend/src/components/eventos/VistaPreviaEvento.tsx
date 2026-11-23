@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card'
 import { describirHorario } from '@/lib/horario'
 import { formatearFecha } from '@/lib/formato'
 import { calcularCocineros, calcularMeseros } from '@/lib/reglasPersonal'
-import { validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
+import { horaInicio24, validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
 
 export function VistaPreviaEvento({ valores }: { valores: ValoresEvento }) {
   const asistentes = validarAsistentes(valores.asistentes)
@@ -16,7 +16,7 @@ export function VistaPreviaEvento({ valores }: { valores: ValoresEvento }) {
     { etiqueta: 'Tipo', valor: valores.tipo || '—' },
     { etiqueta: 'Fecha', valor: formatearFecha(valores.fecha) },
     { etiqueta: 'Duración', valor: valores.duracion ? `${valores.duracion} h` : '—' },
-    { etiqueta: 'Horario', valor: describirHorario(valores.horaInicio, Number(valores.duracion)) ?? '—' },
+    { etiqueta: 'Horario', valor: describirHorario(horaInicio24(valores), Number(valores.duracion)) ?? '—' },
     { etiqueta: 'Asistentes', valor: asistentes.cantidad ?? '—' },
     { etiqueta: 'Modalidad', valor: modalidad },
     // HU-21: 1 mesero por cada 20 asistentes, redondeado hacia arriba (solo con un número de asistentes válido)

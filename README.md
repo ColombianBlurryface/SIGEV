@@ -70,7 +70,7 @@ Además, toda la aplicación tiene **modo claro y modo oscuro**, que se cambia d
 
 ### Eventos (HU-06)
 
-Resumen, búsqueda, filtros por estado y, a la derecha, el detalle del evento seleccionado con sus requerimientos y el costo estimado.
+Resumen, búsqueda, filtros por estado y la lista de eventos. **Al hacer clic en un evento se abre su detalle en una ventana grande sobre la lista** (HU-53): arriba van el nombre, la fecha, el estado y la X para cerrar, y debajo las pestañas *Datos · Alimentos y bebidas · Mobiliario · Servicios · Personal · Costo* con los requerimientos, el costo estimado, la asignación de meseros y las acciones de siempre (editar el evento y cambiar su estado). Se cierra con la X, con la tecla Esc o con un clic en el fondo, y el enlace `/eventos?evento=ID` abre la ventana de ese evento.
 
 | Modo claro | Modo oscuro |
 | --- | --- |

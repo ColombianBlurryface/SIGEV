@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { etiquetaServicio, TIPO_MOBILIARIO } from '@/lib/categorias'
 import { formatearFecha, formatearNumero } from '@/lib/formato'
-import { MAX_EVENTOS_POR_FECHA, validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
+import { MAX_EVENTOS_POR_FECHA, horaInicio24, validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
 import { describirHoras, serviciosFueraDeDuracion } from '@/lib/reglasServicios'
 import { ApiError } from '@/services/api'
 import { eventosService } from '@/services/eventosService'
@@ -25,7 +25,8 @@ const VALORES_INICIALES: ValoresEvento = {
   nombre: '',
   tipo: '',
   fecha: '',
-  horaInicio: '',
+  horaTexto: '',
+  horaPeriodo: '',
   duracion: '',
   asistentes: '',
   observaciones: '',
@@ -117,7 +118,7 @@ export function NuevoEventoPage() {
         nombre_evento: valores.nombre.trim(),
         tipo_evento: valores.tipo,
         fecha_evento: valores.fecha,
-        hora_inicio: valores.horaInicio,
+        hora_inicio: horaInicio24(valores),
         duracion_horas: Number(valores.duracion),
         asistentes: Number(valores.asistentes),
         observaciones_generales: valores.observaciones.trim() || undefined,
