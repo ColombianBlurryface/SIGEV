@@ -18,7 +18,8 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { etiquetaServicio, TIPO_MOBILIARIO } from '@/lib/categorias'
 import { formatearFecha, formatearNumero } from '@/lib/formato'
-import { MAX_EVENTOS_POR_FECHA, validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
+import { de24Horas } from '@/lib/horario'
+import { MAX_EVENTOS_POR_FECHA, horaInicio24, validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
 import { describirHoras, serviciosFueraDeDuracion } from '@/lib/reglasServicios'
 import { ApiError } from '@/services/api'
 import { catalogoService } from '@/services/catalogoService'
@@ -32,7 +33,8 @@ const VALORES_VACIOS: ValoresEvento = {
   nombre: '',
   tipo: '',
   fecha: '',
-  horaInicio: '',
+  horaTexto: '',
+  horaPeriodo: '',
   duracion: '',
   asistentes: '',
   observaciones: '',
@@ -93,7 +95,8 @@ export function EditarEventoPage() {
           nombre: detalle.nombre_evento,
           tipo: detalle.tipo_evento,
           fecha: detalle.fecha_evento.slice(0, 10),
-          horaInicio: detalle.hora_inicio ? detalle.hora_inicio.slice(0, 5) : '',
+          horaTexto: de24Horas(detalle.hora_inicio).texto,
+          horaPeriodo: de24Horas(detalle.hora_inicio).periodo,
           duracion: String(Number(detalle.duracion_horas)),
           asistentes: String(detalle.asistentes),
           observaciones: detalle.observaciones_generales || '',
@@ -250,7 +253,7 @@ export function EditarEventoPage() {
         nombre_evento: valores.nombre.trim(),
         tipo_evento: valores.tipo,
         fecha_evento: valores.fecha,
-        hora_inicio: valores.horaInicio || undefined,
+        hora_inicio: horaInicio24(valores) || undefined,
         duracion_horas: Number(valores.duracion),
         asistentes: Number(valores.asistentes),
         observaciones_generales: valores.observaciones.trim() || undefined,

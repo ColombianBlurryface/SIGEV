@@ -105,12 +105,14 @@ const fechaLibre = () => {
   }
   return new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
 }
+// HU-52: la hora de inicio se escribe en formato de 12 horas («6:00») y se elige a. m. o p. m. (se guarda como «18:00»)
+const escribirHora = async (texto, periodo) => { await page.fill('#horaInicio', texto); if (periodo) await page.selectOption('#horaInicio-periodo', periodo) }
 const nuevoEvento = async (nombre, asistentes, tipo = 'Boda') => {
   await page.goto(`${URL}/eventos/nuevo`)
   await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', nombre)
   await page.selectOption('select', tipo)
   await page.fill('input[type=date]', fechaLibre())
-  await page.fill('#horaInicio', '18:00')
+  await escribirHora('6:00', 'pm')
   await page.fill('input[placeholder="Ej. 6"]', '5')
   await page.getByLabel('Número de asistentes').fill(String(asistentes))
 }
@@ -2046,7 +2048,7 @@ await t('Registro: la hora de inicio es obligatoria (aviso junto al campo) y la 
   await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', 'Hora de inicio' + sufijo); await page.selectOption('select', 'Boda'); await page.fill('input[type=date]', fechaLibre())
   await page.fill('input[placeholder="Ej. 6"]', '5'); await page.getByLabel('Número de asistentes').fill('100')
   await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.waitForSelector('text=Indica la hora de inicio'); igual(await page.getByRole('tab', { name: /Alimentos/ }).count(), 0, 'avanzó sin hora:')
-  await page.fill('#horaInicio', '18:00'); await page.waitForSelector('text=18:00 – 23:00')
+  await escribirHora('6:00', 'pm'); await page.waitForSelector('text=18:00 – 23:00')
   await aRequerimientos(); await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.getByRole('button', { name: 'Guardar evento' }).waitFor()
   cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('Horario 18:00 – 23:00'), 'el resumen no muestra el horario')
   await page.getByRole('button', { name: 'Guardar evento' }).click(); await page.waitForURL('**/eventos?evento=*')
@@ -2059,6 +2061,53 @@ await t('Pantalla: un mesero eliminado ya no aparece en el selector de asignaci�
   await page.waitForSelector('text=Ningún mesero coincide con la búsqueda'); igual(await lista.locator('label', { hasText: a.nombre_completo }).count(), 0)
 })
 
+
+// ============ HU-52 · Escribir la hora de inicio del evento (RF-59) ============
+grupo = 'HU-52 Hora de inicio en formato de 12 horas (RF-59)'
+const llenarPaso1SinHora = async (nombre, dia = fechaLibre()) => {
+  await page.goto(`${URL}/eventos/nuevo`)
+  await page.fill('input[placeholder="Ej. Boda Martínez & Gómez"]', nombre); await page.selectOption('select', 'Boda'); await page.fill('input[type=date]', dia)
+  await page.fill('input[placeholder="Ej. 6"]', '4'); await page.getByLabel('Número de asistentes').fill('100')
+}
+await t('HU-52: el campo de la hora es un texto con el ejemplo «7:30 p. m.» y la elección a. m./p. m. al lado; ya no es el campo del navegador con «--:-- -----»', async () => {
+  await page.goto(`${URL}/eventos/nuevo`); await page.locator('#horaInicio').waitFor()
+  igual(await page.locator('input[type=time]').count(), 0, 'sigue el campo de hora del navegador:')
+  igual(await page.locator('#horaInicio').getAttribute('type'), 'text'); igual(await page.locator('#horaInicio').getAttribute('placeholder'), '7:30 p. m.', 'ejemplo en gris:')
+  const opciones = await page.locator('#horaInicio-periodo option').allInnerTexts(); cierto(opciones.includes('a. m.') && opciones.includes('p. m.'), 'faltan las opciones a. m. / p. m.: ' + opciones.join('|'))
+  cierto(!(await page.locator('main').innerText()).includes('--:--'), 'aparece «--:--»')
+  cierto((await page.locator('main').innerText()).includes('12:00 p. m. es mediodía y 12:00 a. m. es medianoche'), 'falta la ayuda de mediodía y medianoche')
+})
+await t('HU-52: una hora inválida (13:00, 7:75, 0:30, 7, texto) o sin a. m./p. m. avisa junto al campo y no deja continuar', async () => {
+  for (const [texto, periodo, aviso] of [['13:00', 'pm', 'van de 1 a 12'], ['7:75', 'pm', 'minutos van de 00 a 59'], ['0:30', 'am', 'van de 1 a 12'], ['7', 'pm', 'con horas y minutos'], ['abc', 'pm', 'con horas y minutos'], ['7:30', '', 'Elige a. m. o p. m.'], ['', 'pm', 'Indica la hora de inicio']]) {
+    await llenarPaso1SinHora('Hora mala' + sufijo); await escribirHora(texto, periodo)
+    await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.getByText(aviso, { exact: false }).first().waitFor()
+    igual(await page.getByRole('tab', { name: /Alimentos/ }).count(), 0, `«${texto} ${periodo}» avanzó:`)
+    igual(await page.locator('#horaInicio').getAttribute('aria-invalid'), 'true', `«${texto} ${periodo}» sin marcar el campo:`)
+    cierto((await page.locator('#horaInicio-error').innerText()).includes(aviso), `«${texto} ${periodo}»: el aviso no está junto al campo`)
+  }
+})
+await t('HU-52: 12:00 p. m. es mediodía (12:00) y 12:00 a. m. es medianoche (00:00); 7:30 p. m. es 19:30; también se acepta pegar «7:30 p. m.» completo', async () => {
+  await llenarPaso1SinHora('Equivalencias' + sufijo)
+  for (const [texto, periodo, horario] of [['12:00', 'pm', '12:00 – 16:00'], ['12:00', 'am', '00:00 – 04:00'], ['7:30', 'pm', '19:30 – 23:30'], ['12:30', 'am', '00:30 – 04:30'], ['12:30', 'pm', '12:30 – 16:30'], ['1:05', 'am', '01:05 – 05:05'], ['11:59', 'pm', '23:59 – 03:59 (día siguiente)']]) {
+    await escribirHora(texto, periodo); await page.waitForSelector(`text=${horario}`)
+  }
+  await page.fill('#horaInicio', '8:15 p. m.'); await page.waitForSelector('text=20:15 – 00:15 (día siguiente)')
+  igual(await page.locator('#horaInicio').inputValue(), '8:15', 'no se separó la hora pegada:'); igual(await page.locator('#horaInicio-periodo').inputValue(), 'pm', 'no se eligió p. m.:')
+})
+await t('HU-52: crear con 7:30 p. m. guarda «19:30» (la API recibe 24 horas); al editar (HU-50) el campo vuelve a mostrar 7:30 p. m. y 12:00 a. m. se guarda como 00:00; los cruces de meseros (HU-28) usan 19:30', async () => {
+  const dia = fechaLibre(); await llenarPaso1SinHora('Siete y media' + sufijo, dia); await escribirHora('7:30', 'pm'); await aRequerimientos()
+  const id = await guardarEvento()
+  const guardada = (await api(`/eventos/${id}`)).cuerpo.hora_inicio; igual(guardada, '19:30', 'la API no guardó 19:30:')
+  // Cruces: otro evento a las 21:00 de ese día se pisa con 19:30–23:30; uno a las 23:30 empieza justo cuando termina
+  const cruza = await eventoA('CruzaHora', dia, '21:00'), toca = await eventoA('TocaHora', dia, '23:30'); const [x] = await crearMeseros(1, 'Hora Doce')
+  igual((await asignar(id, [x.id])).estado, 200, 'asignar al evento de 19:30:'); const choque = await asignar(cruza.id, [x.id]); igual(choque.estado, 409, 'se pisa con 19:30–23:30:'); cierto(/19:30/.test(choque.cuerpo.detalle), choque.cuerpo.detalle)
+  igual((await asignar(toca.id, [x.id])).estado, 200, 'empieza justo cuando termina:')
+  // Editar: el campo muestra la hora guardada en 12 horas y se puede cambiar
+  await page.goto(`${URL}/eventos/${id}/editar`); await page.locator('#horaInicio').waitFor(); await page.waitForFunction(() => document.querySelector('#horaInicio')?.value !== '')
+  igual(await page.locator('#horaInicio').inputValue(), '7:30', 'al editar, la hora:'); igual(await page.locator('#horaInicio-periodo').inputValue(), 'pm', 'al editar, el período:')
+  await escribirHora('12:00', 'am'); await aRequerimientos(); await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.getByRole('button', { name: 'Guardar cambios' }).click(); await page.waitForURL('**/eventos?evento=*')
+  igual((await api(`/eventos/${id}`)).cuerpo.hora_inicio, '00:00', 'al editar no se guardó 00:00:')
+})
 
 // ============ HU-29 · Estado de la asignación (RF-36) ============
 grupo = 'HU-29 Estado de la asignación de meseros (RF-36)'
