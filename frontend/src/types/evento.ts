@@ -253,7 +253,9 @@ export interface AsignacionMeseros {
 export interface MeseroCandidato extends Omit<MeseroAsignado, 'estado'> {
   asignado: boolean
   estado: EstadoMesero | null
-  ocupado_en: { evento_id: number; nombre_evento: string; fecha: string; horario: string }[]
+  // Por qué no se puede asignar a este evento: «cruce» (está en otro evento que se pisa en el tiempo) o «no_puede» (marcó «no puede»
+  // en otro evento de esta misma fecha: ese día no está disponible; en las demás fechas sí)
+  ocupado_en: { evento_id: number; nombre_evento: string; fecha: string; horario: string; motivo: 'cruce' | 'no_puede' }[]
 }
 
 // HU-29: respuesta de cambiar el estado de una asignación

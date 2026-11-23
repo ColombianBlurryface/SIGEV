@@ -9,7 +9,8 @@
  *   GET /api/eventos/:id/staff/waiters        lista de meseros programados del evento, para el checklist (HU-30 · RF-37)
  *
  * Estado de cada asignación (HU-29): por_confirmar (al asignar), confirmado o no_puede. Quien «no puede» sigue en la lista
- * pero NO cuenta para el estándar de personal (HU-25) ni para el tope, ni bloquea su horario en otro evento. Sincronizar la
+ * pero NO cuenta para el estándar de personal (HU-25) ni para el tope. Además queda no disponible para los demás eventos de ESA
+ * fecha (RN-21 · DEF-02), a cualquier hora; en las otras fechas sigue disponible. Sincronizar la
  * lista (PUT/POST) conserva el estado de los que ya estaban, agrega los nuevos «por_confirmar» y borra solo los que salen.
  *
  * Sin historial (RF-38): quitar a un mesero de un evento BORRA la fila de evento_personal (no hay borrado lógico ahí), y
@@ -89,24 +90,42 @@ const armarAsignacion = async (cliente, eventoId, asistentes) => {
   };
 };
 
-// De esos meseros, los que ya están en OTRO evento que se cruza con este (misma fecha y horas que se pisan)
-const conflictosDeCruce = async (cliente, eventoId, ids) => {
-  if (ids.length === 0) return [];
+// De esos meseros, los que NO se pueden asignar a este evento por lo que tienen en OTROS eventos (no cancelados). Hay dos motivos:
+//   · «cruce»: están en otro evento que cuenta (no «no puede») y se cruza en el tiempo con este (misma fecha y horas que se pisan).
+//   · «no_puede» (RN-21): marcaron «no puede» en otro evento de ESTA MISMA FECHA; ese día quedan no disponibles aunque las
+//     horas no se pisen. En las demás fechas el «no puede» no tiene efecto.
+// `ids` son los que se revisan por cruce; `idsDia`, los que se revisan por «no puede» ese día (por defecto, los mismos). Quien ya
+// está asignado a este evento y luego marcó «no puede» en otro de la misma fecha conserva su asignación: no se le vuelve a revisar.
+const conflictosDeCruce = async (cliente, eventoId, ids, idsDia = ids) => {
+  if (ids.length === 0 && idsDia.length === 0) return [];
   const { rows } = await cliente.query(
     `SELECT p.id AS personal_id, p.nombre_completo, o.id AS evento_id, o.nombre_evento,
             to_char(o.fecha_evento, 'YYYY-MM-DD') AS fecha, to_char(o.hora_inicio, 'HH24:MI') AS hora_inicio,
-            to_char(${FIN('o')}, 'HH24:MI') AS fin_hora, to_char(${FIN('o')}, 'YYYY-MM-DD') AS fin_fecha
+            to_char(${FIN('o')}, 'HH24:MI') AS fin_hora, to_char(${FIN('o')}, 'YYYY-MM-DD') AS fin_fecha,
+            CASE WHEN ep.estado = '${ESTADO_NO_CUENTA}' THEN 'no_puede' ELSE 'cruce' END AS motivo
      FROM eventos e
-     JOIN evento_personal ep ON ep.personal_id = ANY($1::int[]) AND ep.evento_id <> e.id
+     JOIN evento_personal ep ON ep.evento_id <> e.id AND ep.personal_id = ANY($1::int[] || $3::int[])
      JOIN eventos o ON o.id = ep.evento_id
      JOIN personal p ON p.id = ep.personal_id
-     WHERE e.id = $2 AND o.estado <> 'cancelado' AND p.activo = true AND ep.estado <> '${ESTADO_NO_CUENTA}'
-       AND ${INICIO('o')} < ${FIN('e')} AND ${INICIO('e')} < ${FIN('o')}
+     WHERE e.id = $2 AND o.estado <> 'cancelado' AND p.activo = true
+       AND (
+            (ep.estado <> '${ESTADO_NO_CUENTA}' AND ep.personal_id = ANY($1::int[])
+               AND ${INICIO('o')} < ${FIN('e')} AND ${INICIO('e')} < ${FIN('o')})
+         OR (ep.estado = '${ESTADO_NO_CUENTA}' AND ep.personal_id = ANY($3::int[]) AND o.fecha_evento = e.fecha_evento)
+       )
      ORDER BY p.nombre_completo, o.fecha_evento, o.hora_inicio, o.id`,
-    [ids, eventoId]
+    [ids, eventoId, idsDia]
   );
   return rows.map((r) => ({ ...r, horario: describirHorario(r) }));
 };
+
+// Frase de un conflicto (para el error 409): según el motivo, cruce de horario o «no puede» ese día
+const frase = (c, nombre = c.nombre_completo) =>
+  c.motivo === 'no_puede'
+    ? `${nombre} está marcado como «no puede» en «${c.nombre_evento}» el ${c.fecha}: no está disponible ese día para ningún evento.`
+    : `${nombre} ya está asignado a «${c.nombre_evento}» el ${c.fecha} (${c.horario}), que se cruza con este evento.`;
+const camposConflicto = ({ personal_id, nombre_completo, evento_id, nombre_evento, fecha, horario, motivo }) =>
+  ({ personal_id, nombre_completo, evento_id, nombre_evento, fecha, horario, motivo });
 
 const cargarEvento = async (cliente, id, bloquear = false) => {
   const { rows } = await cliente.query(
@@ -173,7 +192,8 @@ const listarMeserosDisponibles = async (req, res) => {
     );
     const { rows: propios } = await pool.query('SELECT personal_id, estado FROM evento_personal WHERE evento_id = $1', [id]);
     const asignados = new Map(propios.map((r) => [r.personal_id, r.estado]));
-    const conflictos = await conflictosDeCruce(pool, id, meseros.map((m) => m.id));
+    // Por «no puede» ese día solo se revisa a quien aún no está en este evento: los ya asignados conservan su lugar
+    const conflictos = await conflictosDeCruce(pool, id, meseros.map((m) => m.id), meseros.filter((m) => !asignados.has(m.id)).map((m) => m.id));
     res.json({
       evento_id: id,
       meseros_requeridos: calcularMeseros(evento.asistentes),
@@ -183,7 +203,7 @@ const listarMeserosDisponibles = async (req, res) => {
         estado: asignados.get(m.id) || null,
         ocupado_en: conflictos
           .filter((c) => c.personal_id === m.id)
-          .map(({ evento_id, nombre_evento, fecha, horario }) => ({ evento_id, nombre_evento, fecha, horario }))
+          .map(({ evento_id, nombre_evento, fecha, horario, motivo }) => ({ evento_id, nombre_evento, fecha, horario, motivo }))
       }))
     });
   } catch (error) {
@@ -214,8 +234,9 @@ const asignarMeseros = async (req, res) => {
     }
 
     // Quienes ya están en este evento como «no puede» se quedan así y no cuentan para el tope ni para los cruces (HU-29)
-    const { rows: actuales } = await cliente.query('SELECT personal_id FROM evento_personal WHERE evento_id = $1 AND estado = $2', [id, ESTADO_NO_CUENTA]);
-    const noPueden = new Set(actuales.map((r) => r.personal_id));
+    const { rows: actuales } = await cliente.query('SELECT personal_id, estado FROM evento_personal WHERE evento_id = $1', [id]);
+    const noPueden = new Set(actuales.filter((r) => r.estado === ESTADO_NO_CUENTA).map((r) => r.personal_id));
+    const yaAsignados = new Set(actuales.map((r) => r.personal_id));
     const queCuentan = datos.ids.filter((x) => !noPueden.has(x));
 
     // TOPE: no más meseros que los requeridos (1 por cada 20 asistentes)
@@ -242,16 +263,18 @@ const asignarMeseros = async (req, res) => {
         return datosInvalidos(res, `Uno o más meseros no son válidos o están inactivos (ids: ${invalidos.join(', ')}).`);
       }
 
-      // CRUCES: ninguno puede estar en otro evento que se cruce con este
-      const conflictos = await conflictosDeCruce(cliente, id, queCuentan);
+      // CRUCES y «NO PUEDE» (RN-21): ninguno puede estar en otro evento que se cruce con este, ni haber marcado «no puede»
+      // en otro evento de esta misma fecha (esto último solo se revisa a quien se agrega ahora, no a quien ya estaba)
+      const conflictos = await conflictosDeCruce(cliente, id, queCuentan, queCuentan.filter((x) => !yaAsignados.has(x)));
       if (conflictos.length > 0) {
         await cliente.query('ROLLBACK');
         const c = conflictos[0];
-        const otros = conflictos.length > 1 ? ` (y ${conflictos.length - 1} cruce${conflictos.length - 1 === 1 ? '' : 's'} más)` : '';
+        const otros = conflictos.length > 1 ? ` (y ${conflictos.length - 1} conflicto${conflictos.length - 1 === 1 ? '' : 's'} más)` : '';
+        const ayuda = c.motivo === 'no_puede' ? '' : ' Si un evento termina justo cuando empieza el otro, sí se puede asignar.';
         return res.status(409).json({
           error: 'Conflicto',
-          detalle: `${c.nombre_completo} ya está asignado a «${c.nombre_evento}» el ${c.fecha} (${c.horario}), que se cruza con este evento${otros}. Si un evento termina justo cuando empieza el otro, sí se puede asignar.`,
-          conflictos: conflictos.map(({ personal_id, nombre_completo, evento_id, nombre_evento, fecha, horario }) => ({ personal_id, nombre_completo, evento_id, nombre_evento, fecha, horario }))
+          detalle: `${frase(c)}${otros}${ayuda}`,
+          conflictos: conflictos.map(camposConflicto)
         });
       }
     }
@@ -324,10 +347,7 @@ const cambiarEstadoAsignacion = async (req, res) => {
       if (conflictos.length > 0) {
         await cliente.query('ROLLBACK');
         const c = conflictos[0];
-        return res.status(409).json({
-          error: 'Conflicto',
-          detalle: `${nombre} ya está asignado a «${c.nombre_evento}» el ${c.fecha} (${c.horario}), que se cruza con este evento.`
-        });
+        return res.status(409).json({ error: 'Conflicto', detalle: frase(c, nombre), conflictos: conflictos.map(camposConflicto) });
       }
     }
 
