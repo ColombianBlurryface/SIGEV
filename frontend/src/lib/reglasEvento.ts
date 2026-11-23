@@ -3,7 +3,7 @@
  * El umbral de alquiler de la HU-12 (RN-03) no está aquí: lo define el backend y se obtiene con useUmbralAlquiler.
  * Son las mismas que valida el backend; aquí se revisan antes de enviar para avisar al usuario de inmediato.
  */
-import { HORA_VALIDA } from './horario'
+import { a24Horas, validarHora12, type PeriodoHora } from './horario'
 import { hoyIso } from './formato'
 
 // Rango permitido de asistentes (HU-07, RN-01) y desde cuántos asistentes el evento es buffet (RN-02)
@@ -59,14 +59,19 @@ export interface ValoresEvento {
   nombre: string
   tipo: string
   fecha: string
-  // Hora de inicio «HH:MM» (HU-28): con ella se sabe si dos eventos se cruzan al asignar meseros
-  horaInicio: string
+  // Hora de inicio (HU-28, HU-52): lo escrito en formato de 12 horas («7:30») y el a. m./p. m. elegido. Con ella se sabe si
+  // dos eventos se cruzan al asignar meseros; hacia la API se envía en formato de 24 horas (ver horaInicio24)
+  horaTexto: string
+  horaPeriodo: PeriodoHora
   duracion: string
   asistentes: string
   observaciones: string
 }
 
 export type ErroresEvento = Partial<Record<keyof ValoresEvento, string>>
+
+/** La hora de inicio del evento en formato de 24 horas («19:30»), o '' si lo escrito todavía no es una hora válida. */
+export const horaInicio24 = (valores: Pick<ValoresEvento, 'horaTexto' | 'horaPeriodo'>): string => a24Horas(valores.horaTexto, valores.horaPeriodo)
 
 /**
  * Valida todos los datos del paso 1 del registro.
@@ -90,8 +95,8 @@ export function validarEvento(valores: ValoresEvento, eventosEnFecha=0): Errores
     errores.fecha = `Ya hay ${MAX_EVENTOS_POR_FECHA} eventos registrados en esta fecha (máximo permitido).`
   }
 
-  if (!valores.horaInicio) errores.horaInicio = 'Indica la hora de inicio.'
-  else if (!HORA_VALIDA.test(valores.horaInicio)) errores.horaInicio = 'La hora de inicio no es válida (HH:MM).'
+  const hora = validarHora12(valores.horaTexto, valores.horaPeriodo)
+  if (hora.error) errores.horaTexto = hora.error
 
   const duracion = Number(valores.duracion)
   if (!valores.duracion.trim()) errores.duracion = 'Indica la duración en horas.'

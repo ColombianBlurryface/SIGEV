@@ -3,12 +3,14 @@
  */
 import { CampoAsistentes } from '@/components/eventos/CampoAsistentes'
 import { VistaPreviaEvento } from '@/components/eventos/VistaPreviaEvento'
+import { CampoHora } from '@/components/eventos/CampoHora'
 import { Alert } from '@/components/ui/alert'
 import { Card } from '@/components/ui/card'
 import { FormField } from '@/components/ui/form-field'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import type { PeriodoHora } from '@/lib/horario'
 import { fechaMaxima, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
 import { TIPOS_EVENTO, type EstadoEvento } from '@/types/evento'
 import { hoyIso } from '@/lib/formato'
@@ -83,13 +85,20 @@ export function PasoDatos({
           />
         </FormField>
 
-        <FormField id="horaInicio" label="Hora de inicio" error={errores.horaInicio} hint="Sirve para saber si dos eventos se cruzan al asignar meseros.">
-          <Input
+        <FormField
+          id="horaInicio"
+          label="Hora de inicio"
+          error={errores.horaTexto}
+          hint="Escríbela con horas y minutos y elige a. m. o p. m. 12:00 p. m. es mediodía y 12:00 a. m. es medianoche. Sirve para saber si dos eventos se cruzan al asignar meseros."
+        >
+          <CampoHora
             id="horaInicio"
-            type="time"
-            value={valores.horaInicio}
-            onChange={(e) => onCambio('horaInicio', e.target.value)}
-            {...propsError('horaInicio')}
+            texto={valores.horaTexto}
+            periodo={valores.horaPeriodo}
+            invalido={Boolean(errores.horaTexto)}
+            idError="horaInicio-error"
+            onTexto={(v) => onCambio('horaTexto', v)}
+            onPeriodo={(v: PeriodoHora) => onCambio('horaPeriodo', v)}
           />
         </FormField>
 

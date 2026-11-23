@@ -20,7 +20,7 @@ import { describirHorario } from '@/lib/horario'
 import { formatearFecha, formatearMoneda, formatearNumero } from '@/lib/formato'
 import { calcularCocineros, calcularMeseros, relacionCocineros, relacionMeseros } from '@/lib/reglasPersonal'
 import { describirHoras } from '@/lib/reglasServicios'
-import { validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
+import { horaInicio24, validarAsistentes, type ValoresEvento } from '@/lib/reglasEvento'
 import { cn } from '@/lib/utils'
 import type { ProductoCatalogo } from '@/types/catalogo'
 import type { RequerimientosEvento } from '@/types/registro'
@@ -167,7 +167,7 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
     { etiqueta: 'Tipo', valor: valores.tipo },
     { etiqueta: 'Fecha', valor: formatearFecha(valores.fecha) },
     { etiqueta: 'Duración', valor: `${formatearNumero(valores.duracion)} horas` },
-    { etiqueta: 'Horario', valor: describirHorario(valores.horaInicio, Number(valores.duracion)) ?? '—' },
+    { etiqueta: 'Horario', valor: describirHorario(horaInicio24(valores), Number(valores.duracion)) ?? '—' },
     { etiqueta: 'Asistentes', valor: formatearNumero(cantidad) },
     { etiqueta: 'Modalidad', valor: asistentes.esBuffet ? 'Buffet' : 'Servida a la mesa' },
     { etiqueta: 'Meseros requeridos', valor: `${formatearNumero(calcularMeseros(cantidad))} (${relacionMeseros})` },
