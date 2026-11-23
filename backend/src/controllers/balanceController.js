@@ -232,6 +232,14 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
       const cantReq = Number(req.cantidad);
       const cantDisp = Number(req.unidades_propias || 0);
       const alquilar = Number(req.unidades_alquilar || 0);
+
+      // HU-32 · Escenario 3: Si hay déficit y 0 unidades disponibles/gestionadas, el estado por defecto es pendiente.
+      // Si hay existencias parciales o gestión en curso, es por conseguir (TO_PROCURE).
+      let estadoMob = 'disponible';
+      if (alquilar > 0) {
+        estadoMob = cantDisp > 0 ? 'por_conseguir' : 'pendiente';
+      }
+
       recursos.push({
         categoria: 'mobiliario',
         recurso_nombre: req.descripcion,
@@ -240,7 +248,7 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
         cantidad_requerida: cantReq,
         cantidad_disponible: cantDisp,
         unidad_medida: 'unidades',
-        estado: alquilar > 0 ? 'por_conseguir' : 'disponible',
+        estado: estadoMob,
         notas: alquilar > 0
           ? `${cantDisp} unidades propias disponibles · ${alquilar} unidades por alquilar`
           : 'Totalmente cubierto con unidades propias'
@@ -401,8 +409,61 @@ const parseEventoId = (raw) => {
 };
 
 /**
+ * Enumerador estricto de estados para la capa de presentación / API (HU-32 · RF-41).
+ * Nota de negocio: NO existe el valor BOUGHT ni COMPRADO en este Enum.
+ */
+const ResourceStatus = Object.freeze({
+  AVAILABLE: 'AVAILABLE',
+  TO_BUY: 'TO_BUY',
+  TO_PROCURE: 'TO_PROCURE',
+  PENDING: 'PENDING'
+});
+
+/**
+ * Determina el estado estricto (ResourceStatus) según las reglas de negocio de la HU-32 (RF-41):
+ * - Si deficit_quantity <= 0: obligatoriamente AVAILABLE.
+ * - Si internamente figura como comprado o adquirido: se transforma a AVAILABLE (sin exponer "comprado").
+ * - Si hay orden de compra en curso o compras de alimentos/bebidas pendientes: TO_BUY.
+ * - Si hay solicitud de alquiler o personal por conseguir: TO_PROCURE.
+ * - Si hay déficit sin gestión o pendiente: PENDING (Escenario 3).
+ *
+ * @param {object} item
+ * @returns {'AVAILABLE' | 'TO_BUY' | 'TO_PROCURE' | 'PENDING'}
+ */
+const determinarResourceStatus = (item) => {
+  const req = Number(item.cantidad_requerida != null ? item.cantidad_requerida : (item.required_quantity || 0));
+  const disp = Number(item.cantidad_disponible != null ? item.cantidad_disponible : (item.available_quantity || 0));
+  const deficit = Number(item.deficit_quantity != null ? item.deficit_quantity : Math.max(0, req - disp));
+
+  // Regla 1 (RF-41): Si deficit_quantity == 0 (o menor), el estado es obligatoriamente AVAILABLE
+  if (deficit <= 0) {
+    return ResourceStatus.AVAILABLE;
+  }
+
+  const estadoNorm = String(item.estado || item.status || '').trim().toLowerCase();
+
+  // Regla 2 (Exclusión "Comprado" · Escenario 2): todo recurso adquirido o comprado se mapea a AVAILABLE
+  if (['comprado', 'adquirido', 'bought', 'purchased', 'disponible', 'available', 'listo', 'hecho'].includes(estadoNorm)) {
+    return ResourceStatus.AVAILABLE;
+  }
+
+  // Regla 3: Si hay orden de compra en curso o insumos de cocina/alimentos a comprar -> TO_BUY
+  if (item.orden_compra_en_curso || estadoNorm === 'por_comprar' || estadoNorm === 'to_buy' || item.categoria === 'alimento') {
+    return ResourceStatus.TO_BUY;
+  }
+
+  // Regla 4: Si hay solicitud de alquiler en curso o personal requerido por conseguir -> TO_PROCURE
+  if (item.alquiler_en_curso || estadoNorm === 'por_conseguir' || estadoNorm === 'to_procure' || item.categoria === 'personal') {
+    return ResourceStatus.TO_PROCURE;
+  }
+
+  // Regla 5 (Escenario 3): Déficit sin gestión asociada o pendiente -> PENDING
+  return ResourceStatus.PENDING;
+};
+
+/**
  * Agrupa los recursos y genera las métricas de resumen y el DTO jerárquico del balance
- * (HU-31 · RF-39, RF-40).
+ * (HU-31, HU-32 · RF-39, RF-40, RF-41).
  *
  * @param {number} eventoId
  * @param {Array<object>} filas
@@ -413,6 +474,24 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
     const cantReq = parseFloat(r.cantidad_requerida) || 0;
     const cantDisp = parseFloat(r.cantidad_disponible) || 0;
     const deficit = Math.max(0, cantReq - cantDisp);
+
+    const statusVal = determinarResourceStatus({
+      deficit_quantity: deficit,
+      estado: r.estado,
+      status: r.status,
+      categoria: r.categoria,
+      cantidad_requerida: cantReq,
+      cantidad_disponible: cantDisp,
+      orden_compra_en_curso: r.orden_compra_en_curso,
+      alquiler_en_curso: r.alquiler_en_curso
+    });
+
+    // Mapear estado interno amigable en español para la UI
+    let estadoEs = 'pendiente';
+    if (statusVal === ResourceStatus.AVAILABLE) estadoEs = 'disponible';
+    else if (statusVal === ResourceStatus.TO_BUY) estadoEs = 'por_comprar';
+    else if (statusVal === ResourceStatus.TO_PROCURE) estadoEs = 'por_conseguir';
+    else if (statusVal === ResourceStatus.PENDING) estadoEs = 'pendiente';
 
     return {
       id: r.id,
@@ -429,8 +508,8 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
       deficit_quantity: deficit,
       unidad_medida: r.unidad_medida,
       unit: r.unidad_medida,
-      estado: r.estado,
-      status: r.estado,
+      estado: estadoEs,
+      status: statusVal, // Enum ResourceStatus (HU-32 · RF-41)
       fecha_limite: r.fecha_limite ? String(r.fecha_limite).slice(0, 10) : null,
       notas: r.notas,
       creado_en: r.creado_en,
@@ -464,7 +543,7 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
   const total = recursos.length;
   const porcentaje = total > 0 ? Math.round((disponibles / total) * 100) : 100;
 
-  // DTO jerárquico por categoría (LogisticsBalanceResponse - QA Sprint 5 / RF-40)
+  // DTO jerárquico por categoría (LogisticsBalanceResponse - QA Sprint 5 / RF-40, RF-41)
   const categories = [
     {
       category_name: 'STAFF',
@@ -474,7 +553,8 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
         required_quantity: i.required_quantity,
         available_quantity: i.available_quantity,
         deficit_quantity: i.deficit_quantity,
-        unit: i.unit
+        unit: i.unit,
+        status: i.status
       }))
     },
     {
@@ -485,7 +565,8 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
         required_quantity: i.required_quantity,
         available_quantity: i.available_quantity,
         deficit_quantity: i.deficit_quantity,
-        unit: i.unit
+        unit: i.unit,
+        status: i.status
       }))
     },
     {
@@ -496,7 +577,8 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
         required_quantity: i.required_quantity,
         available_quantity: i.available_quantity,
         deficit_quantity: i.deficit_quantity,
-        unit: i.unit
+        unit: i.unit,
+        status: i.status
       }))
     },
     {
@@ -507,7 +589,8 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
         required_quantity: i.required_quantity,
         available_quantity: i.available_quantity,
         deficit_quantity: i.deficit_quantity,
-        unit: i.unit
+        unit: i.unit,
+        status: i.status
       }))
     }
   ];
@@ -521,7 +604,8 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
         required_quantity: i.required_quantity,
         available_quantity: i.available_quantity,
         deficit_quantity: i.deficit_quantity,
-        unit: i.unit
+        unit: i.unit,
+        status: i.status
       }))
     });
   }
@@ -703,6 +787,8 @@ const cambiarEstadoRecursoBalance = async (req, res) => {
 };
 
 module.exports = {
+  ResourceStatus,
+  determinarResourceStatus,
   parseEventoId,
   calcularRecursosEvento,
   sincronizarTablaBalance,

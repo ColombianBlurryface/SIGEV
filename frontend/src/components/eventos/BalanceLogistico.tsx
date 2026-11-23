@@ -27,7 +27,15 @@ import type {
   BalanceLogisticoEvento,
   CategoriaBalance,
   EstadoRecursoBalance,
+  ResourceStatus,
 } from '@/types/balance'
+
+const MAPA_ESTADO_A_STATUS: Record<EstadoRecursoBalance, ResourceStatus> = {
+  disponible: 'AVAILABLE',
+  por_comprar: 'TO_BUY',
+  por_conseguir: 'TO_PROCURE',
+  pendiente: 'PENDING',
+}
 
 interface BalanceLogisticoProps {
   eventoId: number
@@ -130,13 +138,14 @@ export function BalanceLogistico({
     setActualizandoRecursoId(recursoId)
 
     const balanceAnterior = balance
+    const statusEnum = MAPA_ESTADO_A_STATUS[nuevoEstado]
     const recursosActualizados = balance.recursos.map((r) =>
-      r.id === recursoId ? { ...r, estado: nuevoEstado, status: nuevoEstado } : r
+      r.id === recursoId ? { ...r, estado: nuevoEstado, status: statusEnum } : r
     )
     const porCat = { ...balance.recursos_por_categoria }
     for (const k of Object.keys(porCat) as CategoriaBalance[]) {
       porCat[k] = porCat[k].map((r) =>
-        r.id === recursoId ? { ...r, estado: nuevoEstado, status: nuevoEstado } : r
+        r.id === recursoId ? { ...r, estado: nuevoEstado, status: statusEnum } : r
       )
     }
     const total = recursosActualizados.length

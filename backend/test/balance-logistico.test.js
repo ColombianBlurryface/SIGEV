@@ -9,6 +9,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  ResourceStatus,
+  determinarResourceStatus,
   estructurarRespuestaBalance,
   calcularRecursosEvento,
   obtenerBalanceEvento,
@@ -687,4 +689,134 @@ test('HU-31: cambiarEstadoRecursoBalance actualiza el estado y preserva modifica
     pool.connect = originalConnect;
   }
 });
+
+// =============================================================================
+// HU-32 / RF-41: Consultar estado de los recursos (Sprint 5)
+// =============================================================================
+
+test('HU-32 / RF-41: ResourceStatus es un enumerador estricto que no contiene BOUGHT ni COMPRADO', () => {
+  assert.equal(ResourceStatus.AVAILABLE, 'AVAILABLE');
+  assert.equal(ResourceStatus.TO_BUY, 'TO_BUY');
+  assert.equal(ResourceStatus.TO_PROCURE, 'TO_PROCURE');
+  assert.equal(ResourceStatus.PENDING, 'PENDING');
+
+  const valores = Object.values(ResourceStatus);
+  assert.equal(valores.length, 4, 'El Enum debe tener exactamente 4 estados');
+  assert.ok(!valores.includes('BOUGHT'), 'No debe existir el valor BOUGHT en ResourceStatus');
+  assert.ok(!valores.includes('COMPRADO'), 'No debe existir el valor COMPRADO en ResourceStatus');
+});
+
+test('HU-32 / RF-41 · Escenario 1: Todos y cada uno de los elementos incluyen status estrictamente válido', () => {
+  const filasMock = [
+    { id: 1, categoria: 'personal', recurso_nombre: 'Meseros', cantidad_requerida: 5, cantidad_disponible: 3, unidad_medida: 'personas', estado: 'por_conseguir' },
+    { id: 2, categoria: 'alimento', recurso_nombre: 'Arroz', cantidad_requerida: 4, cantidad_disponible: 0, unidad_medida: 'kilos', estado: 'por_comprar' },
+    { id: 3, categoria: 'bebida', recurso_nombre: 'Vino Tinto', cantidad_requerida: 10, cantidad_disponible: 10, unidad_medida: 'botellas', estado: 'disponible' },
+    { id: 4, categoria: 'mobiliario', recurso_nombre: 'Centros de mesa', cantidad_requerida: 10, cantidad_disponible: 0, unidad_medida: 'unidades', estado: 'pendiente' },
+    { id: 5, categoria: 'servicio', recurso_nombre: 'DJ', cantidad_requerida: 1, cantidad_disponible: 0, unidad_medida: 'servicios', estado: 'pendiente' }
+  ];
+
+  const respuesta = estructurarRespuestaBalance(10, filasMock, { id: 10, nombre_evento: 'Evento Test', asistentes: 50 });
+  const permitidos = ['AVAILABLE', 'TO_BUY', 'TO_PROCURE', 'PENDING'];
+
+  for (const cat of respuesta.categories) {
+    for (const item of cat.items) {
+      assert.ok(item.status, `El ítem ${item.item_name} debe incluir el campo status`);
+      assert.ok(permitidos.includes(item.status), `El estado ${item.status} debe ser uno de los permitidos`);
+    }
+  }
+
+  for (const rec of respuesta.recursos) {
+    assert.ok(permitidos.includes(rec.status));
+  }
+});
+
+test('HU-32 / RF-41 · Escenario 2: Transformación del estado "Comprado" a "AVAILABLE" sin exponer "comprado"', () => {
+  // Recurso que internamente figura como comprado / adquirido
+  const itemComprado = {
+    recurso_nombre: 'Vino tinto',
+    cantidad_requerida: 12,
+    cantidad_disponible: 12,
+    deficit_quantity: 0,
+    estado: 'comprado'
+  };
+
+  const statusDeterminado = determinarResourceStatus(itemComprado);
+  assert.equal(statusDeterminado, ResourceStatus.AVAILABLE, 'Debe mapear estado comprado a AVAILABLE');
+
+  // En el DTO consolidado:
+  const filasMock = [
+    {
+      id: 1,
+      categoria: 'bebida',
+      recurso_nombre: 'Vino tinto',
+      cantidad_requerida: 12,
+      cantidad_disponible: 12,
+      unidad_medida: 'botellas',
+      estado: 'comprado'
+    }
+  ];
+
+  const res = estructurarRespuestaBalance(1, filasMock, { id: 1, nombre_evento: 'Cata', asistentes: 20 });
+  const itemVino = res.categories.find((c) => c.category_name === 'DRINKS').items[0];
+
+  assert.equal(itemVino.status, 'AVAILABLE');
+  assert.equal(res.recursos[0].status, 'AVAILABLE');
+  assert.equal(res.recursos[0].estado, 'disponible');
+
+  const jsonStr = JSON.stringify(res).toLowerCase();
+  assert.ok(!jsonStr.includes('"status":"comprado"'), 'No debe exponer status comprado');
+  assert.ok(!jsonStr.includes('"status":"bought"'), 'No debe exponer status bought');
+});
+
+test('HU-32 / RF-41 · Escenario 3: Estado por defecto ante déficit sin gestión retorna "PENDING"', () => {
+  // 50 sillas requeridas, 0 disponibles, sin gestión
+  const itemSillas = {
+    recurso_nombre: 'Sillas',
+    cantidad_requerida: 50,
+    cantidad_disponible: 0,
+    deficit_quantity: 50,
+    estado: 'pendiente',
+    orden_compra_en_curso: false,
+    alquiler_en_curso: false
+  };
+
+  const statusDeterminado = determinarResourceStatus(itemSillas);
+  assert.equal(statusDeterminado, ResourceStatus.PENDING, 'Déficit sin gestión retorna por defecto PENDING');
+
+  const filasMock = [
+    {
+      id: 1,
+      categoria: 'mobiliario',
+      recurso_nombre: 'Sillas',
+      cantidad_requerida: 50,
+      cantidad_disponible: 0,
+      unidad_medida: 'unidades',
+      estado: 'pendiente'
+    }
+  ];
+
+  const res = estructurarRespuestaBalance(1, filasMock);
+  const itemRes = res.categories.find((c) => c.category_name === 'FURNITURE').items[0];
+  assert.equal(itemRes.status, 'PENDING');
+  assert.equal(itemRes.deficit_quantity, 50);
+});
+
+test('HU-32 / RF-41: Si deficit_quantity <= 0 el estado es obligatoriamente AVAILABLE', () => {
+  const itemCubierto = {
+    cantidad_requerida: 10,
+    cantidad_disponible: 10,
+    deficit_quantity: 0,
+    estado: 'pendiente' // A pesar de tener texto interno raro, si el déficit es 0 debe ser AVAILABLE
+  };
+
+  assert.equal(determinarResourceStatus(itemCubierto), ResourceStatus.AVAILABLE);
+
+  const itemSuperavit = {
+    cantidad_requerida: 10,
+    cantidad_disponible: 15,
+    deficit_quantity: 0
+  };
+  assert.equal(determinarResourceStatus(itemSuperavit), ResourceStatus.AVAILABLE);
+});
+
 
