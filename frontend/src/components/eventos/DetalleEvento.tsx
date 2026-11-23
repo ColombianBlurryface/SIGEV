@@ -6,7 +6,7 @@
  * bebidas · Mobiliario · Servicios · Personal · Costo. Son los mismos bloques de antes: solo cambia dónde y cómo se muestran.
  */
 import { describirHorario } from '@/lib/horario'
-import { ChefHat, LoaderCircle, Pencil, RotateCw, Users, X } from 'lucide-react'
+import { ChefHat, Layers, LoaderCircle, Pencil, RotateCw, Users, X } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert } from '@/components/ui/alert'
@@ -16,6 +16,7 @@ import { Modal } from '@/components/ui/modal'
 import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AsignacionMeseros, type MensajeAsignacion } from '@/components/eventos/AsignacionMeseros'
+import { ModalBalanceLogistico } from '@/components/eventos/ModalBalanceLogistico'
 import { ComprasIngredientes } from '@/components/eventos/ComprasIngredientes'
 import { ComprasCocteles } from '@/components/eventos/ComprasCocteles'
 import { useEventoDetalle } from '@/hooks/useEventoDetalle'
@@ -234,12 +235,16 @@ function SeccionRequerimientos({ seccion, requerimientos }: { seccion: Seccion; 
 }
 
 export function DetalleEvento({ evento, onCerrar, onCambio }: { evento: EventoListado; onCerrar: () => void; onCambio?: () => void }) {
-  const { detalle, cargando, error, recargar } = useEventoDetalle(evento.id)
+  const claveDetalle = `${evento.id}-${evento.asistentes}-${evento.estado}-${evento.fecha_evento}`
+  const { detalle, cargando, error, recargar } = useEventoDetalle(evento.id, claveDetalle)
   const requerimientos = detalle ? agruparRequerimientos(detalle) : null
   const [activa, setActiva] = useState<Pestana>('datos')
   const refsPestanas = useRef<Partial<Record<Pestana, HTMLButtonElement | null>>>({})
   // Mensaje de la asignación de meseros: se guarda aquí (y con el id del evento) porque el detalle se recarga al guardar
   const [mensajeAsignacion, setMensajeAsignacion] = useState<{ eventoId: number; mensaje: MensajeAsignacion } | null>(null)
+
+  // Modal de Balance Logístico (HU-31)
+  const [modalBalanceAbierto, setModalBalanceAbierto] = useState(false)
 
   // Estado del evento (HU-51 · RF-58)
   const [estadoLocal, setEstadoLocal] = useState<EstadoEvento>(evento.estado)
@@ -342,6 +347,17 @@ export function DetalleEvento({ evento, onCerrar, onCambio }: { evento: EventoLi
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setModalBalanceAbierto(true)}
+            className="gap-1.5 shrink-0"
+            title="Ver balance logístico del evento"
+          >
+            <Layers aria-hidden="true" className="size-3.5" />
+            Balance logístico
+          </Button>
           <Link to={`/eventos/${evento.id}/editar`} className={buttonVariants({ variant: 'secondary', size: 'sm', className: 'gap-1.5' })}>
             <Pencil aria-hidden="true" className="size-3.5" />
             Editar evento
@@ -453,6 +469,31 @@ export function DetalleEvento({ evento, onCerrar, onCambio }: { evento: EventoLi
             <div className="flex flex-col gap-1">
               <span className="text-xs font-bold text-muted-foreground">Observaciones</span>
               <p className="text-[13.5px] leading-relaxed text-subtle">{evento.observaciones_generales || 'Sin observaciones.'}</p>
+            </div>
+
+            {/* HU-31 (RF-39, RF-40): Acceso a Balance Logístico mediante Modal Dialog */}
+            <div className="flex items-center justify-between gap-3 rounded-[12px] border border-border bg-background p-3.5 sm:p-4">
+              <div className="flex items-center gap-3">
+                <span className="flex size-9 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">
+                  <Layers className="size-4.5" />
+                </span>
+                <div className="flex flex-col">
+                  <span className="font-display text-sm font-bold text-foreground">Balance Logístico</span>
+                  <span className="text-xs text-muted-foreground">
+                    Consolidado de personal, alimentos, bebidas, mobiliario y servicios
+                  </span>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setModalBalanceAbierto(true)}
+                className="gap-1.5 shrink-0"
+              >
+                <Layers aria-hidden="true" className="size-3.5" />
+                Balance logístico
+              </Button>
             </div>
           </>
         )}
@@ -567,6 +608,13 @@ export function DetalleEvento({ evento, onCerrar, onCambio }: { evento: EventoLi
           </>
         )}
       </div>
+
+      <ModalBalanceLogistico
+        abierto={modalBalanceAbierto}
+        onCerrar={() => setModalBalanceAbierto(false)}
+        eventoId={evento.id}
+        refrescoKey={requerimientos?.asignacion?.meseros_asignados}
+      />
     </Modal>
   )
 }
