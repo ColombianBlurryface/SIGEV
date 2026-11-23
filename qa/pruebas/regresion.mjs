@@ -80,6 +80,9 @@ const entrar = async (p, usuario = USUARIO, pw = clave) => {
 }
 // En pantallas pequeñas el menú lateral es un cajón: hay que abrirlo antes de usar sus opciones
 const abrirMenu = async () => {
+  // HU-53: si el detalle de un evento está abierto en su ventana, tapa el menú: se cierra con Esc antes de usarlo
+  const ventana = page.getByRole('dialog', { name: 'Detalle del evento' })
+  if (await ventana.count()) { await page.keyboard.press('Escape'); await ventana.waitFor({ state: 'detached' }) }
   if (ANCHO >= 1024) return
   if (!(await page.getByRole('navigation', { name: 'Navegación principal' }).isVisible())) {
     await page.getByRole('button', { name: 'Abrir menú' }).click()
@@ -121,6 +124,9 @@ const aRequerimientos = async () => {
   await page.getByRole('tab', { name: /Alimentos/ }).waitFor()
 }
 const pestana = async (n) => page.getByRole('tab', { name: new RegExp(n) }).click()
+// HU-53: el detalle del evento se abre en una ventana grande con pestañas (Datos, Alimentos y bebidas, Mobiliario, Servicios, Personal, Costo)
+const ventanaDetalle = () => page.getByRole('dialog', { name: 'Detalle del evento' })
+const abrirPestanaDetalle = async (nombre) => { await ventanaDetalle().getByRole('tab', { name: nombre }).click() }
 const guardarEvento = async () => {
   await page.getByRole('button', { name: /^Siguiente/ }).click()
   await page.getByRole('button', { name: 'Guardar evento' }).click()
@@ -346,6 +352,7 @@ await t('HU-13: subtotales y resumen separan generales de coctelería', async ()
   const resumen = await page.locator('main').innerText()
   cierto(/Bebidas generales\s*\n?\s*1 producto/.test(resumen) && /Bar de coctelería\s*\n?\s*1 producto/.test(resumen), 'no separa los conteos')
   const id = await guardarEvento()
+  await abrirPestanaDetalle('Alimentos y bebidas')
   const sec = await page.locator('section[aria-label="Bar de coctelería"]').innerText()
   cierto(sec.includes('Aguardiente Blanco del Valle'), 'el detalle no muestra el bar')
   return `evento ${id}`
@@ -395,6 +402,7 @@ await t('Mismo elemento dos veces se suma en una sola línea', async () => {
 })
 await t('El detalle guardado muestra propias, a alquilar y «Elemento alquilado»', async () => {
   idMob = await guardarEvento()
+  await abrirPestanaDetalle('Mobiliario')
   await page.waitForSelector('text=Elemento alquilado')
   const d = (await api(`/eventos/${idMob}`)).cuerpo
   const p = d.servicios_adicionales.find((s) => s.descripcion.startsWith('Silla propia'))
@@ -451,9 +459,11 @@ await t('Filtrar por estado muestra solo ese estado', async () => {
 })
 await t('Seleccionar un evento abre su detalle con requerimientos y costo', async () => {
   await page.goto(`${URL}/eventos?evento=${idAlimentos}`)
+  await ventanaDetalle().waitFor(); await abrirPestanaDetalle('Alimentos y bebidas')
   await page.waitForSelector('section[aria-label="Alimentos"]')
-  const txt = await page.locator('[aria-label="Detalle del evento"]').innerText()
+  const txt = await ventanaDetalle().innerText()
   cierto(txt.includes('Medallones de Lomo de Res') && txt.includes('$990.000'), 'detalle incompleto')
+  await abrirPestanaDetalle('Costo'); cierto((await ventanaDetalle().innerText()).includes('Costo total estimado'), 'la pestaña Costo no muestra el total')
 })
 
 // ============ H. HU-08 inventario ============
@@ -1063,19 +1073,19 @@ await t('Detalle del evento: muestra los meseros con la cuenta (45 ÷ 20 = 2,25 
   await page.getByRole('button', { name: 'Guardar evento' }).click()
   await page.waitForURL('**/eventos?evento=*')
   const id = Number(new globalThis.URL(page.url()).searchParams.get('evento'))
-  await page.waitForSelector('[aria-label="Meseros requeridos"]')
+  await abrirPestanaDetalle('Personal'); await page.waitForSelector('[aria-label="Meseros requeridos"]')
   igual((await page.locator('[aria-label="Meseros requeridos"]').innerText()).trim(), '3', 'valor en pantalla:')
   igual((await api(`/eventos/${id}`)).cuerpo.logistica.meseros_requeridos, 3, 'valor de la API:')
-  const txt = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
+  const txt = (await ventanaDetalle().innerText()).replace(/\s+/g, ' ')
   cierto(txt.includes('45 ÷ 20 = 2,25 → se redondea hacia arriba a 3'), 'sin la cuenta explicada')
   cierto(txt.includes('Meseros requeridos · 1 por cada 20 asistentes'), 'sin la relación')
 })
 await t('Detalle del evento: un múltiplo exacto (60 asistentes) muestra 3 sin redondeo', async () => {
   const r = await eventoMeseros(60)
   await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
-  await page.waitForSelector('[aria-label="Meseros requeridos"]')
+  await abrirPestanaDetalle('Personal'); await page.waitForSelector('[aria-label="Meseros requeridos"]')
   igual((await page.locator('[aria-label="Meseros requeridos"]').innerText()).trim(), '3')
-  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('60 ÷ 20 = 3'), 'sin «60 ÷ 20 = 3»')
+  cierto((await ventanaDetalle().innerText()).replace(/\s+/g, ' ').includes('60 ÷ 20 = 3'), 'sin «60 ÷ 20 = 3»')
 })
 
 
@@ -1137,23 +1147,23 @@ await t('Detalle del evento: muestra los cocineros con la cuenta (45 ÷ 25 = 1,8
   await page.getByRole('button', { name: 'Guardar evento' }).click()
   await page.waitForURL('**/eventos?evento=*')
   const id = Number(new globalThis.URL(page.url()).searchParams.get('evento'))
-  await page.waitForSelector('[aria-label="Cocineros requeridos"]')
+  await abrirPestanaDetalle('Personal'); await page.waitForSelector('[aria-label="Cocineros requeridos"]')
   igual((await page.locator('[aria-label="Cocineros requeridos"]').innerText()).trim(), '4', 'valor en pantalla:')
   igual((await api(`/eventos/${id}`)).cuerpo.logistica.cocineros_requeridos, 4, 'valor de la API:')
-  const txt = (await page.locator('main').innerText()).replace(/\s+/g, ' ')
+  const txt = (await ventanaDetalle().innerText()).replace(/\s+/g, ' ')
   cierto(txt.includes('45 ÷ 25 = 1,8 → se redondea hacia arriba a 2 grupos × 2 = 4 cocineros'), 'sin la cuenta explicada')
   cierto(txt.includes('Cocineros requeridos · 2 por cada 25 asistentes'), 'sin la relación')
 })
 await t('Detalle del evento: múltiplo exacto (100 → 8) y buffet (320 → 26) con el mismo cálculo', async () => {
   const exacto = await eventoCocineros(100)
   await page.goto(`${URL}/eventos?evento=${exacto.cuerpo.evento.id}`)
-  await page.waitForSelector('[aria-label="Cocineros requeridos"]')
+  await abrirPestanaDetalle('Personal'); await page.waitForSelector('[aria-label="Cocineros requeridos"]')
   igual((await page.locator('[aria-label="Cocineros requeridos"]').innerText()).trim(), '8')
-  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('100 ÷ 25 = 4 grupos × 2 = 8 cocineros'), 'sin «100 ÷ 25 = 4 grupos × 2 = 8»')
+  cierto((await ventanaDetalle().innerText()).replace(/\s+/g, ' ').includes('100 ÷ 25 = 4 grupos × 2 = 8 cocineros'), 'sin «100 ÷ 25 = 4 grupos × 2 = 8»')
   const buffet = await eventoCocineros(320)
   await page.goto(`${URL}/eventos?evento=${buffet.cuerpo.evento.id}`)
-  await page.waitForFunction(() => document.querySelector('[aria-label="Cocineros requeridos"]')?.textContent.trim() === '26')
-  cierto((await page.locator('main').innerText()).replace(/\s+/g, ' ').includes('320 ÷ 25 = 12,8 → se redondea hacia arriba a 13 grupos × 2 = 26 cocineros'), 'sin la cuenta de 320')
+  await abrirPestanaDetalle('Personal'); await page.waitForFunction(() => document.querySelector('[aria-label="Cocineros requeridos"]')?.textContent.trim() === '26')
+  cierto((await ventanaDetalle().innerText()).replace(/\s+/g, ' ').includes('320 ÷ 25 = 12,8 → se redondea hacia arriba a 13 grupos × 2 = 26 cocineros'), 'sin la cuenta de 320')
 })
 
 
@@ -1505,7 +1515,7 @@ await t('Pantalla (detalle del evento): muestra lo que hay que comprar, en su un
   const sinReceta = await nuevoPlato('Plato detalle sin receta' + sufijo)
   const plato = await platoConReceta('Plato detalle compras', [ing(NOMBRE_ING('Arroz detalle'), { unidad_compra: 'kilo', cantidad_porcion: 80 }), ing(NOMBRE_ING('Papa detalle'), { unidad_compra: 'arroba', cantidad_porcion: 150 })])
   const r = await eventoCon(200, [plato, sinReceta])
-  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
+  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`); await ventanaDetalle().waitFor(); await abrirPestanaDetalle('Alimentos y bebidas')
   const lista = page.getByRole('list', { name: 'Lista de ingredientes a comprar' }); await lista.waitFor()
   const api_ = await comprasDe(r)
   for (const nombre of [NOMBRE_ING('Arroz detalle'), NOMBRE_ING('Papa detalle')]) {
@@ -1520,7 +1530,7 @@ await t('Pantalla (detalle del evento): muestra lo que hay que comprar, en su un
 })
 await t('Pantalla (detalle): un evento sin alimentos explica que no hay ingredientes que calcular', async () => {
   const r = await eventoCon(100, [])
-  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`)
+  await page.goto(`${URL}/eventos?evento=${r.cuerpo.evento.id}`); await ventanaDetalle().waitFor(); await abrirPestanaDetalle('Alimentos y bebidas')
   await page.waitForSelector('text=no tiene alimentos, así que no hay ingredientes que calcular')
 })
 
@@ -1984,7 +1994,8 @@ await t('Eliminar un mesero mientras se asigna: nunca queda un inactivo asignado
 })
 
 // --- Pantalla: detalle del evento
-const abrirDetalleEvento = async (id) => { await page.goto(`${URL}/eventos?evento=${id}`); await page.getByRole('region', { name: 'Meseros asignados' }).waitFor() }
+// HU-53: el detalle se abre en una ventana grande con pestañas; los meseros están en «Personal»
+const abrirDetalleEvento = async (id) => { await page.goto(`${URL}/eventos?evento=${id}`); await page.getByRole('dialog', { name: 'Detalle del evento' }).waitFor(); await abrirPestanaDetalle('Personal'); await page.getByRole('region', { name: 'Meseros asignados' }).waitFor() }
 const seccionAsignados = () => page.getByRole('region', { name: 'Meseros asignados' })
 await t('Pantalla: el detalle muestra «0 de 5 · Faltan 5» y el botón «Asignar meseros»', async () => {
   const ev = (await eventoMeseros(100)).cuerpo.evento; await abrirDetalleEvento(ev.id)
@@ -2107,6 +2118,94 @@ await t('HU-52: crear con 7:30 p. m. guarda «19:30» (la API recibe 24 horas); 
   igual(await page.locator('#horaInicio').inputValue(), '7:30', 'al editar, la hora:'); igual(await page.locator('#horaInicio-periodo').inputValue(), 'pm', 'al editar, el período:')
   await escribirHora('12:00', 'am'); await aRequerimientos(); await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.getByRole('button', { name: 'Guardar cambios' }).click(); await page.waitForURL('**/eventos?evento=*')
   igual((await api(`/eventos/${id}`)).cuerpo.hora_inicio, '00:00', 'al editar no se guardó 00:00:')
+})
+
+// ============ HU-53 · Ver el detalle del evento en una ventana (RF-60) ============
+grupo = 'HU-53 Detalle del evento en una ventana (RF-60)'
+const NOMBRES_PESTANAS = ['Datos', 'Alimentos y bebidas', 'Mobiliario', 'Servicios', 'Personal', 'Costo']
+const filaDeEvento = (nombre) => page.locator('button[aria-pressed][aria-label^="' + nombre + ',"]')
+const eventoConTodo = async (nombre, extra = {}) => {
+  const alimento = (await api('/catalogo')).cuerpo.find((x) => x.clasificacion === 'alimento' && x.activo !== false)
+  const silla = (await api('/inventario')).cuerpo.find((x) => String(x.categoria_inventario).toLowerCase() === 'mobiliario')
+  const r = await api('/eventos', { method: 'POST', body: { nombre_evento: nombre + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 5, asistentes: 100,
+    productos: [{ producto_id: alimento.id, porcion_por_persona: 150, componentes_menu: 'Plato HU53' }],
+    servicios_adicionales: [{ tipo: 'mobiliario', producto_id: silla.id, cantidad: 10, descripcion: 'Mobiliario HU53' }, { tipo: 'dj', descripcion: 'DJ HU53', cantidad: 1, horas: 3, tipo_cobro: 'por_hora', valor_unitario: 50000 }], ...extra } })
+  igual(r.estado, 201, 'crear el evento de la prueba:'); return { id: r.cuerpo.evento.id, nombre: nombre + sufijo, alimento: alimento.nombre, mobiliario: silla.nombre }
+}
+await t('HU-53: al hacer clic en un evento se abre una ventana grande sobre la lista (casi toda la pantalla); sin «?evento» solo se ve la lista', async () => {
+  const ev = await eventoConTodo('Ventana clic'); await page.goto(`${URL}/eventos`); await page.fill('#buscar-evento', ev.nombre); await filaDeEvento(ev.nombre).waitFor()
+  igual(await ventanaDetalle().count(), 0, 'se abrió sola, sin hacer clic:')
+  await filaDeEvento(ev.nombre).click(); await ventanaDetalle().waitFor()
+  cierto(page.url().includes(`evento=${ev.id}`), 'la URL no lleva el evento: ' + page.url())
+  const caja = await ventanaDetalle().boundingBox(); const vp = page.viewportSize()
+  cierto(caja.width >= vp.width * 0.85 && caja.height >= vp.height * 0.85, `la ventana no ocupa casi toda la pantalla: ${Math.round(caja.width)}x${Math.round(caja.height)} en ${vp.width}x${vp.height}`)
+  cierto(await page.locator('#buscar-evento').count() === 1, 'la lista de eventos no sigue detrás de la ventana')
+  cierto((await page.locator('[aria-label="Detalle del evento"]:not(dialog)').count()) === 0, 'sigue la columna angosta')
+})
+await t('HU-53: arriba van el nombre, la fecha, el estado y la X; las pestañas son Datos · Alimentos y bebidas · Mobiliario · Servicios · Personal · Costo y se mueven con el teclado', async () => {
+  const ev = await eventoConTodo('Ventana pestañas'); await page.goto(`${URL}/eventos?evento=${ev.id}`); await ventanaDetalle().waitFor()
+  const cabecera = await ventanaDetalle().locator('header').innerText()
+  cierto(cabecera.includes(ev.nombre) && cabecera.includes('Planificación') && /20\d\d/.test(cabecera), 'falta nombre, estado o fecha en el encabezado: ' + cabecera)
+  await ventanaDetalle().getByRole('button', { name: 'Cerrar el detalle del evento' }).waitFor()
+  const nombres = (await ventanaDetalle().getByRole('tab').allInnerTexts()).map((x) => x.replace(/\s+\d+$/, '').trim()); igual(nombres.join('|'), NOMBRES_PESTANAS.join('|'), 'pestañas:')
+  igual(await ventanaDetalle().getByRole('tab', { name: 'Datos' }).getAttribute('aria-selected'), 'true', 'Datos no es la pestaña inicial:')
+  await ventanaDetalle().getByRole('tab', { name: 'Datos' }).focus(); await page.keyboard.press('ArrowRight')
+  igual(await ventanaDetalle().getByRole('tab', { name: /^Alimentos y bebidas/ }).getAttribute('aria-selected'), 'true', 'la flecha derecha no pasó a la siguiente pestaña:')
+  await page.keyboard.press('End'); igual(await ventanaDetalle().getByRole('tab', { name: 'Costo' }).getAttribute('aria-selected'), 'true', 'Fin no va a la última pestaña:')
+  await page.keyboard.press('Home'); igual(await ventanaDetalle().getByRole('tab', { name: 'Datos' }).getAttribute('aria-selected'), 'true', 'Inicio no va a la primera pestaña:')
+})
+await t('HU-53: se ve todo lo que mostraba el detalle (datos, alimentos, mobiliario, servicios, personal y costo) y se conservan editar, cambiar el estado y asignar meseros', async () => {
+  const ev = await eventoConTodo('Ventana todo'); await page.goto(`${URL}/eventos?evento=${ev.id}`); await ventanaDetalle().waitFor()
+  const texto = async () => (await ventanaDetalle().getByRole('tabpanel').innerText()).replace(/\s+/g, ' ')
+  let d = await texto(); for (const x of ['Fecha', 'Duración', 'Asistentes', 'Modalidad', 'Estado del evento', 'Observaciones']) cierto(d.toLowerCase().includes(x.toLowerCase()), `Datos sin «${x}»: ${d}`)
+  await abrirPestanaDetalle('Alimentos y bebidas'); cierto((await texto()).includes(ev.alimento), `Alimentos y bebidas sin «${ev.alimento}»`)
+  await abrirPestanaDetalle('Mobiliario'); cierto((await texto()).includes(ev.mobiliario), `Mobiliario sin «${ev.mobiliario}»`)
+  await abrirPestanaDetalle('Servicios'); cierto((await texto()).includes('DJ HU53'), 'Servicios sin el DJ')
+  await abrirPestanaDetalle('Personal'); d = await texto(); cierto(d.includes('Meseros requeridos') && d.includes('Cocineros requeridos') && d.includes('Meseros asignados'), 'Personal incompleto: ' + d)
+  await ventanaDetalle().getByRole('region', { name: 'Meseros asignados' }).getByRole('button', { name: 'Asignar meseros' }).waitFor()
+  await abrirPestanaDetalle('Costo'); cierto((await texto()).includes('Costo total estimado'), 'Costo sin el total')
+  // Acciones: editar (el enlace va a la pantalla de edición) y cambiar el estado
+  igual(await ventanaDetalle().getByRole('link', { name: 'Editar evento' }).getAttribute('href'), `/eventos/${ev.id}/editar`, 'enlace de editar:')
+  await abrirPestanaDetalle('Datos'); await ventanaDetalle().getByLabel('Estado del evento').selectOption('confirmado'); await page.waitForSelector('text=Estado actualizado a «Confirmado»')
+  igual((await api(`/eventos/${ev.id}`)).cuerpo.estado, 'confirmado', 'el estado no se guardó:'); cierto((await ventanaDetalle().locator('header').innerText()).includes('Confirmado'), 'el encabezado no refleja el estado nuevo')
+  // Asignar meseros desde la ventana
+  const [m] = await crearMeseros(1, 'Ventana Asigna'); await abrirPestanaDetalle('Personal'); await ventanaDetalle().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', 'Ventana Asigna')
+  await ventanaDetalle().locator('label', { hasText: m.nombre_completo }).locator('input[type=checkbox]').check(); await ventanaDetalle().getByRole('button', { name: 'Guardar asignación' }).click(); await page.waitForSelector('text=/Asignación guardada: 1 de/')
+})
+await t('HU-53: se cierra con la X, con la tecla Esc y con un clic en el fondo, y se vuelve a la lista (la URL pierde «?evento»)', async () => {
+  const ev = await eventoConTodo('Ventana cierra'); await page.goto(`${URL}/eventos?evento=${ev.id}`); await ventanaDetalle().waitFor()
+  await ventanaDetalle().getByRole('button', { name: 'Cerrar el detalle del evento' }).click(); await ventanaDetalle().waitFor({ state: 'detached' }); await page.waitForURL((u) => !u.search.includes('evento='), { timeout: 5000 }).catch(() => {})
+  cierto(!page.url().includes('evento='), 'la X no quitó «?evento»: ' + page.url()); cierto(await page.locator('#buscar-evento').isVisible(), 'no se ve la lista')
+  await page.fill('#buscar-evento', ev.nombre); await filaDeEvento(ev.nombre).click(); await ventanaDetalle().waitFor(); await page.keyboard.press('Escape'); await ventanaDetalle().waitFor({ state: 'detached' }); await page.waitForURL((u) => !u.search.includes('evento='), { timeout: 5000 }).catch(() => {})
+  cierto(!page.url().includes('evento='), 'Esc no quitó «?evento»: ' + page.url())
+  await filaDeEvento(ev.nombre).click(); await ventanaDetalle().waitFor(); await page.mouse.click(2, 2); await ventanaDetalle().waitFor({ state: 'detached' }); await page.waitForURL((u) => !u.search.includes('evento='), { timeout: 5000 }).catch(() => {})
+  cierto(!page.url().includes('evento='), 'el clic en el fondo no cerró la ventana: ' + page.url())
+})
+await t('HU-53: el enlace /eventos?evento=ID abre la ventana de ese evento; un id que no existe no abre nada', async () => {
+  const ev = await eventoConTodo('Ventana enlace'); await page.goto(`${URL}/eventos?evento=${ev.id}`); await ventanaDetalle().waitFor()
+  cierto((await ventanaDetalle().locator('header').innerText()).includes(ev.nombre), 'la ventana no es la del evento pedido')
+  await page.goto(`${URL}/eventos?evento=987654321`); await page.locator('#buscar-evento').waitFor(); igual(await ventanaDetalle().count(), 0, 'un id inexistente abrió una ventana:')
+})
+await t('HU-53: con un evento grande (muchos alimentos, bebidas y servicios) todo queda dentro de la ventana: la página de atrás no se mueve y se recorre con el scroll de la ventana', async () => {
+  const cat = (await api('/catalogo')).cuerpo.filter((x) => x.activo !== false); const de = (c, n) => cat.filter((x) => x.clasificacion === c).slice(0, n)
+  const prods = [...de('alimento', 10), ...de('bebida_general', 10), ...de('bar_cocteleria', 6)].map((x) => (x.clasificacion === 'alimento' ? { producto_id: x.id, porcion_por_persona: 100, componentes_menu: 'Plato' } : { producto_id: x.id, porcion_por_persona: Number(x.porcion_por_persona) || 1 }))
+  const servicios = ['dj', 'musica_en_vivo', 'sonido', 'iluminacion', 'entretenimiento', 'otro'].map((tipo, i) => ({ tipo, descripcion: `Servicio grande ${i + 1}`, cantidad: 1, horas: 3, tipo_cobro: 'por_hora', valor_unitario: 40000 }))
+  const r = await api('/eventos', { method: 'POST', body: { nombre_evento: 'Ventana grande' + sufijo, fecha_evento: fechaLibre(), tipo_evento: 'Boda', duracion_horas: 8, asistentes: 400, hora_inicio: '19:30', productos: prods, servicios_adicionales: servicios } })
+  igual(r.estado, 201, 'crear el evento grande:'); const id = r.cuerpo.evento.id
+  await page.goto(`${URL}/eventos?evento=${id}`); await ventanaDetalle().waitFor()
+  const cant = async (nombre) => Number((await ventanaDetalle().getByRole('tab', { name: nombre }).innerText()).replace(/\D+/g, '') || 0)
+  igual(await cant(/^Alimentos y bebidas/), prods.length, 'conteo de la pestaña Alimentos y bebidas:'); igual(await cant(/^Servicios/), servicios.length, 'conteo de la pestaña Servicios:')
+  await abrirPestanaDetalle('Alimentos y bebidas'); const panel = ventanaDetalle().getByRole('tabpanel')
+  igual(await panel.locator('section[aria-label="Alimentos"] li, section[aria-label="Bebidas generales"] li, section[aria-label="Bar de coctelería"] li').count(), prods.length, 'ítems en la pestaña:')
+  const medidas = await panel.evaluate((el) => ({ desborda: el.scrollHeight > el.clientHeight, y: el.scrollTop }))
+  cierto(medidas.desborda, 'el contenido no desborda: la prueba no prueba un evento grande')
+  await panel.evaluate((el) => { el.scrollTop = el.scrollHeight }); const ultimo = panel.locator('section li').last(); await ultimo.waitFor()
+  const dentro = await page.evaluate(() => { const d = document.querySelector('dialog[open]').getBoundingClientRect(); const li = [...document.querySelectorAll('dialog[open] [role=tabpanel] section li')].pop().getBoundingClientRect(); return li.bottom <= d.bottom + 1 && li.top >= d.top })
+  cierto(dentro, 'el último ítem no queda dentro de la ventana al llegar al final')
+  const atras = await page.evaluate(() => ({ main: getComputedStyle(document.querySelector('main')).overflowY, scrollMain: document.querySelector('main').scrollTop, scrollVentana: window.scrollY }))
+  igual(atras.scrollMain, 0, 'la página de atrás se movió:'); igual(atras.scrollVentana, 0, 'la ventana del navegador se movió:'); cierto(atras.main === 'hidden', 'la página de atrás no está congelada mientras la ventana está abierta: ' + atras.main)
+  await ventanaDetalle().getByRole('button', { name: 'Cerrar el detalle del evento' }).click(); await ventanaDetalle().waitFor({ state: 'detached' })
+  const libre = await page.evaluate(() => getComputedStyle(document.querySelector('main')).overflowY); cierto(libre !== 'hidden', 'la página quedó congelada al cerrar: ' + libre)
 })
 
 // ============ HU-29 · Estado de la asignación (RF-36) ============
