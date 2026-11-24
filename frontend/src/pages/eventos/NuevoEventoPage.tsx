@@ -2,9 +2,9 @@
  * Página "Registrar evento": asistente de 3 pasos (datos, requerimientos y resumen).
  * Todo se guarda en el navegador mientras se avanza y se envía al servidor en un solo POST al final.
  */
-import { ArrowLeft, Check, ChevronRight, LoaderCircle } from 'lucide-react'
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { AlertTriangle, ArrowLeft, Check, ChevronRight, LoaderCircle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useBlocker } from 'react-router-dom'
 import { PasoDatos } from '@/components/eventos/registro/PasoDatos'
 import { PasoRequerimientos } from '@/components/eventos/registro/PasoRequerimientos'
 import { PasoResumen } from '@/components/eventos/registro/PasoResumen'
@@ -12,6 +12,7 @@ import { PasosRegistro, type Paso } from '@/components/eventos/registro/PasosReg
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
+import { Modal } from '@/components/ui/modal'
 import { etiquetaServicio, TIPO_MOBILIARIO } from '@/lib/categorias'
 import { formatearFecha, formatearNumero } from '@/lib/formato'
 import { MAX_EVENTOS_POR_FECHA, horaInicio24, validarAsistentes, validarEvento, type ErroresEvento, type ValoresEvento } from '@/lib/reglasEvento'
@@ -53,6 +54,25 @@ export function NuevoEventoPage() {
   const [intentoAvanzar, setIntentoAvanzar] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [errorServidor, setErrorServidor] = useState<string | null>(null)
+  const permitirNavegacionRef = useRef(false)
+
+  // Bloquea cualquier navegación hacia otra ruta mientras se crea el evento
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      !permitirNavegacionRef.current && currentLocation.pathname !== nextLocation.pathname,
+  )
+
+  // Previene cierre o recarga accidental de la pestaña en el navegador
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!permitirNavegacionRef.current) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
 
   // Cuenta cuántos eventos hay ya registrados en esa misma fecha
   const eventosEnFecha = valores.fecha
@@ -153,6 +173,7 @@ export function NuevoEventoPage() {
           })),
         ],
       })
+      permitirNavegacionRef.current = true
       navigate(`/eventos?evento=${evento.id}`, {
         state: { aviso: `Evento «${evento.nombre_evento}» registrado en planificación.` },
       })
@@ -250,6 +271,48 @@ export function NuevoEventoPage() {
           )}
         </div>
       </div>
+
+      {blocker.state === 'blocked' && (
+        <Modal
+          etiqueta="Confirmar salida de la creación del evento"
+          onCerrar={() => blocker.reset?.()}
+          className="w-full max-w-md p-6"
+        >
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start gap-3.5">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="size-5" />
+              </span>
+              <div className="flex flex-col gap-1.5">
+                <h2 className="text-base font-bold text-foreground">
+                  ¿Ya no deseas continuar con la creación del evento?
+                </h2>
+                <p className="text-sm text-subtle leading-relaxed">
+                  Estás en el proceso de creación de un evento. Si sales a otro apartado, los datos y requerimientos ingresados no se guardarán.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => blocker.reset?.()}
+              >
+                Continuar con el evento
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  permitirNavegacionRef.current = true
+                  blocker.proceed?.()
+                }}
+              >
+                Sí, salir
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
