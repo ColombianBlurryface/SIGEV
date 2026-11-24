@@ -126,9 +126,9 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
   // ===========================================================================
   // 3. BEBIDAS (Bebidas de catálogo + licores para coctelería)
   // ===========================================================================
-  // 3.1. Bebidas generales del catálogo
+  // 3.1. Bebidas generales del catálogo y licores directos por botella de coctelería
   const resBebidas = await cliente.query(
-    `SELECT ep.producto_id, cp.nombre, ep.cantidad_con_margen,
+    `SELECT ep.producto_id, cp.nombre, ep.cantidad_con_margen, cp.clasificacion, cp.tipo_calculo,
             COALESCE(ep.unidad_entrega, cp.unidad_medida, 'unidades') AS unidad_entrega,
             COALESCE(inv.es_propio, cp.es_propio, true) AS es_propio,
             COALESCE(inv.cantidad_propia, cp.cantidad_propia, 0) AS stock_propio
@@ -137,7 +137,8 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
      LEFT JOIN catalogo_productos inv ON LOWER(TRIM(inv.nombre)) = LOWER(TRIM(cp.nombre))
                                      AND inv.categoria_inventario IS NOT NULL
                                      AND inv.activo = true
-     WHERE ep.evento_id = $1 AND cp.clasificacion = 'bebida_general'
+     WHERE ep.evento_id = $1 
+       AND (cp.clasificacion = 'bebida_general' OR cp.tipo_calculo = 'botella_compartida')
      ORDER BY cp.nombre`,
     [eventoId]
   );
@@ -184,20 +185,60 @@ const calcularRecursosEvento = async (cliente, eventoId) => {
       const estado = cantDisp >= cantReq ? 'disponible' : 'por_comprar';
       const coctelesTexto = licor.cocteles && licor.cocteles.length > 0 ? `Para cócteles: ${licor.cocteles.join(', ')}` : null;
 
+      // Consolidar si el licor ya fue agregado directamente como botella al evento
+      const existente = recursos.find(
+        (r) => r.categoria === 'bebida' && r.recurso_nombre.toLowerCase() === licor.nombre_licor.toLowerCase()
+      );
+      if (existente) {
+        existente.cantidad_requerida += cantReq;
+        existente.cantidad_disponible = Math.min(existente.cantidad_requerida, stockPropio);
+        existente.estado = existente.cantidad_disponible >= existente.cantidad_requerida ? 'disponible' : 'por_comprar';
+        const notaExistente = existente.notas ? `${existente.notas} · ` : '';
+        existente.notas = stockPropio > 0
+          ? (existente.cantidad_disponible >= existente.cantidad_requerida
+              ? `${coctelesTexto ? `${coctelesTexto} · ` : ''}Cubierto con inventario (Stock en bodega: ${stockPropio} botellas)`
+              : `${coctelesTexto ? `${coctelesTexto} · ` : ''}Stock en bodega: ${stockPropio} botellas · Faltan ${existente.cantidad_requerida - existente.cantidad_disponible} por comprar`)
+          : `${coctelesTexto ? `${coctelesTexto} · ` : ''}${notaExistente || 'Sin existencias en inventario propio'}`;
+      } else {
+        recursos.push({
+          categoria: 'bebida',
+          recurso_nombre: licor.nombre_licor,
+          origen_tipo: 'coctel',
+          origen_id: licor.licor_id || null,
+          cantidad_requerida: cantReq,
+          cantidad_disponible: cantDisp,
+          unidad_medida: 'botellas',
+          estado,
+          notas: stockPropio > 0
+            ? (cantDisp >= cantReq
+                ? `${coctelesTexto ? `${coctelesTexto} · ` : ''}Cubierto con inventario (Stock en bodega: ${stockPropio} botellas)`
+                : `${coctelesTexto ? `${coctelesTexto} · ` : ''}Stock en bodega: ${stockPropio} botellas · Faltan ${cantReq - cantDisp} por comprar`)
+            : (coctelesTexto || 'Sin existencias en inventario propio')
+        });
+      }
+    }
+  }
+
+  // Cócteles asignados al evento que no tienen receta configurada
+  if (comprasLicores && Array.isArray(comprasLicores.cocteles_sin_receta)) {
+    for (const coctelSin of comprasLicores.cocteles_sin_receta) {
+      const resItem = await cliente.query(
+        `SELECT ep.cantidad_con_margen, COALESCE(ep.unidad_entrega, 'cócteles') AS unidad_entrega
+         FROM evento_productos ep
+         WHERE ep.evento_id = $1 AND ep.producto_id = $2`,
+        [eventoId, coctelSin.producto_id]
+      );
+      const cantReq = resItem.rows.length > 0 ? Number(resItem.rows[0].cantidad_con_margen) : 0;
       recursos.push({
         categoria: 'bebida',
-        recurso_nombre: licor.nombre_licor,
+        recurso_nombre: coctelSin.nombre,
         origen_tipo: 'coctel',
-        origen_id: licor.licor_id || null,
+        origen_id: coctelSin.producto_id || null,
         cantidad_requerida: cantReq,
-        cantidad_disponible: cantDisp,
-        unidad_medida: 'botellas',
-        estado,
-        notas: stockPropio > 0
-          ? (cantDisp >= cantReq
-              ? `${coctelesTexto ? `${coctelesTexto} · ` : ''}Cubierto con inventario (Stock en bodega: ${stockPropio} botellas)`
-              : `${coctelesTexto ? `${coctelesTexto} · ` : ''}Stock en bodega: ${stockPropio} botellas · Faltan ${cantReq - cantDisp} por comprar`)
-          : (coctelesTexto || 'Sin existencias en inventario propio')
+        cantidad_disponible: 0,
+        unidad_medida: resItem.rows[0]?.unidad_entrega || 'cócteles',
+        estado: 'pendiente',
+        notas: 'Cóctel sin receta configurada en catálogo (definir licores en Recetas de Cóctel)'
       });
     }
   }

@@ -114,3 +114,19 @@ test('HU-45: detección de cócteles sin receta configurada', async () => {
   assert.equal(res.cocteles_sin_receta.length, 1);
   assert.equal(res.cocteles_sin_receta[0].nombre, 'Cóctel Misterio');
 });
+
+test('HU-45: licores por botella (botella_compartida) no se clasifican como cócteles sin receta', async () => {
+  const mockClient = {
+    async query(sql) {
+      if (sql.includes('catalogo_productos cp')) {
+        assert.ok(sql.includes("cp.tipo_calculo <> 'botella_compartida'"));
+        return { rows: [] };
+      }
+      return { rows: [] };
+    }
+  };
+
+  const res = await armarComprasCocteles(mockClient, 100, [{ producto_id: 15, porcion_por_persona: 1 }]);
+  assert.equal(res.cocteles_sin_receta.length, 0, 'No debe generar advertencia de cóctel sin receta para licores por botella');
+  assert.equal(res.items.length, 0);
+});

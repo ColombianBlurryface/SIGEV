@@ -127,7 +127,9 @@ const crearCoctel = async (req, res) => {
 
     // 3. Vincular a catalogo_productos para que aparezca en el grupo 'bar_cocteleria' de eventos
     const { rows: catalogoExistente } = await client.query(
-      `SELECT id FROM catalogo_productos WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($1))`,
+      `SELECT id FROM catalogo_productos 
+       WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($1)) 
+         AND categoria_inventario IS NULL`,
       [nombre]
     );
 
@@ -149,7 +151,11 @@ const crearCoctel = async (req, res) => {
     } else {
       await client.query(
         `UPDATE catalogo_productos 
-         SET clasificacion = 'bar_cocteleria', activo = true 
+         SET clasificacion = 'bar_cocteleria', 
+             tipo_calculo = 'unidad_persona',
+             porcion_por_persona = 1,
+             unidad_medida = 'cócteles',
+             activo = true 
          WHERE id = $1`,
         [catalogoExistente[0].id]
       );
@@ -223,14 +229,19 @@ const editarCoctel = async (req, res) => {
     if (nombreAnterior && nombreAnterior !== nombre) {
       const { rowCount: actualizado } = await client.query(
         `UPDATE catalogo_productos 
-         SET nombre = $1, clasificacion = 'bar_cocteleria', activo = true 
-         WHERE nombre = $2 AND clasificacion = 'bar_cocteleria'`,
+         SET nombre = $1, clasificacion = 'bar_cocteleria', tipo_calculo = 'unidad_persona', porcion_por_persona = 1, unidad_medida = 'cócteles', activo = true 
+         WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($2)) 
+           AND clasificacion = 'bar_cocteleria' 
+           AND categoria_inventario IS NULL`,
         [nombre, nombreAnterior]
       );
 
       if (actualizado === 0) {
         const { rows: existeNuevo } = await client.query(
-          `SELECT id FROM catalogo_productos WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($1)) AND clasificacion = 'bar_cocteleria'`,
+          `SELECT id FROM catalogo_productos 
+           WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($1)) 
+             AND clasificacion = 'bar_cocteleria' 
+             AND categoria_inventario IS NULL`,
           [nombre]
         );
         if (existeNuevo.length === 0) {
@@ -243,7 +254,9 @@ const editarCoctel = async (req, res) => {
           );
         } else {
           await client.query(
-            `UPDATE catalogo_productos SET activo = true WHERE id = $1`,
+            `UPDATE catalogo_productos 
+             SET tipo_calculo = 'unidad_persona', porcion_por_persona = 1, unidad_medida = 'cócteles', activo = true 
+             WHERE id = $1`,
             [existeNuevo[0].id]
           );
         }
@@ -288,21 +301,40 @@ const eliminarCoctel = async (req, res) => {
   const id = idDeRuta(req.params.id);
   if (id === null) return idInvalido(res);
 
+  const client = await pool.connect();
   try {
-    const { rowCount } = await pool.query(`DELETE FROM cocteles WHERE id = $1 RETURNING id`, [id]);
+    await client.query('BEGIN');
 
-    if (rowCount === 0) {
-      return res.status(404).json({ error: 'Cóctel no encontrado' });
-    }
-    await pool.query(
-      `UPDATE catalogo_productos SET activo = false WHERE nombre = $1 AND clasificacion = 'bar_cocteleria'`,
-      [rows[0].nombre]
+    const { rows, rowCount } = await client.query(
+      `DELETE FROM cocteles WHERE id = $1 RETURNING id, nombre`,
+      [id]
     );
 
+    if (rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Cóctel no encontrado' });
+    }
+
+    const nombreEliminado = rows[0]?.nombre;
+    if (nombreEliminado) {
+      await client.query(
+        `UPDATE catalogo_productos 
+         SET activo = false 
+         WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($1)) 
+           AND clasificacion = 'bar_cocteleria' 
+           AND categoria_inventario IS NULL`,
+        [nombreEliminado]
+      );
+    }
+
+    await client.query('COMMIT');
     res.json({ mensaje: 'Cóctel eliminado exitosamente.' });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error al eliminar cóctel:', error);
     res.status(500).json({ error: 'Error al eliminar el cóctel', detalle: error.message });
+  } finally {
+    client.release();
   }
 };
 

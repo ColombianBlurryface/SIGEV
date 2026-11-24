@@ -819,4 +819,52 @@ test('HU-32 / RF-41: Si deficit_quantity <= 0 el estado es obligatoriamente AVAI
   assert.equal(determinarResourceStatus(itemSuperavit), ResourceStatus.AVAILABLE);
 });
 
+test('HU-31 / HU-45: el balance logístico incluye licores por botella de coctelería en Bebidas', async () => {
+  const mockClient = {
+    query: async (sql, params) => {
+      if (sql.includes('FROM eventos WHERE id')) {
+        return {
+          rows: [{ id: 1, nombre_evento: 'Fiesta', asistentes: 100, duracion_horas: 5, estado: 'planificacion' }]
+        };
+      }
+      if (sql.includes('FROM evento_personal ep')) {
+        return { rows: [] };
+      }
+      if (sql.includes('FROM evento_productos ep')) {
+        // Query de bebidas (3.1): debe incluir botella_compartida
+        if (sql.includes('botella_compartida')) {
+          return {
+            rows: [
+              {
+                producto_id: 25,
+                nombre: 'Aguardiente Blanco del Valle sin azúcar',
+                cantidad_con_margen: '3.00',
+                clasificacion: 'bar_cocteleria',
+                tipo_calculo: 'botella_compartida',
+                unidad_entrega: 'botellas',
+                es_propio: true,
+                stock_propio: 5
+              }
+            ]
+          };
+        }
+        return { rows: [] };
+      }
+      if (sql.includes('requerimientos_adicionales')) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    }
+  };
+
+  const recursos = await calcularRecursosEvento(mockClient, 1);
+  const aguardiente = recursos.find((r) => r.categoria === 'bebida' && r.recurso_nombre === 'Aguardiente Blanco del Valle sin azúcar');
+
+  assert.ok(aguardiente, 'Debe incluir el Aguardiente en el balance logístico');
+  assert.equal(aguardiente.cantidad_requerida, 3);
+  assert.equal(aguardiente.cantidad_disponible, 3);
+  assert.equal(aguardiente.unidad_medida, 'botellas');
+  assert.equal(aguardiente.estado, 'disponible');
+});
+
 

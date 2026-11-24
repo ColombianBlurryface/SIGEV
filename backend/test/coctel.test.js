@@ -74,3 +74,96 @@ test('el id de la ruta es un entero positivo en texto (abc, 0, negativos, decima
   assert.equal(idDeRuta('7'), 7); assert.equal(idDeRuta('2147483647'), 2147483647);
   for (const malo of ['abc', '0', '-1', '1.5', '1e21', '99999999999', '', ' 3', '3 ', undefined, null]) assert.equal(idDeRuta(malo), null, String(malo));
 });
+
+const pool = require('../src/config/db');
+const { eliminarCoctel } = require('../src/controllers/coctelesController');
+
+test('HU-44: eliminarCoctel rechaza identificadores de ruta inválidos con 400', async () => {
+  let statusCode = null;
+  let responseData = null;
+  const res = {
+    status: (c) => { statusCode = c; return { json: (d) => { responseData = d; } }; },
+    json: (d) => { statusCode = 200; responseData = d; }
+  };
+  await eliminarCoctel({ params: { id: 'abc' } }, res);
+  assert.equal(statusCode, 400);
+});
+
+test('HU-44: eliminarCoctel elimina de cocteles y desactiva en catalogo_productos sin lanzar ReferenceError', async () => {
+  const originalConnect = pool.connect;
+  const queriesEjecutadas = [];
+
+  const mockClient = {
+    query: async (sql, params) => {
+      queriesEjecutadas.push({ sql, params });
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return {};
+      if (sql.includes('DELETE FROM cocteles')) {
+        return { rowCount: 1, rows: [{ id: 5, nombre: 'Margarita' }] };
+      }
+      if (sql.includes('UPDATE catalogo_productos')) {
+        return { rowCount: 1, rows: [] };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+    release: () => {}
+  };
+
+  pool.connect = async () => mockClient;
+
+  try {
+    let statusCode = null;
+    let responseData = null;
+    const res = {
+      status: (c) => { statusCode = c; return { json: (d) => { responseData = d; } }; },
+      json: (d) => { statusCode = 200; responseData = d; }
+    };
+
+    await eliminarCoctel({ params: { id: '5' } }, res);
+
+    assert.equal(statusCode, 200);
+    assert.equal(responseData.mensaje, 'Cóctel eliminado exitosamente.');
+
+    // Verificar que ejecutó DELETE retornando id y nombre
+    const deleteQuery = queriesEjecutadas.find((q) => q.sql.includes('DELETE FROM cocteles'));
+    assert.ok(deleteQuery);
+    assert.ok(deleteQuery.sql.includes('RETURNING id, nombre'));
+
+    // Verificar que ejecutó UPDATE catalogo_productos desactivando el cóctel
+    const updateQuery = queriesEjecutadas.find((q) => q.sql.includes('UPDATE catalogo_productos'));
+    assert.ok(updateQuery);
+    assert.ok(updateQuery.sql.includes('activo = false'));
+    assert.ok(updateQuery.sql.includes('categoria_inventario IS NULL'));
+    assert.equal(updateQuery.params[0], 'Margarita');
+  } finally {
+    pool.connect = originalConnect;
+  }
+});
+
+test('HU-44: eliminarCoctel retorna 404 cuando el cóctel no existe', async () => {
+  const originalConnect = pool.connect;
+  const mockClient = {
+    query: async (sql) => {
+      if (sql.includes('DELETE FROM cocteles')) {
+        return { rowCount: 0, rows: [] };
+      }
+      return {};
+    },
+    release: () => {}
+  };
+  pool.connect = async () => mockClient;
+
+  try {
+    let statusCode = null;
+    let responseData = null;
+    const res = {
+      status: (c) => { statusCode = c; return { json: (d) => { responseData = d; } }; },
+      json: (d) => { statusCode = 200; responseData = d; }
+    };
+
+    await eliminarCoctel({ params: { id: '999' } }, res);
+    assert.equal(statusCode, 404);
+    assert.equal(responseData.error, 'Cóctel no encontrado');
+  } finally {
+    pool.connect = originalConnect;
+  }
+});

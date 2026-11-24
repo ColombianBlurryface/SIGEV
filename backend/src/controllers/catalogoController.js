@@ -118,6 +118,36 @@ const obtenerCatalogo = async (req, res) => {
     const { clasificacion, incluir_inactivos } = req.query;
     const incluirInactivos = incluir_inactivos === 'true';
 
+    // Auto-sincronización de cócteles activos hacia catalogo_productos (HU-44, HU-45)
+    // Garantiza que recetas de cócteles creadas o existentes en la tabla cocteles aparezcan en el catálogo de eventos
+    try {
+      await pool.query(`
+        INSERT INTO catalogo_productos (
+          nombre, clasificacion, tipo_calculo, porcion_por_persona,
+          unidad_medida, volumen_botella_ml, tamano_porcion_ml, precio_unitario, activo
+        )
+        SELECT c.nombre, 'bar_cocteleria', 'unidad_persona', 1, 'cócteles', 0, 0, 18000, true
+        FROM cocteles c
+        WHERE c.activo = true
+          AND NOT EXISTS (
+            SELECT 1 FROM catalogo_productos cp
+            WHERE LOWER(TRIM(cp.nombre)) = LOWER(TRIM(c.nombre))
+              AND cp.categoria_inventario IS NULL
+          )
+      `);
+      await pool.query(`
+        UPDATE catalogo_productos cp
+        SET activo = true, clasificacion = 'bar_cocteleria', tipo_calculo = 'unidad_persona', porcion_por_persona = 1, unidad_medida = 'cócteles'
+        FROM cocteles c
+        WHERE LOWER(TRIM(cp.nombre)) = LOWER(TRIM(c.nombre))
+          AND c.activo = true
+          AND cp.categoria_inventario IS NULL
+          AND (cp.activo = false OR cp.clasificacion <> 'bar_cocteleria' OR cp.tipo_calculo <> 'unidad_persona')
+      `);
+    } catch (_syncErr) {
+      // Ignorar si la tabla cocteles aún no existe en el entorno o en tests aislados
+    }
+
     // Un grupo que no existe daba un error 500 de la base de datos (enum inválido): ahora es un 400 claro
     if (clasificacion !== undefined && clasificacion !== '' && !CLASIFICACIONES.includes(clasificacion)) {
       return datosInvalidos(res, `El grupo debe ser uno de: ${CLASIFICACIONES.join(', ')}.`);

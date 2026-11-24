@@ -79,7 +79,7 @@ export function PasoResumen({ valores, requerimientos, onIrAPaso }: PasoResumenP
   const coctelesItems = useMemo(
     () =>
       requerimientos.bebidas
-        .filter((b) => b.producto.clasificacion === 'bar_cocteleria')
+        .filter((b) => b.producto.clasificacion === 'bar_cocteleria' && b.producto.tipo_calculo !== 'botella_compartida')
         .map((b) => ({
           producto_id: b.producto.id,
           porcion_por_persona: b.porcion,
