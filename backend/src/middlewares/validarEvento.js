@@ -68,9 +68,19 @@ const validarCreacionEvento = (req, res, next) => {
     return rechazar(res, 'La duración en horas debe estar entre 3 y 8 horas.', 'Duración inválida');
   }
 
-  // Hora de inicio (HU-28): opcional en la API, «HH:MM» de 00:00 a 23:59. Con ella se sabe si dos eventos se cruzan.
-  if (hayValor(hora_inicio) && (typeof hora_inicio !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora_inicio))) {
-    return rechazar(res, 'La hora de inicio debe tener el formato HH:MM (de 00:00 a 23:59).', 'Hora de inicio inválida');
+  // Hora de inicio (HU-28, HU-52): opcional en la API («HH:MM» de 00:00 a 23:59). Con ella se sabe si dos eventos se cruzan.
+  // RN-23 / RF-61: solo se aceptan eventos que inicien entre las 8:00 a. m. (08:00) y las 9:00 p. m. (21:00).
+  if (hayValor(hora_inicio)) {
+    if (typeof hora_inicio !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora_inicio)) {
+      return rechazar(res, 'La hora de inicio debe tener el formato HH:MM (de 00:00 a 23:59).', 'Hora de inicio inválida');
+    }
+    if (hora_inicio < LIMITES.horaInicioMin || hora_inicio > LIMITES.horaInicioMax) {
+      return rechazar(
+        res,
+        'La hora de inicio debe estar entre las 8:00 a. m. y las 9:00 p. m. (08:00 a 21:00).',
+        'Regla de negocio no cumplida (RN-23 / RF-61)'
+      );
+    }
   }
 
   if (hayValor(observaciones_generales) &&

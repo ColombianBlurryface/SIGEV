@@ -32,9 +32,17 @@ export type PeriodoHora = 'am' | 'pm' | ''
 
 export const ETIQUETA_PERIODO: Record<'am' | 'pm', string> = { am: 'a. m.', pm: 'p. m.' }
 
+// RN-23 / RF-61: Horario permitido para el inicio de eventos (8:00 a. m. a 9:00 p. m.)
+export const HORA_INICIO_MIN = '08:00'
+export const HORA_INICIO_MAX = '21:00'
+export const HORA_INICIO_MIN_TXT = '8:00 a. m.'
+export const HORA_INICIO_MAX_TXT = '9:00 p. m.'
+export const MENSAJE_HORA_INICIO_PERMITIDA = `La hora de inicio debe estar entre las ${HORA_INICIO_MIN_TXT} y las ${HORA_INICIO_MAX_TXT}.`
+
 /**
  * Valida lo que se escribió en el campo de la hora de inicio. Devuelve la hora en formato de 24 horas si todo está bien,
  * o el mensaje para mostrar junto al campo. 12:00 p. m. es mediodía (12:00) y 12:00 a. m. es medianoche (00:00).
+ * RN-23 (RF-61): Solo se aceptan horas de inicio entre las 8:00 a. m. y las 9:00 p. m.
  */
 export function validarHora12(texto: string, periodo: PeriodoHora): { hora24: string | null; error: string | null } {
   const t = texto.trim()
@@ -49,7 +57,13 @@ export function validarHora12(texto: string, periodo: PeriodoHora): { hora24: st
   if (minutos > 59) return { hora24: null, error: 'La hora no es válida: los minutos van de 00 a 59 (por ejemplo 7:30, no 7:75).' }
   if (periodo !== 'am' && periodo !== 'pm') return { hora24: null, error: 'Elige a. m. o p. m.' }
   const h24 = (horas % 12) + (periodo === 'pm' ? 12 : 0)
-  return { hora24: `${String(h24).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`, error: null }
+  const hora24 = `${String(h24).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`
+
+  if (hora24 < HORA_INICIO_MIN || hora24 > HORA_INICIO_MAX) {
+    return { hora24: null, error: MENSAJE_HORA_INICIO_PERMITIDA }
+  }
+
+  return { hora24, error: null }
 }
 
 /** Lo escrito (hora de 12 horas + a. m./p. m.) → «HH:MM» de 24 horas, o '' si todavía no es una hora válida. */

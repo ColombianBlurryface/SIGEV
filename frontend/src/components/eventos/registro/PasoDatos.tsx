@@ -89,7 +89,7 @@ export function PasoDatos({
           id="horaInicio"
           label="Hora de inicio"
           error={errores.horaTexto}
-          hint="Escríbela con horas y minutos y elige a. m. o p. m. 12:00 p. m. es mediodía y 12:00 a. m. es medianoche. Sirve para saber si dos eventos se cruzan al asignar meseros."
+          hint="Horario permitido: 8:00 a. m. a 9:00 p. m. Escríbela con horas y minutos y elige a. m. o p. m. 12:00 p. m. es mediodía y 12:00 a. m. es medianoche."
         >
           <CampoHora
             id="horaInicio"
