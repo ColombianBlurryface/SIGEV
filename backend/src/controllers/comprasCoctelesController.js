@@ -46,7 +46,9 @@ const armarComprasCocteles = async (cliente, asistentes, items) => {
               c.id AS coctel_id, c.nombre AS coctel_nombre, c.activo AS coctel_activo
        FROM catalogo_productos cp
        LEFT JOIN cocteles c ON LOWER(TRIM(c.nombre)) = LOWER(TRIM(cp.nombre)) AND c.activo = true
-       WHERE cp.id = ANY($1::int[]) AND cp.clasificacion = 'bar_cocteleria'`,
+       WHERE cp.id = ANY($1::int[]) 
+         AND cp.clasificacion = 'bar_cocteleria'
+         AND cp.tipo_calculo <> 'botella_compartida'`,
       [productoIds]
     );
 
@@ -183,7 +185,9 @@ const comprasCoctelesDeEvento = async (cliente, eventoId, asistentes) => {
     `SELECT ep.producto_id, ep.porcion_por_persona
      FROM evento_productos ep
      JOIN catalogo_productos cp ON cp.id = ep.producto_id
-     WHERE ep.evento_id = $1 AND cp.clasificacion = 'bar_cocteleria'`,
+     WHERE ep.evento_id = $1 
+       AND cp.clasificacion = 'bar_cocteleria'
+       AND cp.tipo_calculo <> 'botella_compartida'`,
     [eventoId]
   );
 

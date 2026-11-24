@@ -18,7 +18,7 @@ interface Props {
 export const CalculadoraCocteles: React.FC<Props> = ({ asistentes, bebidas }) => {
   const items = useMemo(() => {
     return bebidas
-      .filter((b) => b.producto.clasificacion === 'bar_cocteleria')
+      .filter((b) => b.producto.clasificacion === 'bar_cocteleria' && b.producto.tipo_calculo !== 'botella_compartida')
       .map((b) => ({
         producto_id: b.producto.id,
         porcion_por_persona: b.porcion,
@@ -57,7 +57,7 @@ export const CalculadoraCocteles: React.FC<Props> = ({ asistentes, bebidas }) =>
 
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground py-2 text-center">
-          Aún no has agregado bebidas de bar de coctelería a este evento. Al agregarlas arriba, aquí verás las botellas consolidadas a comprar.
+          Aún no has agregado cócteles a este evento. Al agregarlos arriba, aquí verás las botellas consolidadas de licor a comprar.
         </p>
       ) : calculando && !compras ? (
         <p className="text-xs text-muted-foreground py-2 text-center">

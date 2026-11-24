@@ -88,13 +88,18 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
   const subtotal = bebidasDelTipo.reduce((suma, b) => suma + calcularProducto(b.producto, b.porcion, asistentes).costo, 0)
   const etiquetaTipo = TIPOS_BEBIDA[tipo].etiqueta
 
-  // Al cambiar de grupo se limpia el formulario. Si el grupo nuevo no tiene productos en la forma
-  // de consumo actual (la coctelería, por ejemplo, solo se sirve por botella), se cambia a la otra.
+  // Al cambiar de grupo se limpia el formulario. Si se pasa a bar de coctelería, se posiciona
+  // directamente en cócteles (modo individual por persona, HU-44/HU-45). Si el grupo no tiene
+  // productos en el modo actual, se alterna al otro modo disponible.
   function cambiarTipo(nuevo: TipoBebida) {
-    const tieneModoActual = productos.some((p) => p.clasificacion === nuevo && modoDe(p) === modo)
-    const tieneOtroModo = productos.some((p) => p.clasificacion === nuevo && modoDe(p) !== modo)
     setTipo(nuevo)
-    if (!tieneModoActual && tieneOtroModo) setModo(modo === 'individual' ? 'compartida' : 'individual')
+    if (nuevo === 'bar_cocteleria') {
+      setModo('individual')
+    } else {
+      const tieneModoActual = productos.some((p) => p.clasificacion === nuevo && modoDe(p) === modo)
+      const tieneOtroModo = productos.some((p) => p.clasificacion === nuevo && modoDe(p) !== modo)
+      if (!tieneModoActual && tieneOtroModo) setModo(modo === 'individual' ? 'compartida' : 'individual')
+    }
     setProductoId('')
     setUnidades('')
     setPrecio('')
@@ -184,10 +189,15 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
             <h2 className="text-base font-bold">Agregar · {etiquetaTipo.toLowerCase()}</h2>
             <div role="group" aria-label="Forma de consumo" className="flex rounded-[10px] bg-chip p-[3px]">
               {(
-                [
-                  ['individual', 'Individual por persona'],
-                  ['compartida', 'Compartida por botella'],
-                ] as const
+                tipo === 'bar_cocteleria'
+                  ? ([
+                      ['individual', 'Cócteles (por persona)'],
+                      ['compartida', 'Licores (por botella)'],
+                    ] as const)
+                  : ([
+                      ['individual', 'Individual por persona'],
+                      ['compartida', 'Compartida por botella'],
+                    ] as const)
               ).map(([valor, etiqueta]) => (
                 <button
                   key={valor}
@@ -225,10 +235,22 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
             !error && (
               <>
                 <div className="grid items-start gap-3.5 md:grid-cols-4">
-                  <FormField id="bebida-producto" label="Producto" className="md:col-span-2">
+                  <FormField
+                    id="bebida-producto"
+                    label={tipo === 'bar_cocteleria' && modo === 'individual' ? 'Cóctel' : 'Producto'}
+                    className="md:col-span-2"
+                  >
                     <Select id="bebida-producto" value={productoId} onChange={(e) => elegirProducto(e.target.value)}>
                       <option value="" disabled>
-                        {disponibles.length ? 'Selecciona una bebida' : 'No hay más bebidas de este grupo y consumo'}
+                        {disponibles.length
+                          ? tipo === 'bar_cocteleria' && modo === 'individual'
+                            ? 'Selecciona un cóctel'
+                            : 'Selecciona una bebida'
+                          : tipo === 'bar_cocteleria'
+                            ? modo === 'individual'
+                              ? 'No hay cócteles disponibles (regístralos en Catálogo → Recetas de Cóctel)'
+                              : 'No hay más licores por botella de este grupo'
+                            : 'No hay más bebidas de este grupo y consumo'}
                       </option>
                       {disponibles.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -241,7 +263,7 @@ export function PestanaBebidas({ asistentes, bebidas, onAgregar, onQuitar }: Pes
                   {modo === 'individual' ? (
                     <FormField
                       id="bebida-unidades"
-                      label="Unidades por persona"
+                      label={tipo === 'bar_cocteleria' ? 'Cócteles por persona' : 'Unidades por persona'}
                       hint="Número entero de 1 a 10"
                       error={unidades.trim() !== '' && !unidadesValidas ? MENSAJE_UNIDADES_POR_PERSONA : undefined}
                     >
