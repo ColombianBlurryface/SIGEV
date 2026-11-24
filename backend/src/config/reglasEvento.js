@@ -89,7 +89,9 @@ const LIMITES = {
   unidadesServicioMax: 5,
   productosMax: 100,           // líneas de alimentos y bebidas por evento
   serviciosMax: 100,           // líneas de mobiliario y servicios por evento
-  gramosPorPersonaMax: 1000    // un alimento no pasa de 1 kg por persona
+  gramosPorPersonaMax: 1000,   // un alimento no pasa de 1 kg por persona
+  horaInicioMin: '08:00',      // RN-23 / RF-61: inicio entre 8:00 a. m. y 9:00 p. m.
+  horaInicioMax: '21:00'
 };
 
 module.exports = {

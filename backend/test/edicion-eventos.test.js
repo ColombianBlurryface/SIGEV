@@ -333,3 +333,27 @@ test('HU-50 / RN-13 · Caso límite de fecha con 3 eventos existentes', async ()
     pool.connect = originalConnect;
   }
 });
+
+test('HU-52 / RN-23 / RF-61: la hora de inicio debe estar entre las 8:00 a. m. y las 9:00 p. m. (08:00 a 21:00)', () => {
+  // Horas dentro del rango permitido (08:00 a 21:00)
+  for (const horaValida of ['08:00', '08:30', '12:00', '18:00', '20:59', '21:00']) {
+    const resValido = simularEdicion({ id: '1' }, payloadValido({ hora_inicio: horaValida }));
+    assert.equal(resValido.nextLlamado, true, `Debe aceptar hora válida: ${horaValida}`);
+  }
+
+  // Evento que empieza a las 21:00 y dura 4 horas (termina pasada la medianoche) debe ser aceptado
+  const resFinTrasMedianoche = simularEdicion(
+    { id: '1' },
+    payloadValido({ hora_inicio: '21:00', duracion_horas: 4 })
+  );
+  assert.equal(resFinTrasMedianoche.nextLlamado, true, 'Debe aceptar evento a las 21:00 que termina al día siguiente');
+
+  // Horas fuera del rango permitido (antes de 08:00 o después de 21:00)
+  for (const horaInvalida of ['00:00', '03:00', '07:59', '21:01', '22:00', '23:59']) {
+    const resInvalido = simularEdicion({ id: '1' }, payloadValido({ hora_inicio: horaInvalida }));
+    assert.equal(resInvalido.nextLlamado, false, `Debe rechazar hora fuera de rango: ${horaInvalida}`);
+    assert.equal(resInvalido.status, 400);
+    assert.equal(resInvalido.respuesta.error, 'Regla de negocio no cumplida (RN-23 / RF-61)');
+    assert.match(resInvalido.respuesta.detalle, /entre las 8:00 a. m. y las 9:00 p. m./);
+  }
+});
