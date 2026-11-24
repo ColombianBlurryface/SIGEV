@@ -121,39 +121,64 @@ export function PasoRequerimientos({ asistentes, duracionHoras, requerimientos, 
           })}
         </div>
 
-        <div role="tabpanel" id={`panel-${activa}`} aria-labelledby={`pestana-${activa}`}>
-          {activa === 'alimentos' && (
-            <PestanaAlimentos
-              asistentes={asistentes}
-              alimentos={requerimientos.alimentos}
-              onAgregar={agregarAlimento}
-              onQuitar={quitarAlimento}
-            />
-          )}
-          {activa === 'bebidas' && (
-            <PestanaBebidas
-              asistentes={asistentes}
-              bebidas={requerimientos.bebidas}
-              onAgregar={agregarBebida}
-              onQuitar={quitarBebida}
-            />
-          )}
-          {activa === 'mobiliario' && (
-            <PestanaMobiliario
-              asistentes={asistentes}
-              mobiliario={requerimientos.mobiliario}
-              onAgregar={agregarMobiliario}
-              onQuitar={quitarMobiliario}
-            />
-          )}
-          {activa === 'servicios' && (
-            <PestanaServicios
-              servicios={requerimientos.servicios}
-              duracionHoras={duracionHoras}
-              onAgregar={agregarServicio}
-              onQuitar={quitarServicio}
-            />
-          )}
+        <div
+          role="tabpanel"
+          id="panel-alimentos"
+          aria-labelledby="pestana-alimentos"
+          hidden={activa !== 'alimentos'}
+          className={cn(activa !== 'alimentos' && 'hidden')}
+        >
+          <PestanaAlimentos
+            asistentes={asistentes}
+            alimentos={requerimientos.alimentos}
+            onAgregar={agregarAlimento}
+            onQuitar={quitarAlimento}
+          />
+        </div>
+
+        <div
+          role="tabpanel"
+          id="panel-bebidas"
+          aria-labelledby="pestana-bebidas"
+          hidden={activa !== 'bebidas'}
+          className={cn(activa !== 'bebidas' && 'hidden')}
+        >
+          <PestanaBebidas
+            asistentes={asistentes}
+            bebidas={requerimientos.bebidas}
+            onAgregar={agregarBebida}
+            onQuitar={quitarBebida}
+          />
+        </div>
+
+        <div
+          role="tabpanel"
+          id="panel-mobiliario"
+          aria-labelledby="pestana-mobiliario"
+          hidden={activa !== 'mobiliario'}
+          className={cn(activa !== 'mobiliario' && 'hidden')}
+        >
+          <PestanaMobiliario
+            asistentes={asistentes}
+            mobiliario={requerimientos.mobiliario}
+            onAgregar={agregarMobiliario}
+            onQuitar={quitarMobiliario}
+          />
+        </div>
+
+        <div
+          role="tabpanel"
+          id="panel-servicios"
+          aria-labelledby="pestana-servicios"
+          hidden={activa !== 'servicios'}
+          className={cn(activa !== 'servicios' && 'hidden')}
+        >
+          <PestanaServicios
+            servicios={requerimientos.servicios}
+            duracionHoras={duracionHoras}
+            onAgregar={agregarServicio}
+            onQuitar={quitarServicio}
+          />
         </div>
       </div>
 
