@@ -123,10 +123,11 @@ await caso('DJ de 300 horas en un evento de 4', [400], async () => m(await await
 await caso('Horas mayores a la duración (5 h en un evento de 4 h)', [400], async () => m(await await_call_eventos(ev({ duracion_horas: 4, servicios_adicionales: [srv({ horas: 5 })] }))))
 await caso('Horas iguales a la duración (4 h en un evento de 4 h)', [201], async () => m(await await_call_eventos(ev({ duracion_horas: 4, servicios_adicionales: [srv({ horas: 4 })] }))))
 await caso('Media hora (3,5 h) en un evento de 4 h', [201], async () => m(await await_call_eventos(ev({ duracion_horas: 4, servicios_adicionales: [srv({ horas: 3.5 })] }))))
-console.log('\n== COR-06: horas de 1 a 5 y tope de unidades por tipo de servicio en todo el evento')
+console.log('\n== RN-18 / HU-48: horas de 1 h hasta la duración del evento (ya no hay tope de 5 h) y tope de unidades por tipo de servicio en todo el evento')
 const largo = async (servicios) => m(await await_call_eventos(ev({ duracion_horas: 8, servicios_adicionales: servicios })))
-await caso('DJ de 6 horas en un evento de 8 h (máximo 5 h)', [400], async () => largo([srv({ horas: 6 })]))
-await caso('DJ de 8 horas en un evento de 8 h', [400], async () => largo([srv({ horas: 8 })]))
+await caso('DJ de 6 horas en un evento de 8 h (desde HU-48 no hay tope de 5 h)', [201], async () => largo([srv({ horas: 6 })]))
+await caso('DJ de 8 horas en un evento de 8 h (igual a la duración)', [201], async () => largo([srv({ horas: 8 })]))
+await caso('DJ de 9 horas en un evento de 8 h (pasa de la duración)', [400], async () => largo([srv({ horas: 9 })]))
 await caso('DJ de 5 horas en un evento de 8 h (límite exacto)', [201], async () => largo([srv({ horas: 5 })]))
 await caso('DJ de media hora (mínimo 1 h)', [400], async () => largo([srv({ horas: 0.5 })]))
 await caso('DJ de 1 hora (límite exacto)', [201], async () => largo([srv({ horas: 1 })]))
@@ -488,7 +489,7 @@ await caso('Asignar, vaciar y volver a asignar deja la lista final correcta', [1
 
 console.log('\n== HU-28: hora de inicio, tope de meseros y cruces de horario')
 const evH = async (hora, extra = {}) => (await call('/eventos', { method: 'POST', body: ev({ ...(hora !== undefined ? { hora_inicio: hora } : {}), ...extra }) }))
-for (const [hora, esperado] of [['00:00', 201], ['23:59', 201], ['09:05', 201], ['24:00', 400], ['25:61', 400], ['18:60', 400], ['6:00', 400], ['18', 400], ['18:00:00', 400], ['', 400], [1800, 400], [null, 201], [true, 400], [[], 400], [{}, 400]]) {
+for (const [hora, esperado] of [['08:00', 201], ['21:00', 201], ['09:05', 201], ['00:00', 400], ['23:59', 400], ['07:59', 400], ['21:01', 400], ['24:00', 400], ['25:61', 400], ['18:60', 400], ['6:00', 400], ['18', 400], ['18:00:00', 400], ['', 400], [1800, 400], [null, 201], [true, 400], [[], 400], [{}, 400]]) {
   await caso(`Evento con hora_inicio ${JSON.stringify(hora)}`, [esperado], async () => m(await evH(hora)))
 }
 await caso('Tope: 6 meseros en un evento de 100 asistentes (5 requeridos) da 400; 5 sí', [400], async () => {

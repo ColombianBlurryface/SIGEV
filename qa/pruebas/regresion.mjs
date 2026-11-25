@@ -139,6 +139,18 @@ const agregarBebida = async (nombre, { precio } = {}) => {
   if (precio !== undefined) await page.fill('#bebida-precio', String(precio))
   await page.getByRole('button', { name: 'Agregar', exact: true }).click()
 }
+// HU-48: el formulario pide la modalidad de cobro («Por servicio (fijo)» o «Por hora»; el campo de horas solo sale con «Por hora»),
+// una tarifa mayor a 0 y su botón se llama «Agregar servicio». Con `horas` se elige «Por hora»; sin ellas, tarifa fija.
+const llenarServicio = async ({ tipo = 'dj', descripcion = 'DJ prueba', unidades, horas, valor = '100000', notas }) => {
+  await page.selectOption('#servicio-tipo', tipo); await page.fill('#servicio-descripcion', descripcion)
+  await page.selectOption('#servicio-modalidad', horas !== undefined ? 'por_hora' : 'por_servicio')
+  await page.fill('#servicio-valor', String(valor))
+  if (unidades !== undefined) await page.fill('#servicio-cantidad', String(unidades))
+  if (horas !== undefined) await page.fill('#servicio-horas', String(horas))
+  if (notas !== undefined) await page.fill('#servicio-notas', notas)
+}
+const clicAgregarServicio = () => page.getByRole('button', { name: 'Agregar servicio', exact: true }).click()
+const agregarServicio = async (datos) => { await llenarServicio(datos); await clicAgregarServicio() }
 const filaTabla = (texto) => page.locator('li', { hasText: texto }).filter({ has: page.locator('button[aria-label^="Registrar adquisición de"]') })
 // Identificador de esta corrida: hace únicos los nombres para poder repetir las pruebas
 const corrida = Date.now().toString(36).slice(-5)
@@ -335,7 +347,8 @@ await t('QA-04: valor escrito en el evento calcula el costo y se guarda', async 
 await t('HU-13: bar de coctelería lista solo licores y acompañantes (sin cervezas)', async () => {
   await nuevoEvento('Bar' + sufijo, 200); await aRequerimientos(); await pestana('Bebidas')
   await page.getByRole('button', { name: /^Bar de coctelería/ }).click()
-  await page.getByRole('button', { name: 'Compartida por botella' }).click()
+  // En el bar el selector es «Cócteles (por persona)» / «Licores (por botella)» (DEF-05)
+  await page.getByRole('button', { name: 'Licores (por botella)' }).click()
   const ops = await page.locator('#bebida-producto option').allInnerTexts()
   cierto(ops.includes('Aguardiente Blanco del Valle'), 'falta Blanco del Valle')
   cierto(!ops.some((x) => /^(Poker|Águila|Club Colombia|Vino |Champaña)/.test(x)), 'hay bebidas generales en el bar')
@@ -432,16 +445,25 @@ await t('Con 180 asistentes y stock insuficiente avisa que hay que alquilar y qu
 
 // ============ F. HU-05 servicios ============
 grupo = 'HU-05 Servicios adicionales'
-await t('Agregar DJ con descripción, cantidad y notas; queda en el resumen y en el detalle', async () => {
+await t('Agregar DJ con descripción, cantidad, tarifa y notas; queda en el resumen y en el detalle', async () => {
   await nuevoEvento('Servicios' + sufijo, 120); await aRequerimientos(); await pestana('Servicios')
-  await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ para recepción')
-  await page.fill('#servicio-cantidad', '2'); await page.fill('#servicio-horas', '4'); await page.fill('#servicio-notas', 'Música crossover')
-  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  // Con tarifa fija el formulario muestra el campo de notas (con «Por hora» muestra las horas y no las notas)
+  await agregarServicio({ descripcion: 'DJ para recepción', unidades: 2, valor: '150000', notas: 'Música crossover' })
   await page.waitForSelector('text=DJ para recepción')
   const id = await guardarEvento()
   const d = (await api(`/eventos/${id}`)).cuerpo
   const s = d.servicios_adicionales.find((x) => x.tipo === 'dj')
-  igual(s.cantidad, 2, 'unidades:'); igual(Number(s.horas), 4, 'horas:'); igual(s.notas, 'Música crossover', 'notas:')
+  igual(s.cantidad, 2, 'unidades:'); igual(s.notas, 'Música crossover', 'notas:'); igual(s.tipo_cobro, 'por_servicio', 'modalidad:'); igual(Number(s.valor_unitario), 150000, 'tarifa:')
+})
+await t('HU-05 / HU-48: un DJ por hora guarda sus horas y su tarifa, y el formulario pide la tarifa y las horas', async () => {
+  await nuevoEvento('Servicios por hora' + sufijo, 120); await aRequerimientos(); await pestana('Servicios')
+  await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ sin tarifa'); await clicAgregarServicio()
+  await page.waitForSelector('text=La tarifa o valor unitario es obligatoria y debe ser mayor a 0')
+  await agregarServicio({ descripcion: 'DJ por hora', unidades: 1, horas: 4, valor: '50000' })
+  await page.waitForSelector('text=DJ por hora')
+  const id = await guardarEvento()
+  const s = (await api(`/eventos/${id}`)).cuerpo.servicios_adicionales.find((x) => x.descripcion === 'DJ por hora')
+  igual(s.tipo_cobro, 'por_hora', 'modalidad:'); igual(Number(s.horas), 4, 'horas:'); igual(Number(s.valor_unitario), 50000, 'tarifa:')
 })
 
 // ============ G. HU-06 consulta ============
@@ -903,13 +925,6 @@ await t('Evento (UI), 250 y 150 asistentes: «A alquilar» es lo requerido menos
 // ============ Corrección: servicios (RN-18) y fecha pasada en la pantalla ============
 grupo = 'Cor. servicios RN-18 y fecha pasada (pantalla)'
 const ayerLocal = () => { const d = new Date(Date.now() - 86400000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
-const agregarServicio = async ({ tipo = 'dj', descripcion = 'DJ prueba', unidades, horas }) => {
-  await page.selectOption('#servicio-tipo', tipo); await page.fill('#servicio-descripcion', descripcion)
-  if (unidades !== undefined) await page.fill('#servicio-cantidad', String(unidades))
-  if (horas !== undefined) await page.fill('#servicio-horas', String(horas))
-  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
-}
-
 await t('Fecha de ayer escrita a mano: muestra el error y no deja pasar al paso 2', async () => {
   await nuevoEvento('Fecha ayer' + sufijo, 100)
   await page.fill('input[type=date]', ayerLocal())
@@ -929,9 +944,9 @@ await t('Fecha de hace un año y de dentro de 10 años también se bloquean; la 
 await t('Servicios: unidades 0 y 6 se rechazan; 1 y 5 se aceptan (5 en «Otro», que admite hasta 5)', async () => {
   await pestana('Servicios')
   for (const u of ['0', '6', '2,5', '-1']) {
-    await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ prueba'); await page.fill('#servicio-cantidad', u)
+    await llenarServicio({ descripcion: 'DJ prueba', unidades: u })
     await page.waitForSelector('text=Las unidades deben ser un número entero de 1 a 5')
-    await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+    await clicAgregarServicio()
     igual(await page.getByText('Todavía no has agregado servicios adicionales').count(), 1, `se agregó con ${u} unidades:`)
   }
   await agregarServicio({ descripcion: 'DJ una unidad', unidades: 1, horas: 3 })
@@ -941,14 +956,13 @@ await t('Servicios: unidades 0 y 6 se rechazan; 1 y 5 se aceptan (5 en «Otro»,
 })
 await t('Servicios: horas mayores a la duración se rechazan; iguales se aceptan', async () => {
   // el evento dura 5 horas (nuevoEvento)
-  await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ largo'); await page.fill('#servicio-cantidad', '1')
-  await page.fill('#servicio-horas', '6')
+  await llenarServicio({ descripcion: 'DJ largo', unidades: 1, horas: 6 })
   await page.waitForSelector('text=Las horas no pueden superar la duración del evento (5 h)')
-  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await clicAgregarServicio()
   igual(await page.getByText('DJ largo').count(), 0, 'se agregó el servicio largo:')
   await page.fill('#servicio-horas', '300'); await page.waitForSelector('text=Las horas no pueden superar la duración del evento')
   await page.fill('#servicio-horas', '5')
-  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await clicAgregarServicio()
   await page.waitForSelector('text=DJ largo')
 })
 await t('Si se reduce la duración por debajo de las horas de un servicio, el sistema avisa y no deja continuar', async () => {
@@ -976,55 +990,60 @@ await t('El detalle del evento muestra las unidades y las horas del servicio', a
   igual(dj.cantidad, 1, 'unidades:'); igual(Number(dj.horas), 3, 'horas:')
   const otro = d.servicios_adicionales.find((x) => x.descripcion === 'Otro cinco')
   igual(otro.cantidad, 5, 'unidades otro:')
+  // El detalle es una ventana con pestañas (HU-53): los servicios están en la pestaña «Servicios»
+  await ventanaDetalle().waitFor(); await abrirPestanaDetalle('Servicios')
   await page.waitForSelector('text=Otro cinco')
-  cierto(/5 und/.test(await page.locator('body').innerText()), 'el detalle no muestra «5 und»')
+  cierto(/5 und/.test(await ventanaDetalle().innerText()), 'el detalle no muestra «5 und»')
 })
 
 
-await t('COR-06 pantalla: 4 DJs y 6 horas se rechazan; el tope de DJs cuenta todas las líneas', async () => {
+await t('COR-06 / RN-18 pantalla: las horas van de 1 h hasta la duración del evento (6 h cabe en 8 h); 4 DJs se rechazan y el tope de DJs cuenta todas las líneas', async () => {
   await nuevoEvento('Tope servicios' + sufijo, 100)
   await page.fill('#duracion', '8')
   await aRequerimientos()
   await pestana('Servicios')
-  // horas: el evento dura 8 h pero un servicio admite hasta 5
-  await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ largo'); await page.fill('#servicio-horas', '6')
-  await page.waitForSelector('text=Las horas de un servicio van de 1 a 5')
-  await page.fill('#servicio-horas', '0,5'); await page.waitForSelector('text=Las horas de un servicio van de 1 a 5')
+  // horas: el evento dura 8 h. Desde HU-48 ya no hay tope de 5 h: 9 h pasa de la duración, 0,5 h no llega a 1 h y 6 h sí cabe
+  await llenarServicio({ descripcion: 'DJ largo', unidades: 1, horas: 9 })
+  await page.waitForSelector('text=Las horas no pueden superar la duración del evento (8 h)')
+  await page.fill('#servicio-horas', '0,5'); await page.waitForSelector('text=Las horas de un servicio deben ser de al menos 1 hora')
+  await page.fill('#servicio-horas', '6')
+  igual(await page.getByText(/Las horas (no pueden|de un servicio)/).count(), 0, '6 h debe ser válido en un evento de 8 h:')
   // unidades: más de 3 DJs en una línea
   await page.fill('#servicio-horas', '4'); await page.fill('#servicio-cantidad', '4')
   await page.waitForSelector('text=Un evento admite máximo 3 de «DJ»')
-  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await clicAgregarServicio()
   igual(await page.getByText('Todavía no has agregado servicios adicionales').count(), 1, 'se agregaron 4 DJs:')
   // 2 DJs y luego 2 más: el segundo grupo ya no cabe, solo queda 1
-  await page.fill('#servicio-cantidad', '2'); await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.fill('#servicio-cantidad', '2'); await clicAgregarServicio()
   await page.waitForSelector('text=DJ largo')
-  await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ otro'); await page.fill('#servicio-cantidad', '2')
+  await llenarServicio({ descripcion: 'DJ otro', unidades: 2, horas: 3 })
   await page.waitForSelector('text=solo puedes agregar 1 más')
-  await page.fill('#servicio-cantidad', '1'); await page.fill('#servicio-horas', '3'); await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.fill('#servicio-cantidad', '1'); await clicAgregarServicio()
   await page.waitForSelector('text=DJ otro')
   // ya están los 3: un DJ más se avisa de inmediato
   await page.selectOption('#servicio-tipo', 'dj'); await page.fill('#servicio-descripcion', 'DJ cuarto'); await page.fill('#servicio-cantidad', '1')
   await page.waitForSelector('text=Ya agregaste el máximo de «DJ» para un evento (3)')
 })
-await t('Servicios: el campo de horas NO se rellena solo con la duración del evento; hay que escribirlas, y no deja pasar de la duración ni de 5', async () => {
-  // el evento dura 8 horas: ni la duración ni 5 se proponen por su cuenta
-  await page.selectOption('#servicio-tipo', 'sonido')
+await t('Servicios: el campo de horas (solo con «Por hora») NO se rellena solo con la duración del evento; hay que escribirlas, y no deja pasar de la duración', async () => {
+  // el evento dura 8 horas: ni la duración ni otro valor se proponen por su cuenta
+  await page.selectOption('#servicio-tipo', 'sonido'); await page.selectOption('#servicio-modalidad', 'por_hora')
   igual(await page.inputValue('#servicio-horas'), '', 'horas al elegir el tipo:')
-  await page.fill('#servicio-descripcion', 'Sonido sin horas'); await page.fill('#servicio-cantidad', '1')
-  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.fill('#servicio-descripcion', 'Sonido sin horas'); await page.fill('#servicio-valor', '80000'); await page.fill('#servicio-cantidad', '1')
+  await clicAgregarServicio()
   await page.waitForSelector('text=Indica las horas del servicio')
   igual(await page.getByText('Sonido sin horas').count() > 0 && (await page.getByRole('list', { name: 'Servicios agregados' }).innerText()).includes('Sonido sin horas'), false, 'se agregó sin horas:')
   igual(await page.inputValue('#servicio-horas'), '', 'horas tras el intento:')
-  await page.fill('#servicio-horas', '3'); await page.getByRole('button', { name: 'Agregar', exact: true }).click(); await page.waitForSelector('text=Sonido sin horas')
-  // tras agregar, el campo vuelve a quedar vacío
-  igual(await page.inputValue('#servicio-horas'), '', 'horas tras agregar:')
+  await page.fill('#servicio-horas', '3'); await clicAgregarServicio(); await page.waitForSelector('text=Sonido sin horas')
+  // tras agregar, el formulario vuelve a «Por servicio» (sin campo de horas) y, al elegir «Por hora» de nuevo, las horas están vacías
+  igual(await page.locator('#servicio-horas').count(), 0, 'el campo de horas sigue visible tras agregar:')
+  await page.selectOption('#servicio-modalidad', 'por_hora'); igual(await page.inputValue('#servicio-horas'), '', 'horas tras agregar:')
 })
-await t('Servicios: en un evento de 3 horas no deja escribir más de 3 (el campo queda vacío y se avisa)', async () => {
+await t('Servicios: en un evento de 3 horas no deja escribir más de 3 (se avisa y no se agrega)', async () => {
   await page.getByRole('button', { name: 'Atrás' }).click(); await page.fill('#duracion', '3'); await aRequerimientos(); await pestana('Servicios')
-  igual(await page.inputValue('#servicio-horas'), '', 'horas vacías:')
-  await page.selectOption('#servicio-tipo', 'iluminacion'); await page.fill('#servicio-descripcion', 'Luces'); await page.fill('#servicio-cantidad', '1')
-  await page.fill('#servicio-horas', '4'); await page.waitForSelector('text=Las horas no pueden superar la duración del evento (3 h)')
-  await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+  await page.selectOption('#servicio-modalidad', 'por_hora'); igual(await page.inputValue('#servicio-horas'), '', 'horas vacías:')
+  await llenarServicio({ tipo: 'iluminacion', descripcion: 'Luces', unidades: 1, horas: 4 })
+  await page.waitForSelector('text=Las horas no pueden superar la duración del evento (3 h)')
+  await clicAgregarServicio()
   igual((await page.getByRole('list', { name: 'Servicios agregados' }).innerText()).includes('Luces'), false, 'se agregó con 4 h en un evento de 3 h:')
   await page.fill('#servicio-horas', '3'); igual(await page.getByText('no pueden superar la duración').count(), 0, '3 h sí es válido:')
 })
@@ -1543,6 +1562,7 @@ const borrarYEscribir = async (selector) => {
   const vacio = await c.inputValue(); await page.keyboard.type('7')
   return { vacio, escrito: await c.inputValue() }
 }
+const primerLicor = async () => (await api('/catalogo?clasificacion=bar_cocteleria')).cuerpo.find((x) => x.tipo_calculo === 'botella_compartida')
 const aTabCocteles = async () => { await page.goto(`${URL}/catalogo`); await page.getByRole('button', { name: 'Recetas de Cóctel' }).click(); await page.getByRole('heading', { name: /Crear Receta de Cóctel/ }).waitFor() }
 
 await t('Cócteles: el campo de mililitros se puede borrar y reescribir (no queda un «0» pegado)', async () => {
@@ -1550,16 +1570,17 @@ await t('Cócteles: el campo de mililitros se puede borrar y reescribir (no qued
   const r = await borrarYEscribir('input[aria-label="Mililitros del licor 1"]')
   igual(r.vacio, '', 'tras borrar:'); igual(r.escrito, '7', 'tras escribir 7:')
 })
-await t('Cócteles: los asistentes y los cócteles por persona de la calculadora se pueden borrar y reescribir', async () => {
-  await page.getByRole('button', { name: /Agregar otro licor/ }).waitFor()
-  const hay = await page.getByRole('heading', { name: /Calcular licor por cóctel/ }).count()
-  if (!hay) { // la calculadora aparece cuando hay cócteles: se crea uno por la API
-    const licor = (await api('/catalogo?clasificacion=bar_cocteleria')).cuerpo[0]
-    igual((await api('/cocteles', { method: 'POST', body: { nombre: 'Cóctel ceros' + sufijo, ingredientes: [{ licor_id: licor.id, mililitros: 50 }] } })).estado, 201)
-    await aTabCocteles()
-  }
-  const as = await borrarYEscribir('input[aria-label^="Número de asistentes"]'); igual(as.vacio, '', 'asistentes tras borrar:'); igual(as.escrito, '7', 'asistentes tras escribir 7:')
-  const pp = await borrarYEscribir('input[aria-label^="Cócteles por persona"]'); igual(pp.vacio, '', 'por persona tras borrar:'); igual(pp.escrito, '7', 'por persona tras escribir 7:')
+// HU-45: la calculadora de licor suelta del Catálogo se quitó; las botellas se calculan dentro del evento, en el bar de coctelería.
+// Lo que antes se probaba en la calculadora (campos sin «0» pegado y con límites) ahora se prueba en «Cócteles por persona» del evento.
+const abrirBarIndividual = async (nombreEvento) => {
+  await nuevoEvento(nombreEvento + sufijo, 200); await aRequerimientos(); await pestana('Bebidas')
+  await page.getByRole('button', { name: /^Bar de coctelería/ }).click()
+  await page.selectOption('#bebida-producto', await optVal(page, '#bebida-producto', 'Gin Tonic'))
+}
+await t('Bar de coctelería (evento): «Cócteles por persona» se puede borrar y reescribir (no queda un «0» pegado)', async () => {
+  await abrirBarIndividual('Bar escribir')
+  const r = await borrarYEscribir('#bebida-unidades')
+  igual(r.vacio, '', 'tras borrar:'); igual(r.escrito, '7', 'tras escribir 7:')
 })
 await t('Cócteles: 15.000 ml se avisan apenas se escriben («Máximo 250 ml por licor»), también 0, texto y 3 decimales; no se guarda', async () => {
   await aTabCocteles()
@@ -1577,7 +1598,7 @@ await t('Cócteles: 15.000 ml se avisan apenas se escriben («Máximo 250 ml por
 })
 await t('Cócteles: crear una receta con 45,5 ml por la pantalla la guarda con ese valor; sin licor o con licor repetido avisa dentro del formulario', async () => {
   await aTabCocteles()
-  const licor = (await api('/catalogo?clasificacion=bar_cocteleria')).cuerpo[0]
+  const licor = await primerLicor()
   await page.fill('input[placeholder="Ej. Mojito, Gin Tonic"]', 'Cóctel pantalla' + sufijo)
   await page.getByRole('button', { name: 'Crear Cóctel' }).click(); await page.waitForSelector('text=Selecciona un licor en cada fila')
   await page.selectOption('form select >> nth=0', String(licor.id)); await page.fill('input[aria-label="Mililitros del licor 1"]', '45,5')
@@ -1585,20 +1606,20 @@ await t('Cócteles: crear una receta con 45,5 ml por la pantalla la guarda con e
   await page.getByRole('button', { name: 'Crear Cóctel' }).click(); await page.waitForSelector('text=mismo licor más de una vez')
   await page.locator('button[title="Quitar licor"]').last().click() // quita la fila repetida (la segunda)
   await page.getByRole('button', { name: 'Crear Cóctel' }).click()
-  await page.waitForSelector(`text=Cóctel pantalla${sufijo}`)
+  // El nombre también sale como opción oculta del desplegable de licores: se espera el título de la tarjeta, que es lo visible
+  await page.getByRole('heading', { name: 'Cóctel pantalla' + sufijo }).waitFor()
   const c = (await api('/cocteles')).cuerpo.find((x) => x.nombre === 'Cóctel pantalla' + sufijo)
   igual(Number(c.ingredientes[0].mililitros), 45.5, 'mililitros guardados:')
 })
-await t('Calculadora de licor: asistentes fuera de 40–600 y cócteles por persona fuera de 1–10 se avisan dentro del formulario y no calculan', async () => {
-  await aTabCocteles()
-  await page.fill('input[aria-label^="Número de asistentes"]', '5'); await page.waitForSelector('text=Debe estar entre 40 y 600 asistentes')
-  await page.fill('input[aria-label^="Número de asistentes"]', '601'); await page.waitForSelector('text=Debe estar entre 40 y 600 asistentes')
-  await page.fill('input[aria-label^="Número de asistentes"]', '40,5'); await page.waitForSelector('text=Debe ser un número entero')
-  await page.fill('input[aria-label^="Cócteles por persona"]', '11'); await page.waitForSelector('text=Debe ser un entero de 1 a 10')
-  await page.fill('input[aria-label^="Cócteles por persona"]', '0'); await page.waitForSelector('text=Debe ser un entero de 1 a 10')
-  await page.getByRole('button', { name: 'Calcular Botellas Necesarias' }).click(); await page.waitForSelector('text=Corrige los campos marcados antes de calcular')
-  await page.fill('input[aria-label^="Número de asistentes"]', '100'); await page.fill('input[aria-label^="Cócteles por persona"]', '2')
-  await page.getByRole('button', { name: 'Calcular Botellas Necesarias' }).click(); await page.waitForSelector('text=Botellas consolidadas a comprar')
+await t('Bar de coctelería (evento): «Cócteles por persona» fuera de 1–10 se avisa dentro del formulario y no deja agregar; 1 y 10 sí', async () => {
+  await abrirBarIndividual('Bar limites')
+  const aviso = 'Las unidades por persona deben ser un número entero de 1 a 10.'
+  for (const v of ['0', '11', '2,5', 'abc', '-1']) {
+    await page.fill('#bebida-unidades', v); await page.waitForSelector(`text=${aviso}`)
+    await page.getByRole('button', { name: 'Agregar', exact: true }).click()
+    igual(await page.getByText('Todavía no has agregado bar de coctelería a este evento').count(), 1, `se agregó con ${v} cócteles por persona:`)
+  }
+  for (const v of ['1', '10']) { await page.fill('#bebida-unidades', v); igual(await page.getByText(aviso).count(), 0, `${v} sí es válido:`) }
 })
 await t('Catálogo: 15.000 ml en la botella, 15.000 g por persona y un precio exagerado se avisan apenas se escriben, y no se guardan', async () => {
   await page.goto(`${URL}/catalogo`); await page.getByLabel('Nombre del producto').waitFor()
@@ -1923,11 +1944,12 @@ await t('Tope: no se pueden asignar más meseros que los requeridos (1 por cada 
 })
 await t('Cruces: un mesero no puede estar en dos eventos que se cruzan (409 con el evento y el horario), pero si uno termina cuando empieza el otro, sí', async () => {
   const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Cruce')
-  const tarde = await eventoA('Tarde', dia, '18:00'), noche = await eventoA('Noche', dia, '22:00'), cruce = await eventoA('Cruce', dia, '20:00')   // tarde 18–22, noche 22–02, cruce 20–24
-  igual((await asignar(tarde.id, [a.id])).estado, 200, 'primer evento:')
-  igual((await asignar(noche.id, [a.id])).estado, 200, 'termina uno (22:00) y empieza el otro (22:00):')
+  // RN-23: los eventos empiezan entre las 08:00 y las 21:00. Mañana 08–12, tarde 12–16 y un tercero de 13 a 16 que se cruza con la tarde
+  const manana = await eventoA('Manana', dia, '08:00'), tarde = await eventoA('Tarde', dia, '12:00'), cruce = await eventoA('Cruce', dia, '13:00', { duracion_horas: 3 })
+  igual((await asignar(manana.id, [a.id])).estado, 200, 'primer evento:')
+  igual((await asignar(tarde.id, [a.id])).estado, 200, 'termina uno (12:00) y empieza el otro (12:00):')
   const r = await asignar(cruce.id, [a.id]); igual(r.estado, 409, 'cruce:')
-  cierto(new RegExp(`ya está asignado a «Tarde ${LETRAS}».*18:00 – 22:00.*se cruza`).test(r.cuerpo.detalle), r.cuerpo.detalle); cierto(/sí se puede asignar/.test(r.cuerpo.detalle), 'sin la aclaración')
+  cierto(new RegExp(`ya está asignado a «Tarde ${LETRAS}».*12:00 – 16:00.*se cruza`).test(r.cuerpo.detalle), r.cuerpo.detalle); cierto(/sí se puede asignar/.test(r.cuerpo.detalle), 'sin la aclaración')
   igual(r.cuerpo.conflictos.length >= 1 && r.cuerpo.conflictos[0].personal_id === a.id, true, 'conflictos:')
   igual((await meserosDe(cruce.id)).total_asignados, 0, 'se asignó pese al cruce:')
 })
@@ -1939,17 +1961,16 @@ await t('Cruces: el mismo horario exacto y un evento dentro de otro se bloquean 
 })
 await t('Cruces: empezar un minuto antes de que termine el otro se bloquea; en la mañana del mismo día y en otro día, no', async () => {
   const dia = fechaLibre(); const [a] = await crearMeseros(1, 'Minuto')
-  const base = await eventoA('Base', dia, '18:00'); igual((await asignar(base.id, [a.id])).estado, 200)   // 18:00–22:00
-  const casi = await eventoA('Casi', dia, '21:59'), manana = await eventoA('Manana', dia, '09:00', { duracion_horas: 5 })   // 09:00–14:00
-  igual((await asignar(casi.id, [a.id])).estado, 409, 'empieza un minuto antes de que termine (21:59):'); igual((await asignar(manana.id, [a.id])).estado, 200, 'en la mañana (09:00–14:00):')
+  const base = await eventoA('Base', dia, '15:00'); igual((await asignar(base.id, [a.id])).estado, 200)   // 15:00–19:00
+  const casi = await eventoA('Casi', dia, '18:59'), manana = await eventoA('Manana', dia, '08:00', { duracion_horas: 5 })   // 08:00–13:00
+  igual((await asignar(casi.id, [a.id])).estado, 409, 'empieza un minuto antes de que termine (18:59):'); igual((await asignar(manana.id, [a.id])).estado, 200, 'en la mañana (08:00–13:00):')
   const otroDia = await eventoA('OtroDia', fechaLibre(), '18:00'); igual((await asignar(otroDia.id, [a.id])).estado, 200, 'otro día:')
 })
-await t('Cruces: un evento que cruza la medianoche (22:00 + 4 h) choca con uno al día siguiente que empieza antes de las 02:00, no con uno a las 02:00', async () => {
-  const dia = new Date(Date.parse(fechaLibre()) ); const sig = new Date(dia.getTime() + 86400000).toISOString().slice(0, 10); const d0 = dia.toISOString().slice(0, 10)
+await t('Cruces: un evento que empieza a las 21:00 y dura 8 h termina de madrugada (05:00), pero como los eventos arrancan desde las 08:00 (RN-23) no choca con el del día siguiente', async () => {
+  const dia = new Date(Date.parse(fechaLibre())); const sig = new Date(dia.getTime() + 86400000).toISOString().slice(0, 10); const d0 = dia.toISOString().slice(0, 10)
   const [a] = await crearMeseros(1, 'Medianoche')
-  const noche = await eventoA('Noche', d0, '22:00'); igual((await asignar(noche.id, [a.id])).estado, 200)
-  const temprano = await eventoA('Temprano', sig, '01:00'), justo = await eventoA('Justo', sig, '02:00')
-  igual((await asignar(temprano.id, [a.id])).estado, 409, 'madrugada del día siguiente (01:00):'); igual((await asignar(justo.id, [a.id])).estado, 200, 'a las 02:00 en punto:')
+  const noche = await eventoA('Noche', d0, '21:00', { duracion_horas: 8 }); igual((await asignar(noche.id, [a.id])).estado, 200)
+  const manana = await eventoA('Manana', sig, '08:00'); igual((await asignar(manana.id, [a.id])).estado, 200, 'a las 08:00 del día siguiente:')
 })
 await t('Cruces: un evento SIN hora de inicio (anteriores a esta regla) ocupa todo el día', async () => {
   const dia = fechaLibre(); const [a] = await crearMeseros(1, 'SinHora')
@@ -1974,9 +1995,9 @@ await t('Dos asignaciones a la vez del mismo mesero a eventos que se cruzan: sol
   igual(rs.filter((r) => r.estado === 200).length, 1, 'asignaciones que entraron:'); igual(rs.filter((r) => r.estado === 409).length, 1, 'rechazadas por cruce:'); igual(rs.filter((r) => r.estado >= 500).length, 0, 'errores 500:')
   igual((await meserosDe(e1.id)).total_asignados + (await meserosDe(e2.id)).total_asignados, 1, 'queda asignado en los dos:')
 })
-await t('Hora de inicio del evento: «HH:MM» de 00:00 a 23:59 (25:61, 18, 6:00, texto o número dan 400), se devuelve en el detalle y la lista, y es opcional en la API', async () => {
-  for (const hora of ['25:61', '24:00', '18', '6:00', '18:60', 'abc', '18:00:00', 1800, {}, []]) igual((await eventoMeseros(100, { hora_inicio: hora })).estado, 400, `hora ${JSON.stringify(hora)}:`)
-  for (const hora of ['00:00', '23:59', '09:05']) { const r = await eventoMeseros(100, { hora_inicio: hora }); igual(r.estado, 201, hora + ':'); igual(r.cuerpo.evento.hora_inicio, hora, 'respuesta:') ; igual((await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo.hora_inicio, hora, 'detalle:') ; igual((await api('/eventos')).cuerpo.find((e) => e.id === r.cuerpo.evento.id).hora_inicio, hora, 'lista:') }
+await t('Hora de inicio del evento: «HH:MM» de 08:00 a 21:00 (RN-23; 07:59, 21:01, 00:00, 25:61, 18, 6:00, texto o número dan 400), se devuelve en el detalle y la lista, y es opcional en la API', async () => {
+  for (const hora of ['25:61', '24:00', '18', '6:00', '18:60', 'abc', '18:00:00', 1800, {}, [], '07:59', '21:01', '00:00', '23:59']) igual((await eventoMeseros(100, { hora_inicio: hora })).estado, 400, `hora ${JSON.stringify(hora)}:`)
+  for (const hora of ['08:00', '21:00', '09:05']) { const r = await eventoMeseros(100, { hora_inicio: hora }); igual(r.estado, 201, hora + ':'); igual(r.cuerpo.evento.hora_inicio, hora, 'respuesta:') ; igual((await api(`/eventos/${r.cuerpo.evento.id}`)).cuerpo.hora_inicio, hora, 'detalle:') ; igual((await api('/eventos')).cuerpo.find((e) => e.id === r.cuerpo.evento.id).hora_inicio, hora, 'lista:') }
   const sin = await eventoMeseros(100); igual(sin.estado, 201, 'sin hora:'); igual(sin.cuerpo.evento.hora_inicio, null)
 })
 await t('Asignaciones simultáneas sobre el mismo evento: 10 listas distintas a la vez terminan con UNA lista completa (sin mezclas ni 500)', async () => {
@@ -1999,7 +2020,7 @@ const abrirDetalleEvento = async (id) => { await page.goto(`${URL}/eventos?event
 const seccionAsignados = () => page.getByRole('region', { name: 'Meseros asignados' })
 await t('Pantalla: el detalle muestra «0 de 5 · Faltan 5» y el botón «Asignar meseros»', async () => {
   const ev = (await eventoMeseros(100)).cuerpo.evento; await abrirDetalleEvento(ev.id)
-  igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '0 de 5'); await seccionAsignados().getByText('Faltan 5').waitFor()
+  igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '0 de 5'); await seccionAsignados().getByText('Faltan 5', { exact: true }).waitFor()
   await seccionAsignados().getByText('Todavía no hay meseros asignados a este evento').waitFor(); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).waitFor()
 })
 await t('Pantalla: marcar 3 meseros y guardar los asigna («3 de 5 · Faltan 2») y quedan en el listado del evento', async () => {
@@ -2008,10 +2029,10 @@ await t('Pantalla: marcar 3 meseros y guardar los asigna («3 de 5 · Faltan 2»
   const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor()
   await page.fill('#buscar-asignacion', LETRAS)   // todos los de esta corrida
   for (const m of ms) await lista.locator('label', { hasText: m.nombre_completo }).locator('input[type=checkbox]').check()
-  await page.waitForSelector('text=/3 seleccionados · el evento requiere 5/')
+  await page.waitForSelector('text=/Faltan 2 meseros para cumplir con el estándar \\(3 de 5 seleccionados\\)/')
   await seccionAsignados().getByRole('button', { name: 'Guardar asignación' }).click()
   await page.waitForSelector('text=Asignación guardada: 3 de 5 meseros')
-  igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '3 de 5'); await seccionAsignados().getByText('Faltan 2').waitFor()
+  igual((await seccionAsignados().getByLabel('Meseros asignados frente a los requeridos').innerText()).replace(/\s+/g, ' '), '3 de 5'); await seccionAsignados().getByText('Faltan 2', { exact: true }).waitFor()
   const asignados = await seccionAsignados().getByRole('list', { name: 'Meseros asignados al evento' }).innerText()
   for (const m of ms) cierto(asignados.includes(m.nombre_completo), `falta ${m.nombre_completo} en el listado`)
   igual((await meserosDe(ev.id)).total_asignados, 3, 'guardado en el servidor:')
@@ -2034,12 +2055,12 @@ await t('Pantalla: en un evento de 40 asistentes (2 requeridos), asignar 2 muest
 })
 await t('Pantalla: un mesero ocupado en otro evento que se cruza aparece bloqueado con «Ocupado en…» y uno que empieza cuando termina el otro se puede marcar', async () => {
   const dia = fechaLibre(); const [cruza, toca] = await crearMeseros(2, 'Bloqueo')
-  const a = await eventoA('Primero', dia, '18:00'), b = await eventoA('Segundo', dia, '20:00'), c = await eventoA('Tercero', dia, '22:00')
+  const a = await eventoA('Primero', dia, '12:00'), b = await eventoA('Segundo', dia, '14:00'), c = await eventoA('Tercero', dia, '16:00')   // primero 12–16, segundo 14–18 (se cruza), tercero 16–20 (empieza cuando termina el primero)
   await asignar(a.id, [cruza.id, toca.id]); await abrirDetalleEvento(b.id)
   await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', `Bloqueo`)
   const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor()
   const filaCruza = lista.locator('label', { hasText: cruza.nombre_completo }); await filaCruza.waitFor()
-  igual(await filaCruza.locator('input[type=checkbox]').isDisabled(), true, 'el que se cruza no está bloqueado:'); cierto((await filaCruza.innerText()).includes(`Ocupado en «Primero ${LETRAS}» (18:00 – 22:00)`), 'sin el aviso «Ocupado en…»')
+  igual(await filaCruza.locator('input[type=checkbox]').isDisabled(), true, 'el que se cruza no está bloqueado:'); cierto((await filaCruza.innerText()).includes(`Ocupado en «Primero ${LETRAS}» (12:00 – 16:00)`), 'sin el aviso «Ocupado en…»')
   await abrirDetalleEvento(c.id); await seccionAsignados().getByRole('button', { name: 'Asignar meseros' }).click(); await page.fill('#buscar-asignacion', `Bloqueo`)
   const filaToca = lista.locator('label', { hasText: toca.nombre_completo }); await filaToca.waitFor()
   igual(await filaToca.locator('input[type=checkbox]').isDisabled(), false, 'el que empieza cuando termina el otro está bloqueado:')
@@ -2051,7 +2072,7 @@ await t('Pantalla: al marcar tantos meseros como requiere el evento, los demás 
   const lista = page.getByRole('list', { name: 'Meseros disponibles para asignar' }); await lista.waitFor()
   const cajas = lista.locator('input[type=checkbox]'); igual(await cajas.count() >= 3, true, 'menos de 3 meseros:')
   await cajas.nth(0).check(); await cajas.nth(1).check()
-  await page.waitForSelector('text=2 seleccionados · el evento requiere 2 (ya no puedes marcar más)')
+  await page.waitForSelector('text=Se han seleccionado los 2 meseros requeridos')
   igual(await cajas.nth(2).isDisabled(), true, 'el tercero no está bloqueado:'); await cajas.nth(0).uncheck(); igual(await cajas.nth(2).isDisabled(), false, 'no se liberó el cupo:')
 })
 await t('Registro: la hora de inicio es obligatoria (aviso junto al campo) y la vista previa muestra el horario «18:00 – 23:00»; el detalle del evento lo muestra', async () => {
@@ -2097,27 +2118,33 @@ await t('HU-52: una hora inválida (13:00, 7:75, 0:30, 7, texto) o sin a. m./p. 
     cierto((await page.locator('#horaInicio-error').innerText()).includes(aviso), `«${texto} ${periodo}»: el aviso no está junto al campo`)
   }
 })
-await t('HU-52: 12:00 p. m. es mediodía (12:00) y 12:00 a. m. es medianoche (00:00); 7:30 p. m. es 19:30; también se acepta pegar «7:30 p. m.» completo', async () => {
+await t('HU-52: 12:00 p. m. es mediodía (12:00), 8:00 a. m. es 08:00 y 7:30 p. m. es 19:30; también se acepta pegar «7:30 p. m.» completo; 12:00 a. m. (medianoche) queda fuera del horario permitido (RN-23)', async () => {
   await llenarPaso1SinHora('Equivalencias' + sufijo)
-  for (const [texto, periodo, horario] of [['12:00', 'pm', '12:00 – 16:00'], ['12:00', 'am', '00:00 – 04:00'], ['7:30', 'pm', '19:30 – 23:30'], ['12:30', 'am', '00:30 – 04:30'], ['12:30', 'pm', '12:30 – 16:30'], ['1:05', 'am', '01:05 – 05:05'], ['11:59', 'pm', '23:59 – 03:59 (día siguiente)']]) {
+  for (const [texto, periodo, horario] of [['12:00', 'pm', '12:00 – 16:00'], ['8:00', 'am', '08:00 – 12:00'], ['7:30', 'pm', '19:30 – 23:30'], ['12:30', 'pm', '12:30 – 16:30'], ['9:00', 'pm', '21:00 – 01:00 (día siguiente)']]) {
     await escribirHora(texto, periodo); await page.waitForSelector(`text=${horario}`)
   }
   await page.fill('#horaInicio', '8:15 p. m.'); await page.waitForSelector('text=20:15 – 00:15 (día siguiente)')
   igual(await page.locator('#horaInicio').inputValue(), '8:15', 'no se separó la hora pegada:'); igual(await page.locator('#horaInicio-periodo').inputValue(), 'pm', 'no se eligió p. m.:')
+  // HU-54 (RN-23): el inicio va de 8:00 a. m. a 9:00 p. m.; la medianoche (12:00 a. m.) y las 9:01 p. m. se rechazan junto al campo
+  for (const [texto, periodo] of [['12:00', 'am'], ['7:59', 'am'], ['9:01', 'pm']]) {
+    await escribirHora(texto, periodo); await page.getByRole('button', { name: /^Siguiente/ }).click()
+    await page.getByText('La hora de inicio debe estar entre las 8:00 a. m. y las 9:00 p. m.').first().waitFor()
+    igual(await page.getByRole('tab', { name: /Alimentos/ }).count(), 0, `«${texto} ${periodo}» avanzó:`)
+  }
 })
-await t('HU-52: crear con 7:30 p. m. guarda «19:30» (la API recibe 24 horas); al editar (HU-50) el campo vuelve a mostrar 7:30 p. m. y 12:00 a. m. se guarda como 00:00; los cruces de meseros (HU-28) usan 19:30', async () => {
+await t('HU-52: crear con 7:30 p. m. guarda «19:30» (la API recibe 24 horas); al editar (HU-50) el campo vuelve a mostrar 7:30 p. m. y 8:00 a. m. se guarda como 08:00; los cruces de meseros (HU-28) usan 19:30', async () => {
   const dia = fechaLibre(); await llenarPaso1SinHora('Siete y media' + sufijo, dia); await escribirHora('7:30', 'pm'); await aRequerimientos()
   const id = await guardarEvento()
   const guardada = (await api(`/eventos/${id}`)).cuerpo.hora_inicio; igual(guardada, '19:30', 'la API no guardó 19:30:')
-  // Cruces: otro evento a las 21:00 de ese día se pisa con 19:30–23:30; uno a las 23:30 empieza justo cuando termina
-  const cruza = await eventoA('CruzaHora', dia, '21:00'), toca = await eventoA('TocaHora', dia, '23:30'); const [x] = await crearMeseros(1, 'Hora Doce')
+  // Cruces: otro evento a las 21:00 de ese día se pisa con 19:30–23:30; uno de 15:30 a 19:30 termina justo cuando este empieza
+  const cruza = await eventoA('CruzaHora', dia, '21:00'), toca = await eventoA('TocaHora', dia, '15:30'); const [x] = await crearMeseros(1, 'Hora Doce')
   igual((await asignar(id, [x.id])).estado, 200, 'asignar al evento de 19:30:'); const choque = await asignar(cruza.id, [x.id]); igual(choque.estado, 409, 'se pisa con 19:30–23:30:'); cierto(/19:30/.test(choque.cuerpo.detalle), choque.cuerpo.detalle)
-  igual((await asignar(toca.id, [x.id])).estado, 200, 'empieza justo cuando termina:')
+  igual((await asignar(toca.id, [x.id])).estado, 200, 'termina justo cuando empieza el de 19:30:')
   // Editar: el campo muestra la hora guardada en 12 horas y se puede cambiar
   await page.goto(`${URL}/eventos/${id}/editar`); await page.locator('#horaInicio').waitFor(); await page.waitForFunction(() => document.querySelector('#horaInicio')?.value !== '')
   igual(await page.locator('#horaInicio').inputValue(), '7:30', 'al editar, la hora:'); igual(await page.locator('#horaInicio-periodo').inputValue(), 'pm', 'al editar, el período:')
-  await escribirHora('12:00', 'am'); await aRequerimientos(); await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.getByRole('button', { name: 'Guardar cambios' }).click(); await page.waitForURL('**/eventos?evento=*')
-  igual((await api(`/eventos/${id}`)).cuerpo.hora_inicio, '00:00', 'al editar no se guardó 00:00:')
+  await escribirHora('8:00', 'am'); await aRequerimientos(); await page.getByRole('button', { name: /^Siguiente/ }).click(); await page.getByRole('button', { name: 'Guardar cambios' }).click(); await page.waitForURL('**/eventos?evento=*')
+  igual((await api(`/eventos/${id}`)).cuerpo.hora_inicio, '08:00', 'al editar no se guardó 08:00:')
 })
 
 // ============ HU-53 · Ver el detalle del evento en una ventana (RF-60) ============
