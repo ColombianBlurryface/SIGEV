@@ -66,6 +66,7 @@ Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Su
 | 9 ⚠️ | Personal de servicio (HU-26): tabla `personal` | [`docs/sql-hu-26-personal.sql`](sql-hu-26-personal.sql) | **Sí: antes de desplegar el código de la HU-26** (sin la tabla, la pantalla «Personal» da 500) | ⬜ |
 | 10 ⚠️ | Meseros asignados a un evento (HU-28): columna `eventos.hora_inicio` y tabla `evento_personal` (**después** del SQL de la HU-26) | [`docs/sql-hu-28-asignacion-meseros.sql`](sql-hu-28-asignacion-meseros.sql) | **Sí: antes de desplegar el código de la HU-28** (sin la tabla, el detalle de cualquier evento da 500) | ⬜ |
 | 11 ⚠️ | Estado de la asignación (HU-29): columna `evento_personal.estado` (**después** del SQL de la HU-28) | [`docs/sql-hu-29-estado-asignacion.sql`](sql-hu-29-estado-asignacion.sql) | **Sí: antes de desplegar el código de la HU-29** (sin la columna, el detalle de los eventos y la alerta de personal dan 500) | ⬜ |
+| 12 ⚠️ | Balance logístico (HU-31, HU-33 y HU-34): tabla `evento_balance_recursos` con sus dos tipos (**después** del SQL de la HU-28; repetible) | [`docs/sql-hu-31-balance-logistico.sql`](sql-hu-31-balance-logistico.sql) | **Sí: antes de desplegar el balance.** Sin la tabla, «Balance logístico» da 500 y, peor, **asignar un mesero o editar un evento responde 200 pero no guarda nada** (la transacción se aborta en silencio) | ⬜ |
 
 ### Producción
 
@@ -81,6 +82,7 @@ Marca ✅ cuando lo ejecutes en cada entorno. Se ejecutan en el SQL Editor de Su
 | 7 ⚠️ | Personal de servicio (HU-26): tabla `personal` | [`docs/sql-hu-26-personal.sql`](sql-hu-26-personal.sql) | **Sí: antes de publicar** | ⬜ |
 | 8 ⚠️ | Meseros asignados a un evento (HU-28): columna `eventos.hora_inicio` y tabla `evento_personal` (**después** del SQL de la HU-26) | [`docs/sql-hu-28-asignacion-meseros.sql`](sql-hu-28-asignacion-meseros.sql) | **Sí: antes de publicar** | ⬜ |
 | 9 ⚠️ | Estado de la asignación (HU-29): columna `evento_personal.estado` (**después** del SQL de la HU-28) | [`docs/sql-hu-29-estado-asignacion.sql`](sql-hu-29-estado-asignacion.sql) | **Sí: antes de publicar** | ⬜ |
+| 10 ⚠️ | Balance logístico (HU-31, HU-33 y HU-34): tabla `evento_balance_recursos` con sus dos tipos | [`docs/sql-hu-31-balance-logistico.sql`](sql-hu-31-balance-logistico.sql) | **Sí: antes de publicar** (sin la tabla, asignar meseros y editar eventos no guardan nada) | ⬜ |
 
 **Nunca se corre en producción:** `qa/reiniciar-datos-qa.sql` (tiene un candado que lo impide: solo funciona donde existe el usuario `qa`) ni `qa/limpiar-datos-qa.sql`.
 

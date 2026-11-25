@@ -51,6 +51,7 @@ router.post('/:id/balance/sincronizar', sincronizarBalanceEvento);
 router.post('/:id/balance/generar', sincronizarBalanceEvento);
 router.patch('/:id/balance/recursos/:recursoId', cambiarEstadoRecursoBalance);
 router.patch('/:eventId/logistics-balance/items/:itemId', cambiarEstadoRecursoBalance);
+router.patch('/:eventId/logistics-balance/items/:itemId/status', cambiarEstadoRecursoBalance); // Ruta del contrato (HU-34 · RF-43)
 // Fecha límite para conseguir un recurso del balance (HU-33 · RF-42). Con deadline_date: null se quita.
 router.put('/:id/balance/recursos/:recursoId/fecha-limite', establecerFechaLimiteRecurso);
 router.put('/:eventId/logistics-balance/items/:itemId/deadline', establecerFechaLimiteRecurso);

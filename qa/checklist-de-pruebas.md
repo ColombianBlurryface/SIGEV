@@ -288,7 +288,7 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 
 ### HU-33 · Establecer fechas límite en el balance (RF-42)
 
-> **No hay SQL nuevo para esta historia:** la fecha se guarda en la columna `fecha_limite` que ya tiene la tabla `evento_balance_recursos`. Ojo: esa tabla (con sus dos tipos `categoria_balance_enum` y `estado_balance_enum`) **no aparece en ninguno de los SQL de entrega a QA ni a producción** (el de QA incluso dice que no se crea); hay que crearla antes de desplegar el balance (HU-31), con o sin esta historia.
+> **No hay SQL nuevo propio de esta historia:** la fecha se guarda en la columna `fecha_limite` de `evento_balance_recursos`. Esa tabla (con sus dos tipos) **no estaba en ningún SQL de entrega**; ahora la crea [`docs/sql-hu-31-balance-logistico.sql`](../docs/sql-hu-31-balance-logistico.sql), que hay que correr antes de desplegar el balance, con o sin esta historia.
 
 - [ ] 🤖👀 **Se fija la fecha (Escenario 1):** en el balance logístico de un evento, cada recurso que todavía falta (pendiente, por comprar o por conseguir) tiene un campo «Fecha límite». Al elegir un día aparece **Guardar**; al pulsarlo (o con Enter) se ve «Fecha límite guardada.» y aparece **Quitar**. Al cerrar y volver a abrir el balance, o al recargar la página, la fecha sigue ahí, junto al recurso.
 - [ ] 🤖👀 **No pasa del día del evento (Escenario 2):** el calendario no deja elegir días posteriores al evento. Si se escribe a mano un día posterior, al guardar sale en rojo «La fecha límite no puede ser posterior a la fecha del evento (dd/mm/aaaa)», el campo se marca y **no** se guarda nada. El mismo día del evento sí se permite.
@@ -298,6 +298,21 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖 **API:** `PUT /api/eventos/{id}/balance/recursos/{recursoId}/fecha-limite` (y su ruta del contrato `PUT …/logistics-balance/items/{itemId}/deadline`) con `{"deadline_date": "AAAA-MM-DD"}` → 200; `null` quita la fecha; formato incorrecto o un día que no existe (2026-02-30) → 400; recurso inexistente o de otro evento → 404; sin sesión → 401. El balance trae `deadline_date` e `item_id` en cada ítem y `event_date` arriba.
 - [ ] 👀 Una fecha límite **ya pasada** se acepta (la historia solo prohíbe pasarse del día del evento). Confirmar con el PO si debe avisar al responsable.
 - [ ] 👀 Si después de poner una fecha límite se **cambia la fecha del evento a un día anterior**, la fecha límite queda posterior al evento (no se corrige sola). Confirmar con el PO qué debe pasar.
+
+---
+
+### HU-34 · Actualizar el estado de un recurso (RF-43)
+
+> **Base de datos:** la columna `estado_manual` viene en el SQL de entrega del balance ([`docs/sql-hu-31-balance-logistico.sql`](../docs/sql-hu-31-balance-logistico.sql)), que hay que correr antes de desplegar; si la tabla ya existía sin ella, ese SQL se la agrega. No se guardan costos, facturas ni comprobantes.
+
+- [ ] 🤖👀 **Marcar como listo (Escenario 1):** en el balance, cambiar un recurso con déficit a «Listo». Debajo aparece «Marcado como listo a mano · Deshacer»; el recurso queda «Listo», su déficit desaparece (lo disponible pasa a ser igual a lo requerido) y el contador «Listos» y el porcentaje de completitud suben. Al cerrar el balance y volver a abrirlo, o al recargar la página, sigue marcado.
+- [ ] 🤖👀 **«Sincronizar» no lo borra:** pulsar «Sincronizar» no quita lo marcado a mano.
+- [ ] 🤖 **Se suelta solo si cambia lo requerido:** si después se cambian los asistentes y el recurso requiere otra cantidad, la marca manual ya no aplica y se muestra el déficit real.
+- [ ] 🤖👀 **Deshacer (Escenario 3):** «Deshacer» quita la marca y el balance vuelve a mostrar el déficit y el estado reales (por ejemplo «Por conseguir» para el personal que falta, no necesariamente «Pendiente»). El desplegable de estado solo ofrece Listo, Por comprar y Por conseguir; «Pendiente» aparece (sin poder elegirse) solo cuando el sistema lo calcula.
+- [ ] 🤖 **Sin datos contables (Escenario 2):** el balance no tiene ningún campo de costo, precio, factura ni comprobante. Si a la API se le mandan `cost`, `price` o `invoice_number` junto con el estado, se ignoran: el estado cambia y no se guarda ni se devuelve nada de eso.
+- [ ] 🤖 **API:** `PATCH /api/eventos/{id}/logistics-balance/items/{itemId}/status` con `{"status": "AVAILABLE"}` → 200 con `event_id`, `item_id`, `status` y `message` (también sirve `…/balance/recursos/{id}` y el nombre `estado`: `disponible`, `listo`, `por_comprar`, `por_conseguir`, `pendiente`). `BOUGHT`/`COMPRADO` o cualquier otro texto → 400; recurso inexistente o de otro evento → 404; sin sesión → 401.
+- [ ] 👀 La nota gris de un recurso (por ejemplo «460 unidades por alquilar») describe lo **calculado** y no cambia cuando se marca como listo. Confirmar con el PO si debe ocultarse o aclararse.
+- [ ] 👀 «Sincronizar» antes **borraba** los cambios manuales de estado (HU-31); ahora los respeta. Confirmar con el PO que es lo esperado.
 
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)
 

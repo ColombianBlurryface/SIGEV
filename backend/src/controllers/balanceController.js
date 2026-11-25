@@ -8,6 +8,10 @@
  * HU-33 (RF-42): Permite fijar una fecha límite para conseguir cada recurso pendiente del balance. La fecha se guarda en la
  * columna `fecha_limite` de `evento_balance_recursos` (cada recurso tiene un `id` estable) y la sincronización del balance
  * la respeta, así que no se pierde al volver a calcular.
+ *
+ * HU-34 (RF-43): Permite marcar a mano un recurso como disponible (y deshacerlo). La marca se guarda en `estado_manual` y manda
+ * sobre el cálculo: el recurso se ve «disponible», sin déficit, hasta que el usuario la deshaga. No se guarda ningún dato
+ * contable (costos, facturas, comprobantes): este módulo solo lee el estado que llega en la petición.
  */
 const pool = require('../config/db');
 const { calcularMeseros, calcularCocineros } = require('../config/reglasPersonal');
@@ -548,7 +552,9 @@ const determinarResourceStatus = (item) => {
 const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
   const recursos = filas.map((r) => {
     const cantReq = parseFloat(r.cantidad_requerida) || 0;
-    const cantDisp = parseFloat(r.cantidad_disponible) || 0;
+    // HU-34 (RF-43): un recurso marcado a mano como disponible cuenta como cubierto: sin déficit y con todo lo requerido disponible
+    const marcadoDisponible = r.estado_manual === true && r.estado === 'disponible';
+    const cantDisp = marcadoDisponible ? cantReq : parseFloat(r.cantidad_disponible) || 0;
     const deficit = Math.max(0, cantReq - cantDisp);
 
     const statusVal = determinarResourceStatus({
@@ -587,6 +593,8 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
       estado: estadoEs,
       status: statusVal, // Enum ResourceStatus (HU-32 · RF-41)
       item_id: String(r.id),
+      estado_manual: r.estado_manual === true, // El estado lo puso una persona (y se puede deshacer)
+      is_manually_fulfilled: marcadoDisponible, // Marcado a mano como disponible (HU-34 · RF-43)
       fecha_limite: aFechaIso(r.fecha_limite),
       deadline_date: aFechaIso(r.fecha_limite), // Mismo dato con el nombre del contrato oficial (HU-33 · RF-42)
       notas: r.notas,
@@ -784,7 +792,9 @@ const sincronizarBalanceEvento = async (req, res) => {
 
     const infoEvento = resEvento.rows[0];
     const calculados = await calcularRecursosEvento(client, eventoId);
-    const filas = await sincronizarTablaBalance(client, eventoId, calculados || [], true);
+    // Sincronizar recalcula cantidades y estados, pero respeta lo marcado a mano (HU-34): solo se deshace con «Deshacer»/PENDING
+    // o cuando cambia lo requerido (ahí la confirmación manual ya no aplica)
+    const filas = await sincronizarTablaBalance(client, eventoId, calculados || []);
 
     res.json(estructurarRespuestaBalance(eventoId, filas, infoEvento));
   } catch (error) {
@@ -796,9 +806,26 @@ const sincronizarBalanceEvento = async (req, res) => {
 };
 
 /**
+ * Estados que acepta la API para un recurso, con sus nombres en español y en el enumerador del contrato (HU-32, HU-34).
+ * `pendiente` es especial: no fija un estado, deshace la marca manual y deja que el balance vuelva a calcular el real.
+ */
+const ESTADOS_ACEPTADOS = Object.freeze({
+  disponible: 'disponible', listo: 'disponible', hecho: 'disponible', ready: 'disponible', available: 'disponible',
+  por_comprar: 'por_comprar', comprar: 'por_comprar', to_buy: 'por_comprar',
+  por_conseguir: 'por_conseguir', conseguir: 'por_conseguir', to_procure: 'por_conseguir',
+  pendiente: 'pendiente', pending: 'pendiente'
+});
+
+/**
  * PATCH /api/eventos/:id/balance/recursos/:recursoId
- * Modifica manualmente el estado de un recurso del balance logístico (HU-31).
- * Estados permitidos: disponible (listo / hecho), por_comprar, por_conseguir, pendiente.
+ * PATCH /api/v1/events/:eventId/logistics-balance/items/:itemId  (y …/items/:itemId/status)
+ * Cambia a mano el estado de un recurso del balance (HU-31 · HU-34 · RF-43).
+ *
+ * Cuerpo: { "status": "AVAILABLE" } (también "estado": "disponible"). Se leen SOLO el estado y nada más: cualquier otro campo
+ * (cost, price, invoice_number…) se ignora por completo y no se guarda (no se registran facturas, comprobantes ni gastos).
+ * - AVAILABLE / disponible: guarda la marca manual; el balance lo muestra disponible, sin déficit.
+ * - TO_BUY / TO_PROCURE: fija ese estado a mano (se conserva mientras no cambie lo requerido).
+ * - PENDING / pendiente: deshace la marca manual y el balance vuelve a calcular el estado real del recurso.
  */
 const cambiarEstadoRecursoBalance = async (req, res) => {
   const eventoId = parseEventoId(req.params.id || req.params.eventId);
@@ -808,29 +835,23 @@ const cambiarEstadoRecursoBalance = async (req, res) => {
     return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del evento no es válido.' });
   }
 
-  if (!Number.isInteger(recursoId) || recursoId <= 0) {
+  if (!Number.isInteger(recursoId) || recursoId <= 0 || recursoId > 2147483647) {
     return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del recurso no es válido.' });
   }
 
-  const estadoCrudo = String(req.body?.estado || req.body?.status || '').trim().toLowerCase();
-  let estadoNormalizado = null;
-
-  if (estadoCrudo === 'disponible' || estadoCrudo === 'listo' || estadoCrudo === 'hecho' || estadoCrudo === 'ready') {
-    estadoNormalizado = 'disponible';
-  } else if (estadoCrudo === 'por_comprar' || estadoCrudo === 'comprar') {
-    estadoNormalizado = 'por_comprar';
-  } else if (estadoCrudo === 'por_conseguir' || estadoCrudo === 'conseguir') {
-    estadoNormalizado = 'por_conseguir';
-  } else if (estadoCrudo === 'pendiente' || estadoCrudo === 'pending') {
-    estadoNormalizado = 'pendiente';
-  }
+  // Solo se toma el estado del cuerpo; el resto de lo que venga (aunque sea dinero) nunca se lee
+  const cuerpo = req.body && typeof req.body === 'object' ? req.body : {};
+  const estadoEnviado = cuerpo.status ?? cuerpo.estado;
+  const estadoCrudo = typeof estadoEnviado === 'string' ? estadoEnviado.trim().toLowerCase() : '';
+  const estadoNormalizado = Object.prototype.hasOwnProperty.call(ESTADOS_ACEPTADOS, estadoCrudo) ? ESTADOS_ACEPTADOS[estadoCrudo] : null;
 
   if (!estadoNormalizado) {
     return res.status(400).json({
       error: 'Datos inválidos',
-      detalle: 'El estado debe ser uno de: disponible (listo), por_comprar, por_conseguir o pendiente.'
+      detalle: 'El estado debe ser uno de: AVAILABLE (disponible), TO_BUY (por comprar), TO_PROCURE (por conseguir) o PENDING (pendiente).'
     });
   }
+  const deshacer = estadoNormalizado === 'pendiente';
 
   const client = await pool.connect();
   try {
@@ -841,11 +862,11 @@ const cambiarEstadoRecursoBalance = async (req, res) => {
     const resUpdate = await client.query(
       `UPDATE evento_balance_recursos
        SET estado = $1,
-           estado_manual = true,
+           estado_manual = $2,
            actualizado_en = CURRENT_TIMESTAMP
-       WHERE id = $2 AND evento_id = $3
+       WHERE id = $3 AND evento_id = $4
        RETURNING *`,
-      [estadoNormalizado, recursoId, eventoId]
+      [estadoNormalizado, !deshacer, recursoId, eventoId]
     );
 
     if (resUpdate.rows.length === 0) {
@@ -855,21 +876,35 @@ const cambiarEstadoRecursoBalance = async (req, res) => {
       });
     }
 
-    // Retornar balance actualizado
     const resEvento = await client.query(SQL_INFO_EVENTO, [eventoId]);
     const infoEvento = resEvento.rows[0];
-    const { rows: filas } = await client.query(
-      'SELECT * FROM evento_balance_recursos WHERE evento_id = $1 ORDER BY categoria, id ASC',
-      [eventoId]
-    );
+
+    let filas;
+    if (deshacer) {
+      // Sin la marca manual, el motor del balance vuelve a calcular el déficit y el estado reales de este recurso
+      const calculados = await calcularRecursosEvento(client, eventoId);
+      filas = await sincronizarTablaBalance(client, eventoId, calculados || []);
+    } else {
+      ({ rows: filas } = await client.query(
+        'SELECT * FROM evento_balance_recursos WHERE evento_id = $1 ORDER BY categoria, id ASC',
+        [eventoId]
+      ));
+    }
+
+    const balance = estructurarRespuestaBalance(eventoId, filas, infoEvento);
+    const recurso = balance.recursos.find((r) => r.id === recursoId) || null;
 
     res.json({
-      mensaje: 'Estado del recurso actualizado exitosamente',
-      recurso: resUpdate.rows[0],
-      balance: estructurarRespuestaBalance(eventoId, filas, infoEvento)
+      event_id: String(eventoId),
+      item_id: String(recursoId),
+      status: recurso ? recurso.status : null,
+      message: 'Estado del recurso actualizado correctamente.', // Contrato oficial
+      mensaje: 'Estado del recurso actualizado exitosamente', // Lo que ya usaba la pantalla (HU-31)
+      recurso: recurso || resUpdate.rows[0],
+      balance
     });
   } catch (error) {
-    console.error('Error al cambiar estado del recurso en balance (HU-31):', error);
+    console.error('Error al cambiar estado del recurso en balance (HU-31, HU-34):', error);
     res.status(500).json({ error: 'Error al cambiar estado del recurso', detalle: error.message });
   } finally {
     client.release();
