@@ -128,6 +128,8 @@ const largo = async (servicios) => m(await await_call_eventos(ev({ duracion_hora
 await caso('DJ de 6 horas en un evento de 8 h (desde HU-48 no hay tope de 5 h)', [201], async () => largo([srv({ horas: 6 })]))
 await caso('DJ de 8 horas en un evento de 8 h (igual a la duración)', [201], async () => largo([srv({ horas: 8 })]))
 await caso('DJ de 9 horas en un evento de 8 h (pasa de la duración)', [400], async () => largo([srv({ horas: 9 })]))
+await caso('DJ de 5 horas en un evento de 3 h (el límite es la duración del evento, no 5 h)', [400], async () => m(await await_call_eventos(ev({ duracion_horas: 3, servicios_adicionales: [srv({ horas: 5 })] }))))
+await caso('DJ de 3 horas en un evento de 3 h (igual a la duración)', [201], async () => m(await await_call_eventos(ev({ duracion_horas: 3, servicios_adicionales: [srv({ horas: 3 })] }))))
 await caso('DJ de 5 horas en un evento de 8 h (límite exacto)', [201], async () => largo([srv({ horas: 5 })]))
 await caso('DJ de media hora (mínimo 1 h)', [400], async () => largo([srv({ horas: 0.5 })]))
 await caso('DJ de 1 hora (límite exacto)', [201], async () => largo([srv({ horas: 1 })]))

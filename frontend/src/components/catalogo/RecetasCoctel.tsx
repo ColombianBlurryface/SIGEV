@@ -37,7 +37,9 @@ export const RecetasCoctel: React.FC = () => {
       .then(([dataCocteles, dataCatalogo]) => {
         if (!activo) return
         setCocteles(dataCocteles)
-        setLicoresDisponibles(dataCatalogo)
+        // En el bar del catálogo también están los cócteles ya creados (tipo «unidad_persona»): no son licores y no pueden ser
+        // ingrediente de otro cóctel. Solo se ofrecen los licores (se compran por botella).
+        setLicoresDisponibles(dataCatalogo.filter((producto) => producto.tipo_calculo === 'botella_compartida'))
         setError(null)
         setCargando(false)
       })

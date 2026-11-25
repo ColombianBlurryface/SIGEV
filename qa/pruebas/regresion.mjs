@@ -1048,6 +1048,22 @@ await t('Servicios: en un evento de 3 horas no deja escribir más de 3 (se avisa
   await page.fill('#servicio-horas', '3'); igual(await page.getByText('no pueden superar la duración').count(), 0, '3 h sí es válido:')
 })
 
+await t('Servicios al EDITAR un evento: el límite de horas es la duración del evento (en uno de 3 h, 5 h se rechaza y 3 h pasa), en pantalla y en el servidor', async () => {
+  const fecha = fechaLibre()
+  const base = { nombre_evento: 'Editar horas' + sufijo, fecha_evento: fecha, tipo_evento: 'Boda', duracion_horas: 3, asistentes: 100, hora_inicio: '18:00' }
+  const r = await api('/eventos', { method: 'POST', body: base }); igual(r.estado, 201, 'crear el evento de 3 h:'); const id = r.cuerpo.evento.id
+  await page.goto(`${URL}/eventos/${id}/editar`); await page.locator('#horaInicio').waitFor(); await page.waitForFunction(() => document.querySelector('#horaInicio')?.value !== '')
+  await aRequerimientos(); await pestana('Servicios')
+  await llenarServicio({ descripcion: 'DJ cinco horas', unidades: 1, horas: 5 })
+  await page.waitForSelector('text=Las horas no pueden superar la duración del evento (3 h)')
+  await clicAgregarServicio()
+  igual(await page.getByText('DJ cinco horas').count(), 0, 'se agregó un servicio de 5 h en un evento de 3 h:')
+  await page.fill('#servicio-horas', '3'); igual(await page.getByText('no pueden superar la duración').count(), 0, '3 h sí es válido:')
+  await clicAgregarServicio(); await page.waitForSelector('text=DJ cinco horas')
+  // El servidor también lo rechaza al editar
+  const mal = await api(`/eventos/${id}`, { method: 'PUT', body: { ...base, productos: [], servicios_adicionales: [{ tipo: 'dj', descripcion: 'DJ 5 h', cantidad: 1, tipo_cobro: 'por_hora', valor_unitario: 50000, horas: 5 }] } })
+  igual(mal.estado, 400, 'PUT con 5 h en un evento de 3 h:'); cierto(/no puede durar más que el evento/.test(mal.cuerpo.detalle), mal.cuerpo.detalle)
+})
 
 // ============ HU-21 · Calcular meseros (RF-28, RN-04, RN-12) ============
 grupo = 'HU-21 Meseros (RF-28 / RN-04 / RN-12)'
@@ -1582,6 +1598,17 @@ await t('Bar de coctelería (evento): «Cócteles por persona» se puede borrar 
   const r = await borrarYEscribir('#bebida-unidades')
   igual(r.vacio, '', 'tras borrar:'); igual(r.escrito, '7', 'tras escribir 7:')
 })
+await t('Cócteles: el desplegable de licores de la receta solo ofrece licores (no los cócteles ya creados) y la API rechaza un cóctel como ingrediente', async () => {
+  const bar = (await api('/catalogo?clasificacion=bar_cocteleria')).cuerpo
+  const licor = bar.find((x) => x.tipo_calculo === 'botella_compartida'); const cocteles = bar.filter((x) => x.tipo_calculo === 'unidad_persona')
+  cierto(licor && cocteles.length > 0, 'la prueba necesita al menos un licor y un cóctel ya creado')
+  await aTabCocteles()
+  const ops = await page.locator('form select >> nth=0').locator('option').allInnerTexts()
+  cierto(ops.some((o) => o.startsWith(licor.nombre)), 'falta el licor ' + licor.nombre)
+  for (const c of cocteles) cierto(!ops.some((o) => o.startsWith(c.nombre)), `el cóctel «${c.nombre}» aparece como si fuera un licor`)
+  const r = await api('/cocteles', { method: 'POST', body: { nombre: 'Cóctel con cóctel' + sufijo, ingredientes: [{ licor_id: cocteles[0].id, mililitros: 50 }] } })
+  igual(r.estado, 400, 'un cóctel como ingrediente:'); cierto(/un cóctel no puede ser ingrediente de otro/.test(r.cuerpo.detalle), r.cuerpo.detalle)
+})
 await t('Cócteles: 15.000 ml se avisan apenas se escriben («Máximo 250 ml por licor»), también 0, texto y 3 decimales; no se guarda', async () => {
   await aTabCocteles()
   const ml = 'input[aria-label="Mililitros del licor 1"]'
@@ -1854,6 +1881,7 @@ await t('Pantalla: si otra persona ya lo eliminó, avisa que ya no existe y actu
   igual((await eliminarMesero(m.id)).status, 204) // otra sesión lo elimina primero
   await fila.getByRole('button', { name: `Eliminar a ${m.nombre_completo}` }).click(); await page.getByRole('button', { name: 'Sí, eliminar' }).click()
   await page.waitForSelector(`text=«${m.nombre_completo}» ya no existe o ya había sido eliminado`)
+  await filaMesero(m.nombre_completo).waitFor({ state: 'detached' }) // el listado se actualiza un instante después del aviso
   igual(await filaMesero(m.nombre_completo).count(), 0, 'sigue en el listado:')
 })
 await t('Pantalla: eliminar y volver a registrar con los mismos datos funciona (así se corrige un error)', async () => {
