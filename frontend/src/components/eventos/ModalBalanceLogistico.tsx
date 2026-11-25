@@ -13,6 +13,7 @@ interface ModalBalanceLogisticoProps {
   onCerrar: () => void
   eventoId: number
   refrescoKey?: unknown
+  soloFaltantesInicial?: boolean
 }
 
 export function ModalBalanceLogistico({
@@ -20,6 +21,7 @@ export function ModalBalanceLogistico({
   onCerrar,
   eventoId,
   refrescoKey,
+  soloFaltantesInicial = false,
 }: ModalBalanceLogisticoProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
 
@@ -94,6 +96,7 @@ export function ModalBalanceLogistico({
           <BalanceLogistico
             eventoId={eventoId}
             refrescoKey={refrescoKey}
+            soloFaltantesInicial={soloFaltantesInicial}
             className="border-0 bg-transparent p-0"
             ocultarTitulo={true}
           />

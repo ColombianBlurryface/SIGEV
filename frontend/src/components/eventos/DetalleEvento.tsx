@@ -6,7 +6,7 @@
  * bebidas · Mobiliario · Servicios · Personal · Costo. Son los mismos bloques de antes: solo cambia dónde y cómo se muestran.
  */
 import { describirHorario } from '@/lib/horario'
-import { ChefHat, Layers, LoaderCircle, Pencil, RotateCw, Users, X } from 'lucide-react'
+import { AlertCircle, ChefHat, Layers, LoaderCircle, Pencil, RotateCw, Users, X } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert } from '@/components/ui/alert'
@@ -240,8 +240,9 @@ export function DetalleEvento({ evento, onCerrar, onCambio }: { evento: EventoLi
   const { detalle, cargando, error, recargar } = useEventoDetalle(evento.id, claveDetalle)
   const requerimientos = detalle ? agruparRequerimientos(detalle) : null
   const [activa, setActiva] = useState<Pestana>('datos')
-  // Ventana del balance logístico (HU-31): se abre encima de esta ventana
+  // Ventana del balance logístico (HU-31, HU-35): se abre encima de esta ventana
   const [modalBalanceAbierto, setModalBalanceAbierto] = useState(false)
+  const [abrirSoloFaltantes, setAbrirSoloFaltantes] = useState(false)
   const refsPestanas = useRef<Partial<Record<Pestana, HTMLButtonElement | null>>>({})
   // Mensaje de la asignación de meseros: se guarda aquí (y con el id del evento) porque el detalle se recarga al guardar
   const [mensajeAsignacion, setMensajeAsignacion] = useState<{ eventoId: number; mensaje: MensajeAsignacion } | null>(null)
@@ -351,7 +352,10 @@ export function DetalleEvento({ evento, onCerrar, onCambio }: { evento: EventoLi
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => setModalBalanceAbierto(true)}
+            onClick={() => {
+              setAbrirSoloFaltantes(false)
+              setModalBalanceAbierto(true)
+            }}
             className="gap-1.5"
             title="Ver balance logístico del evento"
           >
@@ -470,6 +474,31 @@ export function DetalleEvento({ evento, onCerrar, onCambio }: { evento: EventoLi
               <span className="text-xs font-bold text-muted-foreground">Observaciones</span>
               <p className="text-[13.5px] leading-relaxed text-subtle">{evento.observaciones_generales || 'Sin observaciones.'}</p>
             </div>
+
+            {/* HU-35 · RF-44: Acceso directo a los recursos faltantes antes del evento */}
+            <div className="flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-[10px] border border-border bg-background p-3.5">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-bold tracking-[0.04em] text-muted-foreground uppercase">
+                  Faltantes anticipados
+                </span>
+                <p className="text-[13px] text-subtle">
+                  Consulta los recursos pendientes, por comprar o por conseguir con su estado y fecha límite.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setAbrirSoloFaltantes(true)
+                  setModalBalanceAbierto(true)
+                }}
+                className="gap-1.5"
+              >
+                <AlertCircle aria-hidden="true" className="size-3.5" />
+                Ver faltantes anticipados
+              </Button>
+            </div>
           </>
         )}
 
@@ -584,11 +613,12 @@ export function DetalleEvento({ evento, onCerrar, onCambio }: { evento: EventoLi
         )}
       </div>
 
-      {/* HU-31 (RF-39, RF-40): el balance se abre dentro de esta ventana para quedar por encima de ella */}
+      {/* HU-31 / HU-35 (RF-39, RF-40, RF-44): el balance se abre dentro de esta ventana para quedar por encima de ella */}
       <ModalBalanceLogistico
         abierto={modalBalanceAbierto}
         onCerrar={() => setModalBalanceAbierto(false)}
         eventoId={evento.id}
+        soloFaltantesInicial={abrirSoloFaltantes}
         refrescoKey={`${requerimientos?.asignacion?.meseros_asignados}-${requerimientos?.asignacion?.confirmados}-${requerimientos?.asignacion?.por_confirmar}-${requerimientos?.asignacion?.estado}`}
       />
     </Modal>

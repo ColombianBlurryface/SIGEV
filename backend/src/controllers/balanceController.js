@@ -12,6 +12,9 @@
  * HU-34 (RF-43): Permite marcar a mano un recurso como disponible (y deshacerlo). La marca se guarda en `estado_manual` y manda
  * sobre el cálculo: el recurso se ve «disponible», sin déficit, hasta que el usuario la deshaga. No se guarda ningún dato
  * contable (costos, facturas, comprobantes): este módulo solo lee el estado que llega en la petición.
+ *
+ * HU-35 (RF-44): Permite visualizar anticipadamente los recursos faltantes filtrando con `?only_missing=true` los recursos cuyo
+ * estado sea distinto de `AVAILABLE`, omitiendo las categorías vacías y conservando `status` y `deadline_date`.
  */
 const pool = require('../config/db');
 const { calcularMeseros, calcularCocineros } = require('../config/reglasPersonal');
@@ -489,6 +492,17 @@ const parseEventoId = (raw) => {
 };
 
 /**
+ * Interpreta el parámetro opcional `only_missing` (HU-35 · RF-44), por defecto false.
+ */
+const parseOnlyMissing = (req) => {
+  const raw = req?.query?.only_missing;
+  if (raw === true) return true;
+  if (typeof raw !== 'string') return false;
+  const norm = raw.trim().toLowerCase();
+  return norm === 'true' || norm === '1';
+};
+
+/**
  * Enumerador estricto de estados para la capa de presentación / API (HU-32 · RF-41).
  * Nota de negocio: NO existe el valor BOUGHT ni COMPRADO en este Enum.
  */
@@ -541,16 +555,30 @@ const determinarResourceStatus = (item) => {
   return ResourceStatus.PENDING;
 };
 
+const mapearItemCategoria = (i) => ({
+  item_id: i.item_id,
+  item_name: i.item_name,
+  required_quantity: i.required_quantity,
+  available_quantity: i.available_quantity,
+  deficit_quantity: i.deficit_quantity,
+  unit: i.unit,
+  status: i.status,
+  deadline_date: i.deadline_date
+});
+
 /**
  * Agrupa los recursos y genera las métricas de resumen y el DTO jerárquico del balance
- * (HU-31, HU-32 · RF-39, RF-40, RF-41).
+ * (HU-31, HU-32, HU-35 · RF-39 a RF-44).
  *
  * @param {number} eventoId
  * @param {Array<object>} filas
  * @param {object} [infoEvento] - Información básica del evento (id, nombre_evento, asistentes)
+ * @param {{ onlyMissing?: boolean }} [opciones] - Opciones de filtrado (onlyMissing=true para RF-44)
  */
-const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
-  const recursos = filas.map((r) => {
+const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null, opciones = {}) => {
+  const { onlyMissing = false } = opciones || {};
+
+  const recursosCompletos = filas.map((r) => {
     const cantReq = parseFloat(r.cantidad_requerida) || 0;
     // HU-34 (RF-43): un recurso marcado a mano como disponible cuenta como cubierto: sin déficit y con todo lo requerido disponible
     const marcadoDisponible = r.estado_manual === true && r.estado === 'disponible';
@@ -603,6 +631,25 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
     };
   });
 
+  let disponibles = 0;
+  let porComprar = 0;
+  let porConseguir = 0;
+  let pendientes = 0;
+
+  for (const item of recursosCompletos) {
+    if (item.status === ResourceStatus.AVAILABLE) disponibles++;
+    else if (item.status === ResourceStatus.TO_BUY) porComprar++;
+    else if (item.status === ResourceStatus.TO_PROCURE) porConseguir++;
+    else if (item.status === ResourceStatus.PENDING) pendientes++;
+  }
+
+  const total = recursosCompletos.length;
+  const porcentaje = total > 0 ? Math.round((disponibles / total) * 100) : 100;
+
+  // HU-35 (RF-44): filtrar en memoria los recursos disponibles después de consolidar estados manuales y fechas límite
+  const faltantesAnticipados = recursosCompletos.filter((r) => r.status !== ResourceStatus.AVAILABLE);
+  const recursosVisibles = onlyMissing ? faltantesAnticipados : recursosCompletos;
+
   const recursosPorCategoria = {
     personal: [],
     alimento: [],
@@ -611,100 +658,29 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
     servicio: []
   };
 
-  let disponibles = 0;
-  let porComprar = 0;
-  let porConseguir = 0;
-  let pendientes = 0;
-
-  for (const item of recursos) {
+  for (const item of recursosVisibles) {
     if (recursosPorCategoria[item.categoria]) {
       recursosPorCategoria[item.categoria].push(item);
     }
-    if (item.estado === 'disponible') disponibles++;
-    else if (item.estado === 'por_comprar') porComprar++;
-    else if (item.estado === 'por_conseguir') porConseguir++;
-    else if (item.estado === 'pendiente') pendientes++;
   }
 
-  const total = recursos.length;
-  const porcentaje = total > 0 ? Math.round((disponibles / total) * 100) : 100;
-
-  // DTO jerárquico por categoría (LogisticsBalanceResponse - QA Sprint 5 / RF-40, RF-41)
-  const categories = [
-    {
-      category_name: 'STAFF',
-      category_label: 'Personal',
-      items: recursosPorCategoria.personal.map((i) => ({
-        item_id: i.item_id,
-        item_name: i.item_name,
-        required_quantity: i.required_quantity,
-        available_quantity: i.available_quantity,
-        deficit_quantity: i.deficit_quantity,
-        unit: i.unit,
-        status: i.status,
-        deadline_date: i.deadline_date
-      }))
-    },
-    {
-      category_name: 'FOOD',
-      category_label: 'Alimentos',
-      items: recursosPorCategoria.alimento.map((i) => ({
-        item_id: i.item_id,
-        item_name: i.item_name,
-        required_quantity: i.required_quantity,
-        available_quantity: i.available_quantity,
-        deficit_quantity: i.deficit_quantity,
-        unit: i.unit,
-        status: i.status,
-        deadline_date: i.deadline_date
-      }))
-    },
-    {
-      category_name: 'DRINKS',
-      category_label: 'Bebidas',
-      items: recursosPorCategoria.bebida.map((i) => ({
-        item_id: i.item_id,
-        item_name: i.item_name,
-        required_quantity: i.required_quantity,
-        available_quantity: i.available_quantity,
-        deficit_quantity: i.deficit_quantity,
-        unit: i.unit,
-        status: i.status,
-        deadline_date: i.deadline_date
-      }))
-    },
-    {
-      category_name: 'FURNITURE',
-      category_label: 'Mobiliario',
-      items: recursosPorCategoria.mobiliario.map((i) => ({
-        item_id: i.item_id,
-        item_name: i.item_name,
-        required_quantity: i.required_quantity,
-        available_quantity: i.available_quantity,
-        deficit_quantity: i.deficit_quantity,
-        unit: i.unit,
-        status: i.status,
-        deadline_date: i.deadline_date
-      }))
-    }
+  // DTO jerárquico por categoría (LogisticsBalanceResponse - QA Sprint 5 / RF-40, RF-41, RF-44)
+  const categoriasBase = [
+    { category_name: 'STAFF', category_label: 'Personal', items: recursosPorCategoria.personal.map(mapearItemCategoria) },
+    { category_name: 'FOOD', category_label: 'Alimentos', items: recursosPorCategoria.alimento.map(mapearItemCategoria) },
+    { category_name: 'DRINKS', category_label: 'Bebidas', items: recursosPorCategoria.bebida.map(mapearItemCategoria) },
+    { category_name: 'FURNITURE', category_label: 'Mobiliario', items: recursosPorCategoria.mobiliario.map(mapearItemCategoria) }
   ];
 
   if (recursosPorCategoria.servicio && recursosPorCategoria.servicio.length > 0) {
-    categories.push({
+    categoriasBase.push({
       category_name: 'OTHER',
       category_label: 'Servicios',
-      items: recursosPorCategoria.servicio.map((i) => ({
-        item_id: i.item_id,
-        item_name: i.item_name,
-        required_quantity: i.required_quantity,
-        available_quantity: i.available_quantity,
-        deficit_quantity: i.deficit_quantity,
-        unit: i.unit,
-        status: i.status,
-        deadline_date: i.deadline_date
-      }))
+      items: recursosPorCategoria.servicio.map(mapearItemCategoria)
     });
   }
+
+  const categories = onlyMissing ? categoriasBase.filter((c) => c.items.length > 0) : categoriasBase;
 
   return {
     // 1. DTO oficial del contrato técnico (QA Sprint 5)
@@ -725,9 +701,9 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
       pendientes,
       porcentaje_completitud: porcentaje
     },
-    recursos,
+    recursos: recursosVisibles,
     recursos_por_categoria: recursosPorCategoria,
-    faltantes_anticipados: recursos.filter((r) => r.estado !== 'disponible')
+    faltantes_anticipados: faltantesAnticipados
   };
 };
 
@@ -760,7 +736,7 @@ const obtenerBalanceEvento = async (req, res) => {
     const calculados = await calcularRecursosEvento(client, eventoId);
     const filas = await sincronizarTablaBalance(client, eventoId, calculados || []);
 
-    res.json(estructurarRespuestaBalance(eventoId, filas, infoEvento));
+    res.json(estructurarRespuestaBalance(eventoId, filas, infoEvento, { onlyMissing: parseOnlyMissing(req) }));
   } catch (error) {
     console.error('Error al obtener balance logístico (HU-31):', error);
     res.status(500).json({ error: 'Error al obtener el balance logístico', detalle: error.message });
@@ -796,7 +772,7 @@ const sincronizarBalanceEvento = async (req, res) => {
     // o cuando cambia lo requerido (ahí la confirmación manual ya no aplica)
     const filas = await sincronizarTablaBalance(client, eventoId, calculados || []);
 
-    res.json(estructurarRespuestaBalance(eventoId, filas, infoEvento));
+    res.json(estructurarRespuestaBalance(eventoId, filas, infoEvento, { onlyMissing: parseOnlyMissing(req) }));
   } catch (error) {
     console.error('Error al sincronizar balance logístico (HU-31):', error);
     res.status(500).json({ error: 'Error al sincronizar el balance logístico', detalle: error.message });
@@ -891,8 +867,10 @@ const cambiarEstadoRecursoBalance = async (req, res) => {
       ));
     }
 
-    const balance = estructurarRespuestaBalance(eventoId, filas, infoEvento);
-    const recurso = balance.recursos.find((r) => r.id === recursoId) || null;
+    const onlyMissing = parseOnlyMissing(req);
+    const balanceCompleto = estructurarRespuestaBalance(eventoId, filas, infoEvento);
+    const recurso = balanceCompleto.recursos.find((r) => r.id === recursoId) || null;
+    const balance = onlyMissing ? estructurarRespuestaBalance(eventoId, filas, infoEvento, { onlyMissing: true }) : balanceCompleto;
 
     res.json({
       event_id: String(eventoId),
@@ -998,7 +976,7 @@ const establecerFechaLimiteRecurso = async (req, res) => {
       item_id: String(recursoId),
       deadline_date: fechaLimite,
       message: mensaje,
-      balance: estructurarRespuestaBalance(eventoId, filas, resEvento.rows[0])
+      balance: estructurarRespuestaBalance(eventoId, filas, resEvento.rows[0], { onlyMissing: parseOnlyMissing(req) })
     });
   } catch (error) {
     console.error('Error al establecer la fecha límite del recurso (HU-33):', error);
@@ -1012,6 +990,7 @@ module.exports = {
   ResourceStatus,
   determinarResourceStatus,
   parseEventoId,
+  parseOnlyMissing,
   calcularRecursosEvento,
   sincronizarTablaBalance,
   estructurarRespuestaBalance,
