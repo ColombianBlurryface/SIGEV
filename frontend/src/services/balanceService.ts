@@ -2,7 +2,7 @@
  * Servicio de Balance Logístico (Épica 6 · HU-31 a HU-35, RF-39 a RF-44).
  */
 import { apiRequest } from './api'
-import type { BalanceLogisticoEvento } from '@/types/balance'
+import type { BalanceLogisticoEvento, RespuestaFechaLimite } from '@/types/balance'
 
 export const balanceService = {
   /**
@@ -33,5 +33,16 @@ export const balanceService = {
         body: { estado },
       }
     )
+  },
+
+  /**
+   * Fija o cambia la fecha límite para conseguir un recurso (HU-33 · RF-42). Con null se quita.
+   * La fecha va como AAAA-MM-DD y no puede ser posterior a la del evento (si lo es, el servidor responde 400).
+   */
+  establecerFechaLimite(eventoId: number, recursoId: number, fecha: string | null) {
+    return apiRequest<RespuestaFechaLimite>(`/eventos/${eventoId}/balance/recursos/${recursoId}/fecha-limite`, {
+      method: 'PUT',
+      body: { deadline_date: fecha },
+    })
   },
 }

@@ -2208,6 +2208,117 @@ await t('HU-53: con un evento grande (muchos alimentos, bebidas y servicios) tod
   const libre = await page.evaluate(() => getComputedStyle(document.querySelector('main')).overflowY); cierto(libre !== 'hidden', 'la página quedó congelada al cerrar: ' + libre)
 })
 
+// ============ HU-33 · Fecha límite de los recursos del balance (RF-42) ============
+grupo = 'HU-33 Fecha límite de los recursos del balance (RF-42)'
+// Un evento con un DJ (siempre queda «pendiente» en el balance) y un ingrediente por comprar; devuelve su fecha y el recurso del DJ
+const diaDe = (iso, delta) => new Date(Date.parse(iso + 'T00:00:00Z') + delta * 86400000).toISOString().slice(0, 10)
+const eventoConFechaLimite = async (nombre) => {
+  const alimento = (await api('/catalogo')).cuerpo.find((x) => x.clasificacion === 'alimento' && x.activo !== false)
+  const fecha = fechaLibre()
+  const r = await api('/eventos', { method: 'POST', body: { nombre_evento: nombre + sufijo, fecha_evento: fecha, tipo_evento: 'Boda', duracion_horas: 5, asistentes: 100,
+    productos: [{ producto_id: alimento.id, porcion_por_persona: 150, componentes_menu: 'Plato HU33' }],
+    servicios_adicionales: [{ tipo: 'dj', descripcion: 'DJ HU33' + sufijo, cantidad: 1, horas: 3, tipo_cobro: 'por_hora', valor_unitario: 50000 }] } })
+  igual(r.estado, 201, 'crear el evento de la prueba:')
+  const id = r.cuerpo.evento.id
+  const balance = (await api(`/eventos/${id}/balance`)).cuerpo
+  const dj = balance.recursos.find((x) => x.recurso_nombre === 'DJ HU33' + sufijo)
+  cierto(dj, 'el DJ no está en el balance')
+  return { id, nombre: nombre + sufijo, fecha, dj }
+}
+const balanceDeEvento = async (id) => (await api(`/eventos/${id}/balance`)).cuerpo
+const ponerFechaLimite = (id, recursoId, fecha) => api(`/eventos/${id}/balance/recursos/${recursoId}/fecha-limite`, { method: 'PUT', body: { deadline_date: fecha } })
+const recursoDe = async (id, recursoId) => (await balanceDeEvento(id)).recursos.find((x) => x.id === recursoId)
+const abrirBalance = async (id) => {
+  await page.goto(`${URL}/eventos?evento=${id}`)
+  await page.getByRole('button', { name: 'Balance logístico' }).first().click()
+  await page.getByRole('region', { name: 'Balance Logístico del Evento' }).waitFor()
+}
+
+await t('HU-33 · Escenario 1: se fija la fecha límite de un recurso pendiente y el balance la muestra (también en el contrato oficial, con item_id)', async () => {
+  const ev = await eventoConFechaLimite('Fecha límite E1'); const limite = diaDe(ev.fecha, -5)
+  igual(ev.dj.fecha_limite, null, 'un recurso nuevo no debe traer fecha:')
+  const r = await ponerFechaLimite(ev.id, ev.dj.id, limite)
+  igual(r.estado, 200, 'PUT:'); igual(r.cuerpo.deadline_date, limite, 'respuesta:'); igual(r.cuerpo.item_id, String(ev.dj.id), 'item_id:'); igual(r.cuerpo.event_id, String(ev.id), 'event_id:')
+  cierto(/actualizada correctamente/.test(r.cuerpo.message), 'mensaje: ' + r.cuerpo.message)
+  igual((await recursoDe(ev.id, ev.dj.id)).fecha_limite, limite, 'al consultar de nuevo el balance:')
+  const oficial = (await balanceDeEvento(ev.id)).categories.flatMap((c) => c.items).find((i) => i.item_id === String(ev.dj.id))
+  cierto(oficial, 'el DJ no está en el contrato oficial con su item_id'); igual(oficial.deadline_date, limite, 'deadline_date del contrato oficial:')
+  return limite
+})
+await t('HU-33 · Escenario 1 (ruta del contrato): PUT /eventos/{id}/logistics-balance/items/{itemId}/deadline hace lo mismo', async () => {
+  const ev = await eventoConFechaLimite('Fecha límite ruta'); const limite = diaDe(ev.fecha, -2)
+  const r = await api(`/eventos/${ev.id}/logistics-balance/items/${ev.dj.id}/deadline`, { method: 'PUT', body: { deadline_date: limite } })
+  igual(r.estado, 200, 'PUT:'); igual((await recursoDe(ev.id, ev.dj.id)).fecha_limite, limite, 'fecha:')
+})
+await t('HU-33 · Escenario 2: una fecha posterior a la del evento se rechaza (400, dice la fecha del evento); el mismo día sí se permite', async () => {
+  const ev = await eventoConFechaLimite('Fecha límite E2')
+  const tarde = await ponerFechaLimite(ev.id, ev.dj.id, diaDe(ev.fecha, 5))
+  igual(tarde.estado, 400, 'cinco días después:'); cierto(/no puede ser posterior a la fecha del evento/.test(tarde.cuerpo.detalle), 'mensaje: ' + tarde.cuerpo.detalle)
+  cierto(tarde.cuerpo.detalle.includes(ev.fecha.split('-').reverse().join('/')), 'no dice la fecha del evento: ' + tarde.cuerpo.detalle)
+  igual((await ponerFechaLimite(ev.id, ev.dj.id, diaDe(ev.fecha, 1))).estado, 400, 'un día después:')
+  igual((await recursoDe(ev.id, ev.dj.id)).fecha_limite, null, 'lo rechazado no debe quedar guardado:')
+  igual((await ponerFechaLimite(ev.id, ev.dj.id, ev.fecha)).estado, 200, 'el mismo día del evento:')
+})
+await t('HU-33 · Escenario 3: cambiar la fecha sobrescribe la anterior, el recurso no se duplica y la fecha sobrevive a sincronizar el balance', async () => {
+  const ev = await eventoConFechaLimite('Fecha límite E3'); const antes = (await balanceDeEvento(ev.id)).recursos.length
+  await ponerFechaLimite(ev.id, ev.dj.id, diaDe(ev.fecha, -10))
+  const nueva = diaDe(ev.fecha, -8); igual((await ponerFechaLimite(ev.id, ev.dj.id, nueva)).estado, 200, 'segundo PUT:')
+  const b = await balanceDeEvento(ev.id)
+  igual(b.recursos.length, antes, 'cantidad de recursos del balance:'); igual(b.recursos.filter((x) => x.recurso_nombre === ev.dj.recurso_nombre).length, 1, 'filas del DJ:')
+  igual((await recursoDe(ev.id, ev.dj.id)).fecha_limite, nueva, 'la fecha nueva:')
+  const sync = (await api(`/eventos/${ev.id}/balance/sincronizar`, { method: 'POST' })).cuerpo
+  igual(sync.recursos.find((x) => x.id === ev.dj.id).fecha_limite, nueva, 'tras sincronizar:')
+})
+await t('HU-33 · RF-42: con deadline_date null se quita la fecha límite', async () => {
+  const ev = await eventoConFechaLimite('Fecha límite quitar')
+  await ponerFechaLimite(ev.id, ev.dj.id, diaDe(ev.fecha, -3))
+  const r = await ponerFechaLimite(ev.id, ev.dj.id, null)
+  igual(r.estado, 200, 'PUT null:'); igual(r.cuerpo.deadline_date, null, 'respuesta:'); cierto(/eliminada/.test(r.cuerpo.message), r.cuerpo.message)
+  igual((await recursoDe(ev.id, ev.dj.id)).fecha_limite, null, 'balance:')
+})
+await t('HU-33 · Validaciones: sin fecha, formato incorrecto, día que no existe, recurso de otro evento o inexistente, y sin sesión', async () => {
+  const ev = await eventoConFechaLimite('Fecha límite validar'); const otro = await eventoConFechaLimite('Fecha límite otro')
+  const ruta = `/eventos/${ev.id}/balance/recursos/${ev.dj.id}/fecha-limite`
+  igual((await api(ruta, { method: 'PUT', body: {} })).estado, 400, 'sin fecha:')
+  for (const mala of ['15/10/2026', '2026-02-30', '2026-13-01', 'mañana', 20261015]) igual((await ponerFechaLimite(ev.id, ev.dj.id, mala)).estado, 400, `«${mala}»:`)
+  igual((await ponerFechaLimite(ev.id, 999999999, diaDe(ev.fecha, -1))).estado, 404, 'recurso inexistente:')
+  igual((await ponerFechaLimite(ev.id, otro.dj.id, diaDe(ev.fecha, -1))).estado, 404, 'recurso de otro evento:')
+  igual((await recursoDe(otro.id, otro.dj.id)).fecha_limite, null, 'el recurso del otro evento no debe cambiar:')
+  igual((await api(`/eventos/${ev.id}/balance/recursos/abc/fecha-limite`, { method: 'PUT', body: { deadline_date: ev.fecha } })).estado, 400, 'id no numérico:')
+  const guardado = TOKEN; TOKEN = null
+  try { igual((await ponerFechaLimite(ev.id, ev.dj.id, diaDe(ev.fecha, -1))).estado, 401, 'sin sesión:') } finally { TOKEN = guardado }
+})
+await t('HU-33 · Pantalla: cada recurso pendiente del balance tiene su campo de fecha; se guarda con «Guardar», sigue ahí al recargar y el calendario no pasa del día del evento', async () => {
+  const ev = await eventoConFechaLimite('Fecha límite pantalla'); const limite = diaDe(ev.fecha, -4)
+  await abrirBalance(ev.id)
+  const campo = page.getByLabel(`Fecha límite de ${ev.dj.recurso_nombre}`, { exact: true })
+  igual(await campo.inputValue(), '', 'campo del DJ al inicio:'); igual(await campo.getAttribute('max'), ev.fecha, 'máximo del calendario:')
+  cierto((await page.getByRole('region', { name: 'Balance Logístico del Evento' }).locator('input[type=date]').count()) >= 3, 'faltan campos de fecha en los recursos pendientes')
+  await campo.fill(limite); await page.getByRole('button', { name: 'Guardar', exact: true }).click(); await page.getByText('Fecha límite guardada.').waitFor()
+  await abrirBalance(ev.id); igual(await page.getByLabel(`Fecha límite de ${ev.dj.recurso_nombre}`, { exact: true }).inputValue(), limite, 'tras recargar:')
+})
+await t('HU-33 · Pantalla: una fecha posterior al evento muestra el motivo con la fecha del evento y no se guarda; «Quitar» la borra', async () => {
+  const ev = await eventoConFechaLimite('Fecha límite pantalla error')
+  await abrirBalance(ev.id)
+  const campo = page.getByLabel(`Fecha límite de ${ev.dj.recurso_nombre}`, { exact: true })
+  await campo.fill(diaDe(ev.fecha, 6)); await page.getByRole('button', { name: 'Guardar', exact: true }).click()
+  const aviso = page.getByRole('alert').filter({ hasText: 'no puede ser posterior' }); await aviso.waitFor()
+  cierto((await aviso.innerText()).includes(ev.fecha.split('-').reverse().join('/')), 'el mensaje no dice la fecha del evento: ' + await aviso.innerText())
+  igual(await campo.getAttribute('aria-invalid'), 'true', 'campo marcado:')
+  igual((await recursoDe(ev.id, ev.dj.id)).fecha_limite, null, 'no debe haberse guardado:')
+  await campo.fill(diaDe(ev.fecha, -1)); await page.getByRole('button', { name: 'Guardar', exact: true }).click(); await page.getByText('Fecha límite guardada.').waitFor()
+  await page.getByRole('button', { name: `Quitar la fecha de ${ev.dj.recurso_nombre}` }).click(); await page.getByText('Fecha límite quitada.').waitFor()
+  igual(await campo.inputValue(), '', 'tras quitar:'); igual((await recursoDe(ev.id, ev.dj.id)).fecha_limite, null, 'balance tras quitar:')
+})
+await t('HU-33 · Pantalla: un recurso que ya está listo deja de ofrecer el campo, pero sigue mostrando su fecha límite como texto', async () => {
+  const ev = await eventoConFechaLimite('Fecha límite listo')
+  await ponerFechaLimite(ev.id, ev.dj.id, diaDe(ev.fecha, -3))
+  igual((await api(`/eventos/${ev.id}/balance/recursos/${ev.dj.id}`, { method: 'PATCH', body: { estado: 'disponible' } })).estado, 200, 'marcar listo:')
+  await abrirBalance(ev.id)
+  igual(await page.getByLabel(`Fecha límite de ${ev.dj.recurso_nombre}`, { exact: true }).count(), 0, 'sigue el campo editable:')
+  igual(await page.getByText(/^Fecha límite: /).count(), 1, 'falta la fecha como texto:')
+})
+
 // ============ HU-29 · Estado de la asignación (RF-36) ============
 grupo = 'HU-29 Estado de la asignación de meseros (RF-36)'
 const cambiarEstado = (eventoId, personalId, body) => api(`/eventos/${eventoId}/meseros/${personalId}/estado`, { method: 'PATCH', body })

@@ -35,6 +35,9 @@ export interface RecursoBalance {
   unidad_medida: string
   estado: EstadoRecursoBalance
   status?: ResourceStatus
+  /** Identificador estable del recurso en el contrato oficial (el mismo `id`, como texto) */
+  item_id?: string
+  /** Fecha límite para conseguir el recurso (HU-33 · RF-42), en formato AAAA-MM-DD */
   fecha_limite?: string | null
   notas?: string | null
   creado_en?: string
@@ -42,12 +45,14 @@ export interface RecursoBalance {
 }
 
 export interface ResourceItemBalance {
+  item_id: string
   item_name: string
   required_quantity: number
   available_quantity: number
   deficit_quantity: number
   unit: string
   status: ResourceStatus
+  deadline_date: string | null
 }
 
 export interface ResourceCategoryBalance {
@@ -74,8 +79,19 @@ export interface ResumenBalanceLogistico {
 
 export interface BalanceLogisticoEvento {
   evento_id: number
+  /** Fecha del evento (AAAA-MM-DD): la fecha límite de un recurso no puede pasar de ahí */
+  fecha_evento?: string | null
   resumen: ResumenBalanceLogistico
   recursos: RecursoBalance[]
   recursos_por_categoria: Record<CategoriaBalance, RecursoBalance[]>
   faltantes_anticipados: RecursoBalance[]
+}
+
+/** Respuesta al fijar o quitar la fecha límite de un recurso (HU-33 · RF-42) */
+export interface RespuestaFechaLimite {
+  event_id: string
+  item_id: string
+  deadline_date: string | null
+  message: string
+  balance: BalanceLogisticoEvento
 }

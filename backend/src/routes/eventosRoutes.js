@@ -11,7 +11,7 @@ const { calcularComprasPrevio } = require('../controllers/comprasController');
 const { calcularComprasCoctelesPrevio } = require('../controllers/comprasCoctelesController');
 const { listarMeserosDelEvento, listarMeserosDisponibles, asignarMeseros, cambiarEstadoAsignacion, listarChecklistMeseros } = require('../controllers/asignacionMeserosController');
 const { obtenerDesviacionesPersonal } = require('../controllers/desviacionesPersonalController');
-const { obtenerBalanceEvento, sincronizarBalanceEvento, cambiarEstadoRecursoBalance } = require('../controllers/balanceController');
+const { obtenerBalanceEvento, sincronizarBalanceEvento, cambiarEstadoRecursoBalance, establecerFechaLimiteRecurso } = require('../controllers/balanceController');
 
 const router = Router();
 
@@ -51,6 +51,9 @@ router.post('/:id/balance/sincronizar', sincronizarBalanceEvento);
 router.post('/:id/balance/generar', sincronizarBalanceEvento);
 router.patch('/:id/balance/recursos/:recursoId', cambiarEstadoRecursoBalance);
 router.patch('/:eventId/logistics-balance/items/:itemId', cambiarEstadoRecursoBalance);
+// Fecha límite para conseguir un recurso del balance (HU-33 · RF-42). Con deadline_date: null se quita.
+router.put('/:id/balance/recursos/:recursoId/fecha-limite', establecerFechaLimiteRecurso);
+router.put('/:eventId/logistics-balance/items/:itemId/deadline', establecerFechaLimiteRecurso);
 
 // GET /api/eventos/:id -> detalle de un evento con sus requerimientos calculados
 router.get('/:id', obtenerDetalleEvento);
