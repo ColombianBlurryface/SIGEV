@@ -1,12 +1,14 @@
 /**
- * Componente de Balance Logístico (HU-31 · RF-39, RF-40).
+ * Componente de Balance Logístico (HU-31 a HU-35 · RF-39 a RF-44).
  *
  * Muestra el balance consolidado de recursos necesarios para el evento integrando:
- * personal, alimentos, bebidas, mobiliario y servicios, indicando la cantidad requerida
- * y el estado de disponibilidad de cada elemento.
+ * personal, alimentos, bebidas, mobiliario y servicios, indicando la cantidad requerida,
+ * el estado de disponibilidad, fecha límite y la vista filtrada de faltantes anticipados (HU-35).
  */
 import {
+  AlertCircle,
   Armchair,
+  CheckCircle2,
   ChevronDown,
   Layers,
   RefreshCw,
@@ -15,7 +17,7 @@ import {
   Utensils,
   Wine,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -29,6 +31,7 @@ import type {
   CategoriaBalance,
   EstadoRecursoBalance,
   ResourceStatus,
+  ResumenBalanceLogistico,
 } from '@/types/balance'
 
 const MAPA_ESTADO_A_STATUS: Record<EstadoRecursoBalance, ResourceStatus> = {
@@ -38,10 +41,22 @@ const MAPA_ESTADO_A_STATUS: Record<EstadoRecursoBalance, ResourceStatus> = {
   pendiente: 'PENDING',
 }
 
+const CLAVE_RESUMEN: Record<
+  EstadoRecursoBalance,
+  keyof Omit<ResumenBalanceLogistico, 'total_recursos' | 'porcentaje_completitud'>
+> = {
+  disponible: 'disponibles',
+  por_comprar: 'por_comprar',
+  por_conseguir: 'por_conseguir',
+  pendiente: 'pendientes',
+}
+
 interface BalanceLogisticoProps {
   eventoId: number
   refrescoKey?: unknown
   ocultarTitulo?: boolean
+  /** Abre el componente directamente en la vista de solo faltantes (HU-35 · RF-44) */
+  soloFaltantesInicial?: boolean
   className?: string
 }
 
@@ -128,15 +143,18 @@ export function BalanceLogistico({
   eventoId,
   refrescoKey,
   ocultarTitulo = false,
+  soloFaltantesInicial = false,
   className,
 }: BalanceLogisticoProps) {
   const [balance, setBalance] = useState<BalanceLogisticoEvento | null>(null)
   const [cargando, setCargando] = useState(true)
   const [sincronizando, setSincronizando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [soloFaltantes, setSoloFaltantes] = useState(soloFaltantesInicial)
   const [categoriaFiltro, setCategoriaFiltro] = useState<CategoriaBalance | 'todas'>('todas')
   const [actualizandoRecursoId, setActualizandoRecursoId] = useState<number | null>(null)
   const [errorAccion, setErrorAccion] = useState<string | null>(null)
+  const solicitudRef = useRef(0)
 
   const manejarCambioEstadoRecurso = async (recursoId: number, nuevoEstado: EstadoRecursoBalance) => {
     if (!balance) return
@@ -144,40 +162,55 @@ export function BalanceLogistico({
     setActualizandoRecursoId(recursoId)
 
     const balanceAnterior = balance
+    const recursoObjetivo = balance.recursos.find((r) => r.id === recursoId)
     const statusEnum = MAPA_ESTADO_A_STATUS[nuevoEstado]
-    const recursosActualizados = balance.recursos.map((r) =>
-      r.id === recursoId ? { ...r, estado: nuevoEstado, status: statusEnum } : r
-    )
+
+    const actualizarItem = (r: (typeof balance.recursos)[number]) =>
+      r.id === recursoId
+        ? {
+            ...r,
+            estado: nuevoEstado,
+            status: statusEnum,
+            deficit_quantity:
+              nuevoEstado === 'disponible'
+                ? 0
+                : Math.max(0, Number(r.cantidad_requerida) - Number(r.cantidad_disponible)),
+          }
+        : r
+
+    const recursosActualizados = balance.recursos
+      .map(actualizarItem)
+      .filter((r) => !soloFaltantes || r.estado !== 'disponible')
+
     const porCat = { ...balance.recursos_por_categoria }
     for (const k of Object.keys(porCat) as CategoriaBalance[]) {
-      porCat[k] = porCat[k].map((r) =>
-        r.id === recursoId ? { ...r, estado: nuevoEstado, status: statusEnum } : r
-      )
+      porCat[k] = porCat[k]
+        .map(actualizarItem)
+        .filter((r) => !soloFaltantes || r.estado !== 'disponible')
     }
-    const total = recursosActualizados.length
-    const disponibles = recursosActualizados.filter((r) => r.estado === 'disponible').length
-    const por_comprar = recursosActualizados.filter((r) => r.estado === 'por_comprar').length
-    const por_conseguir = recursosActualizados.filter((r) => r.estado === 'por_conseguir').length
-    const pendientes = recursosActualizados.filter((r) => r.estado === 'pendiente').length
-    const porcentaje = total > 0 ? Math.round((disponibles / total) * 100) : 100
+
+    const nuevoResumen = { ...balance.resumen }
+    if (recursoObjetivo && recursoObjetivo.estado !== nuevoEstado) {
+      const claveVieja = CLAVE_RESUMEN[recursoObjetivo.estado]
+      const claveNueva = CLAVE_RESUMEN[nuevoEstado]
+      nuevoResumen[claveVieja] = Math.max(0, nuevoResumen[claveVieja] - 1)
+      nuevoResumen[claveNueva] += 1
+    }
+    nuevoResumen.porcentaje_completitud =
+      nuevoResumen.total_recursos > 0
+        ? Math.round((nuevoResumen.disponibles / nuevoResumen.total_recursos) * 100)
+        : 100
 
     // Actualización optimista inmediata
     setBalance({
       ...balance,
       recursos: recursosActualizados,
       recursos_por_categoria: porCat,
-      resumen: {
-        total_recursos: total,
-        disponibles,
-        por_comprar,
-        por_conseguir,
-        pendientes,
-        porcentaje_completitud: porcentaje,
-      },
+      resumen: nuevoResumen,
     })
 
     try {
-      const resp = await balanceService.cambiarEstado(eventoId, recursoId, nuevoEstado)
+      const resp = await balanceService.cambiarEstado(eventoId, recursoId, nuevoEstado, soloFaltantes)
       if (resp && resp.balance) {
         setBalance(resp.balance)
       }
@@ -192,39 +225,54 @@ export function BalanceLogistico({
   // HU-33 (RF-42): fija o quita la fecha límite de un recurso. Si el servidor la rechaza (por ejemplo, posterior al evento),
   // el error sube hasta el campo de esa fila, que muestra el motivo; si sale bien, el balance trae ya la fecha nueva.
   const manejarFechaLimite = async (recursoId: number, fecha: string | null) => {
-    const resp = await balanceService.establecerFechaLimite(eventoId, recursoId, fecha)
+    const resp = await balanceService.establecerFechaLimite(eventoId, recursoId, fecha, soloFaltantes)
     setBalance(resp.balance)
   }
 
   const cargarBalance = useCallback(
     async (sincronizar = false) => {
+      const seq = ++solicitudRef.current
       if (sincronizar) setSincronizando(true)
       else setCargando(true)
       setError(null)
       try {
         const data = sincronizar
-          ? await balanceService.sincronizar(eventoId)
-          : await balanceService.obtener(eventoId)
-        setBalance(data)
+          ? await balanceService.sincronizar(eventoId, soloFaltantes)
+          : await balanceService.obtener(eventoId, { onlyMissing: soloFaltantes })
+        if (seq === solicitudRef.current) {
+          setBalance(data)
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al cargar el balance logístico.')
+        if (seq === solicitudRef.current) {
+          setError(err instanceof Error ? err.message : 'Error al cargar el balance logístico.')
+        }
       } finally {
-        setCargando(false)
-        setSincronizando(false)
+        if (seq === solicitudRef.current) {
+          setCargando(false)
+          setSincronizando(false)
+        }
       }
     },
-    [eventoId]
+    [eventoId, soloFaltantes]
   )
 
   useEffect(() => {
     cargarBalance()
   }, [cargarBalance, refrescoKey])
 
+  const categoriaActiva: CategoriaBalance | 'todas' =
+    soloFaltantes &&
+    categoriaFiltro !== 'todas' &&
+    (balance?.recursos_por_categoria[categoriaFiltro]?.length ?? 0) === 0
+      ? 'todas'
+      : categoriaFiltro
+
   const recursosFiltrados = useMemo(() => {
     if (!balance) return []
-    if (categoriaFiltro === 'todas') return balance.recursos
-    return balance.recursos_por_categoria[categoriaFiltro] || []
-  }, [balance, categoriaFiltro])
+    const base =
+      categoriaActiva === 'todas' ? balance.recursos : balance.recursos_por_categoria[categoriaActiva] || []
+    return soloFaltantes ? base.filter((r) => r.estado !== 'disponible' && r.status !== 'AVAILABLE') : base
+  }, [balance, categoriaActiva, soloFaltantes])
 
   if (cargando && !balance) {
     return (
@@ -259,6 +307,7 @@ export function BalanceLogistico({
   if (!balance) return null
 
   const { resumen } = balance
+  const totalFaltantes = Math.max(0, resumen.total_recursos - resumen.disponibles)
 
   return (
     <section aria-label="Balance Logístico del Evento" className={cn('flex flex-col gap-4 rounded-[12px] border border-border bg-background p-4 sm:p-5', className)}>
@@ -330,55 +379,108 @@ export function BalanceLogistico({
         </div>
       </div>
 
-      {/* Filtro por Categorías */}
-      <div className="flex flex-wrap gap-1.5 border-t border-border pt-3">
-        <button
-          type="button"
-          onClick={() => setCategoriaFiltro('todas')}
-          className={cn(
-            'cursor-pointer rounded-full px-3 py-1 text-xs font-semibold transition-colors',
-            categoriaFiltro === 'todas'
-              ? 'bg-foreground text-background'
-              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+      {/* Selector de vista (HU-31 balance completo vs HU-35 solo faltantes) y filtro por categorías */}
+      <div className="flex flex-col gap-2.5 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div role="group" aria-label="Vista del balance" className="inline-flex rounded-[10px] bg-muted p-1">
+            <button
+              type="button"
+              aria-pressed={!soloFaltantes}
+              onClick={() => setSoloFaltantes(false)}
+              className={cn(
+                'cursor-pointer rounded-[8px] px-3 py-1 text-xs font-bold transition-colors',
+                !soloFaltantes
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Todos ({resumen.total_recursos})
+            </button>
+            <button
+              type="button"
+              aria-pressed={soloFaltantes}
+              onClick={() => setSoloFaltantes(true)}
+              className={cn(
+                'flex cursor-pointer items-center gap-1.5 rounded-[8px] px-3 py-1 text-xs font-bold transition-colors',
+                soloFaltantes
+                  ? 'bg-warning-soft text-warning-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <AlertCircle aria-hidden="true" className="size-3.5" />
+              Solo faltantes ({totalFaltantes})
+            </button>
+          </div>
+          {soloFaltantes && (
+            <span className="text-[11.5px] font-medium text-muted-foreground">
+              Mostrando únicamente recursos pendientes, por comprar o por conseguir
+            </span>
           )}
-        >
-          Todas ({resumen.total_recursos})
-        </button>
-        {(['personal', 'alimento', 'bebida', 'mobiliario', 'servicio'] as CategoriaBalance[]).map(
-          (cat) => {
-            const conf = CONFIG_CATEGORIAS[cat]
-            const totalCat = balance.recursos_por_categoria[cat]?.length || 0
-            const activo = categoriaFiltro === cat
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setCategoriaFiltro(cat)}
-                className={cn(
-                  'flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors',
-                  activo
-                    ? 'bg-foreground text-background'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                )}
-              >
-                <span>{conf.etiqueta}</span>
-                <span className="opacity-75">({totalCat})</span>
-              </button>
-            )
-          }
+        </div>
+
+        {(!soloFaltantes || totalFaltantes > 0) && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCategoriaFiltro('todas')}
+              className={cn(
+                'cursor-pointer rounded-full px-3 py-1 text-xs font-semibold transition-colors',
+                categoriaActiva === 'todas'
+                  ? 'bg-foreground text-background'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              )}
+            >
+              Todas ({soloFaltantes ? totalFaltantes : resumen.total_recursos})
+            </button>
+            {(['personal', 'alimento', 'bebida', 'mobiliario', 'servicio'] as CategoriaBalance[]).map(
+              (cat) => {
+                const conf = CONFIG_CATEGORIAS[cat]
+                const totalCat = balance.recursos_por_categoria[cat]?.length || 0
+                if (soloFaltantes && totalCat === 0) return null
+                const activo = categoriaActiva === cat
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setCategoriaFiltro(cat)}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors',
+                      activo
+                        ? 'bg-foreground text-background'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    )}
+                  >
+                    <span>{conf.etiqueta}</span>
+                    <span className="opacity-75">({totalCat})</span>
+                  </button>
+                )
+              }
+            )}
+          </div>
         )}
       </div>
 
       {/* Lista de Recursos Requeridos */}
       {recursosFiltrados.length === 0 ? (
-        <p className="rounded-[10px] bg-background px-3 py-4 text-center text-xs text-muted-foreground">
-          No hay recursos requeridos en esta categoría.
-        </p>
+        soloFaltantes && totalFaltantes === 0 && resumen.total_recursos > 0 ? (
+          <div className="flex items-center justify-center gap-2 rounded-[10px] border border-border bg-success-soft/40 px-4 py-5 text-center text-xs font-semibold text-success-foreground">
+            <CheckCircle2 aria-hidden="true" className="size-4 shrink-0" />
+            <span>¡Todo listo! No hay recursos faltantes para este evento.</span>
+          </div>
+        ) : (
+          <p className="rounded-[10px] bg-background px-3 py-4 text-center text-xs text-muted-foreground">
+            {soloFaltantes ? 'No hay recursos faltantes en esta categoría.' : 'No hay recursos requeridos en esta categoría.'}
+          </p>
+        )
       ) : (
         <div className="flex flex-col divide-y divide-border rounded-[10px] border border-border bg-card">
           {recursosFiltrados.map((rec) => {
             const confCat = CONFIG_CATEGORIAS[rec.categoria]
             const IconoCat = confCat.icono
+            const faltan =
+              rec.deficit_quantity !== undefined
+                ? rec.deficit_quantity
+                : Math.max(0, Number(rec.cantidad_requerida) - Number(rec.cantidad_disponible))
             return (
               <div
                 key={rec.id}
@@ -433,6 +535,11 @@ export function BalanceLogistico({
                     {rec.categoria !== 'servicio' && rec.categoria !== 'alimento' && (
                       <span className="text-[11px] text-muted-foreground">
                         Disp: {formatearNumero(rec.cantidad_disponible)} {rec.unidad_medida}
+                      </span>
+                    )}
+                    {rec.estado !== 'disponible' && faltan > 0 && (
+                      <span className="text-[11px] font-semibold text-warning-foreground">
+                        Faltan: {formatearNumero(faltan)} {rec.unidad_medida}
                       </span>
                     )}
                   </div>
