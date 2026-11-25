@@ -364,6 +364,8 @@ CREATE TABLE IF NOT EXISTS evento_balance_recursos (
     unidad_medida VARCHAR(30) NOT NULL DEFAULT 'unidades',
     estado estado_balance_enum NOT NULL DEFAULT 'pendiente',
     fecha_limite DATE,
+    -- HU-34 (RF-43): true cuando una persona fijó el estado a mano (p. ej. «ya está disponible»); manda sobre el cálculo del balance
+    estado_manual BOOLEAN NOT NULL DEFAULT false,
     notas TEXT,
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     actualizado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

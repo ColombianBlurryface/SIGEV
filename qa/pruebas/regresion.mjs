@@ -2319,6 +2319,92 @@ await t('HU-33 · Pantalla: un recurso que ya está listo deja de ofrecer el cam
   igual(await page.getByText(/^Fecha límite: /).count(), 1, 'falta la fecha como texto:')
 })
 
+// ============ HU-34 · Actualizar el estado de un recurso (RF-43) ============
+grupo = 'HU-34 Estado manual de un recurso del balance (RF-43)'
+const estadoManual = (id, recursoId, status, extra = {}) => api(`/eventos/${id}/logistics-balance/items/${recursoId}/status`, { method: 'PATCH', body: { status, ...extra } })
+const itemOficial = async (id, recursoId) => (await balanceDeEvento(id)).categories.flatMap((c) => c.items).find((i) => i.item_id === String(recursoId))
+
+await t('HU-34 · Escenario 1: PATCH …/items/{id}/status con AVAILABLE deja el recurso disponible y sin déficit, y se mantiene al consultar y al sincronizar', async () => {
+  const ev = await eventoConFechaLimite('Estado manual E1')
+  const antes = await itemOficial(ev.id, ev.dj.id)
+  igual(antes.status, 'PENDING', 'antes:'); cierto(antes.deficit_quantity > 0, 'antes debía tener déficit')
+  const r = await estadoManual(ev.id, ev.dj.id, 'AVAILABLE')
+  igual(r.estado, 200, 'PATCH:'); igual(r.cuerpo.status, 'AVAILABLE', 'status:'); igual(r.cuerpo.item_id, String(ev.dj.id), 'item_id:'); igual(r.cuerpo.event_id, String(ev.id), 'event_id:')
+  cierto(/actualizado correctamente/.test(r.cuerpo.message), 'mensaje: ' + r.cuerpo.message)
+  const verificar = async (cuando) => {
+    const i = await itemOficial(ev.id, ev.dj.id)
+    igual(i.status, 'AVAILABLE', cuando + ' status:'); igual(i.deficit_quantity, 0, cuando + ' déficit:'); igual(i.available_quantity, i.required_quantity, cuando + ' disponible = requerido:')
+  }
+  await verificar('al consultar'); await api(`/eventos/${ev.id}/balance/sincronizar`, { method: 'POST' }); await verificar('tras sincronizar')
+  igual((await balanceDeEvento(ev.id)).recursos.find((x) => x.id === ev.dj.id).is_manually_fulfilled, true, 'marca manual:')
+})
+await t('HU-34 · Escenario 2: cost, price e invoice_number se ignoran: el cambio de estado se hace y no se guarda ni se devuelve nada contable', async () => {
+  const ev = await eventoConFechaLimite('Estado manual E2')
+  const r = await estadoManual(ev.id, ev.dj.id, 'AVAILABLE', { cost: 50000, price: 1000, invoice_number: 'A-123', factura: 'F-9', comprobante: 'C-1' })
+  igual(r.estado, 200, 'PATCH:'); igual(r.cuerpo.status, 'AVAILABLE', 'status:')
+  const texto = JSON.stringify(await balanceDeEvento(ev.id)) + JSON.stringify(r.cuerpo)
+  cierto(!/50000|A-123|F-9|C-1|invoice|factura|comprobante/i.test(texto), 'aparece algo de lo inyectado en las respuestas')
+  cierto(!Object.keys((await balanceDeEvento(ev.id)).recursos[0]).some((k) => /cost|price|invoice|factura|comprobante|gasto/i.test(k)), 'el recurso tiene campos contables')
+})
+await t('HU-34 · Escenario 3: PENDING deshace la marca manual y el balance vuelve a calcular el déficit real', async () => {
+  const ev = await eventoConFechaLimite('Estado manual E3')
+  const real = await itemOficial(ev.id, ev.dj.id)
+  await estadoManual(ev.id, ev.dj.id, 'AVAILABLE'); igual((await itemOficial(ev.id, ev.dj.id)).deficit_quantity, 0, 'marcado:')
+  const r = await estadoManual(ev.id, ev.dj.id, 'PENDING'); igual(r.estado, 200, 'PATCH PENDING:')
+  const i = await itemOficial(ev.id, ev.dj.id)
+  igual(i.status, real.status, 'estado real restaurado:'); igual(i.deficit_quantity, real.deficit_quantity, 'déficit real restaurado:'); igual(i.available_quantity, real.available_quantity, 'disponible real restaurado:')
+  igual((await balanceDeEvento(ev.id)).recursos.find((x) => x.id === ev.dj.id).is_manually_fulfilled, false, 'marca manual:')
+})
+await t('HU-34 · Validaciones: no existe «comprado», un estado raro o vacío da 400, un recurso inexistente o de otro evento 404, y sin sesión 401', async () => {
+  const ev = await eventoConFechaLimite('Estado manual validar'); const otro = await eventoConFechaLimite('Estado manual otro')
+  for (const mal of ['BOUGHT', 'COMPRADO', 'cualquier cosa', '']) igual((await estadoManual(ev.id, ev.dj.id, mal)).estado, 400, `«${mal}»:`)
+  igual((await api(`/eventos/${ev.id}/logistics-balance/items/${ev.dj.id}/status`, { method: 'PATCH', body: {} })).estado, 400, 'sin estado:')
+  igual((await estadoManual(ev.id, 999999999, 'AVAILABLE')).estado, 404, 'recurso inexistente:')
+  igual((await estadoManual(ev.id, otro.dj.id, 'AVAILABLE')).estado, 404, 'recurso de otro evento:')
+  igual((await itemOficial(otro.id, otro.dj.id)).status, 'PENDING', 'el recurso del otro evento no debe cambiar:')
+  const guardado = TOKEN; TOKEN = null
+  try { igual((await estadoManual(ev.id, ev.dj.id, 'AVAILABLE')).estado, 401, 'sin sesión:') } finally { TOKEN = guardado }
+})
+await t('HU-34 · Pantalla: cambiar un recurso a «Listo» lo deja marcado a mano y sin déficit; «Deshacer» devuelve el estado real', async () => {
+  const ev = await eventoConFechaLimite('Estado manual pantalla')
+  await abrirBalance(ev.id)
+  const region = page.getByRole('region', { name: 'Balance Logístico del Evento' })
+  const fila = region.getByText(ev.dj.recurso_nombre, { exact: true }).locator('xpath=ancestor::div[contains(@class,"sm:justify-between")][1]')
+  igual(await fila.getByTitle('Modificar estado del recurso').inputValue(), 'pendiente', 'estado inicial:')
+  const listosAntes = Number((await region.getByText('Listos', { exact: true }).locator('xpath=following-sibling::span').innerText()).trim())
+  await fila.getByTitle('Modificar estado del recurso').selectOption('disponible')
+  await fila.getByText('Marcado como listo a mano').waitFor()
+  igual(await fila.getByTitle('Modificar estado del recurso').inputValue(), 'disponible', 'estado tras marcar:')
+  igual(Number((await region.getByText('Listos', { exact: true }).locator('xpath=following-sibling::span').innerText()).trim()), listosAntes + 1, 'contador «Listos»:')
+  igual((await itemOficial(ev.id, ev.dj.id)).deficit_quantity, 0, 'déficit en la API:')
+  await abrirBalance(ev.id); await region.getByText('Marcado como listo a mano').waitFor()   // sigue marcado al recargar
+  await page.getByRole('button', { name: `Deshacer el cambio manual de ${ev.dj.recurso_nombre}` }).click()
+  await fila.getByText('Marcado como listo a mano').waitFor({ state: 'detached' })
+  igual(await fila.getByTitle('Modificar estado del recurso').inputValue(), 'pendiente', 'estado tras deshacer:')
+  igual((await itemOficial(ev.id, ev.dj.id)).status, 'PENDING', 'estado real en la API:')
+})
+await t('HU-34 · Pantalla: «Pendiente» no se puede elegir a mano (solo se muestra cuando el sistema lo calcula); volver al estado calculado es «Deshacer»', async () => {
+  const ev = await eventoConFechaLimite('Estado manual sin pendiente')
+  await abrirBalance(ev.id)
+  const region = page.getByRole('region', { name: 'Balance Logístico del Evento' })
+  const selectores = region.getByTitle('Modificar estado del recurso')
+  cierto(await selectores.count() >= 3, 'faltan selectores de estado')
+  igual(await region.locator('option[value=pendiente]:not([disabled])').count(), 0, 'opciones «Pendiente» que se pueden elegir:')
+  const fila = region.getByText(ev.dj.recurso_nombre, { exact: true }).locator('xpath=ancestor::div[contains(@class,"sm:justify-between")][1]')
+  igual(await fila.getByTitle('Modificar estado del recurso').inputValue(), 'pendiente', 'el DJ calculado como pendiente debe mostrarse así:')
+  igual(await fila.locator('option[value=pendiente]').isDisabled(), true, 'la opción «Pendiente» del DJ debe estar deshabilitada:')
+  const textos = await fila.getByTitle('Modificar estado del recurso').locator('option:not([disabled])').allInnerTexts()
+  igual(textos.join('|'), 'Listo|Por comprar|Por conseguir', 'opciones elegibles:')
+})
+await t('HU-34 · Pantalla: no hay ningún campo de costo, precio, factura ni comprobante en el balance', async () => {
+  const ev = await eventoConFechaLimite('Estado manual sin dinero')
+  await abrirBalance(ev.id)
+  const region = page.getByRole('region', { name: 'Balance Logístico del Evento' })
+  const campos = await region.locator('input, textarea, select').evaluateAll((els) => els.map((e) => `${e.name} ${e.id} ${e.getAttribute('aria-label') || ''} ${e.getAttribute('placeholder') || ''}`).join(' | '))
+  cierto(!/costo|cost|precio|price|factura|invoice|comprobante|gasto/i.test(campos), 'hay un campo contable: ' + campos)
+  cierto(!/factura|comprobante|\$/i.test(await region.innerText()), 'el balance muestra datos contables')
+})
+
 // ============ HU-29 · Estado de la asignación (RF-36) ============
 grupo = 'HU-29 Estado de la asignación de meseros (RF-36)'
 const cambiarEstado = (eventoId, personalId, body) => api(`/eventos/${eventoId}/meseros/${personalId}/estado`, { method: 'PATCH', body })

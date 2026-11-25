@@ -112,7 +112,12 @@ function EstadoRecursoSelector({
         <option value="disponible">Listo</option>
         <option value="por_comprar">Por comprar</option>
         <option value="por_conseguir">Por conseguir</option>
-        <option value="pendiente">Pendiente</option>
+        {/* «Pendiente» solo se muestra cuando el sistema lo calcula; no se elige a mano. Para volver al estado calculado está «Deshacer» (HU-34) */}
+        {estado === 'pendiente' && (
+          <option value="pendiente" disabled>
+            Pendiente
+          </option>
+        )}
       </select>
       <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2 size-3 opacity-60" />
     </div>
@@ -395,6 +400,21 @@ export function BalanceLogistico({
                     </span>
                     {rec.notas && (
                       <span className="text-[12px] text-muted-foreground">{rec.notas}</span>
+                    )}
+                    {rec.estado_manual && (
+                      <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+                        {rec.is_manually_fulfilled ? 'Marcado como listo a mano' : 'Estado cambiado a mano'}
+                        <button
+                          type="button"
+                          disabled={actualizandoRecursoId === rec.id}
+                          onClick={() => manejarCambioEstadoRecurso(rec.id, 'pendiente')}
+                          aria-label={`Deshacer el cambio manual de ${rec.recurso_nombre}`}
+                          title="Quita la marca y vuelve al estado que calcula el sistema"
+                          className="cursor-pointer font-bold text-primary underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Deshacer
+                        </button>
+                      </span>
                     )}
                     <FechaLimiteRecurso
                       recurso={rec}

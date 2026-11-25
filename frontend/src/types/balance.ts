@@ -37,6 +37,10 @@ export interface RecursoBalance {
   status?: ResourceStatus
   /** Identificador estable del recurso en el contrato oficial (el mismo `id`, como texto) */
   item_id?: string
+  /** El estado lo fijó una persona a mano (se puede deshacer) */
+  estado_manual?: boolean
+  /** Marcado a mano como disponible: se muestra cubierto, sin déficit (HU-34 · RF-43) */
+  is_manually_fulfilled?: boolean
   /** Fecha límite para conseguir el recurso (HU-33 · RF-42), en formato AAAA-MM-DD */
   fecha_limite?: string | null
   notas?: string | null

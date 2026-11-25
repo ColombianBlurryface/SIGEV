@@ -10,7 +10,7 @@
 --   2) HU-28 · columna `eventos.hora_inicio` y tabla `evento_personal`     — sin ellas el detalle de CUALQUIER evento da 500
 --   3) #60   · (opcional) cócteles ya registrados → catálogo de bebidas    — para poder elegirlos al crear un evento
 --   4) HU-48 · costo de los servicios: 3 columnas y una restricción        — sin ellas guardar o abrir un evento con servicios da 500
---   (El «balance logístico» del esquema es solo diseño y todavía nada lo usa: NO se crea en QA.)
+--   (OJO: el «balance logístico» (HU-31/33/34) YA se usa y su tabla NO está en este archivo: va aparte, en docs/sql-hu-31-balance-logistico.sql, antes de desplegar el balance.)
 --
 --   psql "$URL_DE_QA" -v ON_ERROR_STOP=1 -f qa/sql-qa-pendiente.sql
 -- =====================================================================================================
