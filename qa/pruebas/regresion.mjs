@@ -2194,6 +2194,7 @@ await t('HU-53: con un evento grande (muchos alimentos, bebidas y servicios) tod
   igual(r.estado, 201, 'crear el evento grande:'); const id = r.cuerpo.evento.id
   await page.goto(`${URL}/eventos?evento=${id}`); await ventanaDetalle().waitFor()
   const cant = async (nombre) => Number((await ventanaDetalle().getByRole('tab', { name: nombre }).innerText()).replace(/\D+/g, '') || 0)
+  await ventanaDetalle().getByRole('tab', { name: /^Alimentos y bebidas/ }).filter({ hasText: /\d/ }).waitFor() // el conteo aparece cuando el detalle terminó de cargar
   igual(await cant(/^Alimentos y bebidas/), prods.length, 'conteo de la pestaña Alimentos y bebidas:'); igual(await cant(/^Servicios/), servicios.length, 'conteo de la pestaña Servicios:')
   await abrirPestanaDetalle('Alimentos y bebidas'); const panel = ventanaDetalle().getByRole('tabpanel')
   igual(await panel.locator('section[aria-label="Alimentos"] li, section[aria-label="Bebidas generales"] li, section[aria-label="Bar de coctelería"] li').count(), prods.length, 'ítems en la pestaña:')
@@ -2403,6 +2404,32 @@ await t('HU-34 · Pantalla: no hay ningún campo de costo, precio, factura ni co
   const campos = await region.locator('input, textarea, select').evaluateAll((els) => els.map((e) => `${e.name} ${e.id} ${e.getAttribute('aria-label') || ''} ${e.getAttribute('placeholder') || ''}`).join(' | '))
   cierto(!/costo|cost|precio|price|factura|invoice|comprobante|gasto/i.test(campos), 'hay un campo contable: ' + campos)
   cierto(!/factura|comprobante|\$/i.test(await region.innerText()), 'el balance muestra datos contables')
+})
+
+// ============ HU-53 + HU-31 · El balance logístico dentro de la ventana de detalle ============
+grupo = 'HU-53 y HU-31 Balance dentro de la ventana del detalle'
+await t('HU-53 / HU-31: «Balance logístico» está en el encabezado de la ventana, el balance se abre ENCIMA de ella y Esc cierra primero solo el balance', async () => {
+  const ev = await eventoConFechaLimite('Ventana con balance')
+  await page.goto(`${URL}/eventos?evento=${ev.id}`); await ventanaDetalle().waitFor()
+  const boton = ventanaDetalle().locator('header').getByRole('button', { name: 'Balance logístico' })
+  igual(await boton.count(), 1, 'botones «Balance logístico» en el encabezado de la ventana:')
+  await boton.click()
+  const balance = page.getByRole('region', { name: 'Balance Logístico del Evento' }); await balance.waitFor()
+  const visible = await balance.evaluate((el) => { const r = el.getBoundingClientRect(); const punto = document.elementFromPoint(r.left + r.width / 2, r.top + 30); return el.contains(punto) })
+  cierto(visible, 'el balance quedó tapado por la ventana del detalle')
+  await page.keyboard.press('Escape'); await balance.waitFor({ state: 'detached' })
+  cierto(await ventanaDetalle().isVisible(), 'Esc cerró también la ventana del detalle')
+  await page.keyboard.press('Escape'); await ventanaDetalle().waitFor({ state: 'detached' })
+  await page.waitForURL((u) => !u.search.includes('evento='), { timeout: 3000 }).catch(() => {}) // la URL se actualiza un instante después de cerrarse la ventana
+  cierto(!page.url().includes('evento='), 'la URL conserva ?evento: ' + page.url())
+})
+await t('HU-53 / HU-31: el balance también se cierra con su X y la ventana del detalle sigue abierta', async () => {
+  const ev = await eventoConFechaLimite('Ventana con balance X')
+  await page.goto(`${URL}/eventos?evento=${ev.id}`); await ventanaDetalle().waitFor()
+  const balance = page.getByRole('region', { name: 'Balance Logístico del Evento' })
+  await ventanaDetalle().getByRole('button', { name: 'Balance logístico' }).click(); await balance.waitFor()
+  await page.getByRole('dialog', { name: /Balance/i }).getByRole('button').first().click(); await balance.waitFor({ state: 'detached' })
+  cierto(await ventanaDetalle().isVisible(), 'la X del balance cerró también la ventana del detalle')
 })
 
 // ============ HU-29 · Estado de la asignación (RF-36) ============

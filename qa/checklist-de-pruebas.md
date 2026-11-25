@@ -283,6 +283,7 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖 **Enlace directo:** `/eventos?evento=ID` abre la ventana de ese evento; un id que no existe no abre nada y se ve la lista.
 - [ ] 🤖👀 **Evento grande:** con un evento de muchos alimentos, bebidas y servicios, todo se recorre con el scroll **dentro** de la ventana (no hay que bajar por la página). Revisar también en un celular (390 px) y una tableta (768 px): la ventana ocupa casi toda la pantalla y las pestañas se pueden desplazar a los lados.
 - [ ] 👀 Tras **crear o editar** un evento, la ventana de ese evento se abre sola sobre la lista (el aviso de éxito queda detrás y se ve al cerrarla).
+- [ ] 🤖👀 **Balance logístico dentro de la ventana:** en el encabezado de la ventana hay un botón «Balance logístico» (junto a «Editar evento»). El balance se abre **encima** de la ventana del detalle; **Esc** (o su X, o un clic en su fondo) cierra solo el balance y la ventana del detalle sigue abierta; un segundo Esc cierra la ventana.
 
 ---
 

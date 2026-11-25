@@ -1,6 +1,6 @@
 /**
- * Página principal de Eventos (HU-06): resumen, búsqueda, filtros, tabla de eventos y
- * panel con el detalle del evento seleccionado.
+ * Página principal de Eventos (HU-06): resumen, búsqueda, filtros y tabla de eventos. Al hacer clic en un evento se abre su
+ * detalle en una ventana grande sobre la lista (HU-53 · RF-60); el enlace /eventos?evento=ID abre la ventana de ese evento.
  */
 import { CalendarDays, Plus, RotateCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -15,7 +15,7 @@ import { buttonVariants } from '@/components/ui/button-variants'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useEventos } from '@/hooks/useEventos'
-import { hoyIso, normalizar } from '@/lib/formato'
+import { normalizar } from '@/lib/formato'
 
 export function EventosPage() {
   const location = useLocation()
@@ -31,7 +31,7 @@ export function EventosPage() {
   // ...y se borra del historial del navegador para que no vuelva a salir al recargar la página
   useEffect(() => {
     if (aviso) {
-      recargar()
+      recargar() // Tras crear o editar un evento, la lista se vuelve a pedir para mostrar lo nuevo (HU-31)
       navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
     }
   }, [aviso, location.pathname, location.search, navigate, recargar])
@@ -46,17 +46,14 @@ export function EventosPage() {
     )
   }, [eventos, busqueda, estado])
 
-  // Evento seleccionado: el que viene en la URL (?evento=ID); si no hay, el próximo evento
-  // no cancelado; y si tampoco, el primero de la lista. Así la URL se puede compartir.
+  // Evento abierto en la ventana: el que viene en la URL (?evento=ID). Sin ese parámetro solo se ve la lista, y así el enlace
+  // se puede compartir. Un id que no existe (o que todavía no cargó) no abre nada.
   const idEnUrl = Number(searchParams.get('evento'))
-  const hoy = hoyIso()
-  const seleccionado =
-    eventos.find((e) => e.id === idEnUrl) ??
-    eventos.find((e) => e.estado !== 'cancelado' && e.fecha_evento.slice(0, 10) >= hoy) ??
-    eventos[0] ??
-    null
+  const seleccionado = eventos.find((e) => e.id === idEnUrl) ?? null
 
   const seleccionar = (id: number) => setSearchParams({ evento: String(id) }, { replace: true })
+  // Cerrar la ventana (X, tecla Esc o clic en el fondo) quita el parámetro de la URL y se vuelve a la lista
+  const cerrar = () => setSearchParams({}, { replace: true })
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,25 +113,13 @@ export function EventosPage() {
       )}
 
       {eventos.length > 0 && (
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="flex min-w-0 flex-col gap-6">
-            <ResumenEventos eventos={eventos} />
-            <FiltrosEventos
-              eventos={eventos}
-              busqueda={busqueda}
-              onBusqueda={setBusqueda}
-              estado={estado}
-              onEstado={setEstado}
-            />
-            <TablaEventos eventos={filtrados} seleccionadoId={seleccionado?.id ?? null} onSeleccionar={seleccionar} />
-          </div>
-          {seleccionado && (
-            <div className="xl:sticky xl:top-0">
-              <DetalleEvento evento={seleccionado} onCambio={recargar} />
-            </div>
-          )}
+        <div className="flex min-w-0 flex-col gap-6">
+          <ResumenEventos eventos={eventos} />
+          <FiltrosEventos eventos={eventos} busqueda={busqueda} onBusqueda={setBusqueda} estado={estado} onEstado={setEstado} />
+          <TablaEventos eventos={filtrados} seleccionadoId={seleccionado?.id ?? null} onSeleccionar={seleccionar} />
         </div>
       )}
+      {seleccionado && <DetalleEvento key={seleccionado.id} evento={seleccionado} onCerrar={cerrar} onCambio={recargar} />}
     </div>
   )
 }
