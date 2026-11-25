@@ -4,6 +4,10 @@
  * HU-31 (RF-39, RF-40): Genera automáticamente el balance de recursos necesarios
  * para un evento integrando personal, alimentos, bebidas, mobiliario y servicios,
  * indicando la cantidad requerida para cada elemento.
+ *
+ * HU-33 (RF-42): Permite fijar una fecha límite para conseguir cada recurso pendiente del balance. La fecha se guarda en la
+ * columna `fecha_limite` de `evento_balance_recursos` (cada recurso tiene un `id` estable) y la sincronización del balance
+ * la respeta, así que no se pierde al volver a calcular.
  */
 const pool = require('../config/db');
 const { calcularMeseros, calcularCocineros } = require('../config/reglasPersonal');
@@ -432,6 +436,37 @@ const sincronizarTablaBalance = async (cliente, eventoId, recursosCalculados, fo
 };
 
 /**
+ * Convierte una fecha que viene de la base (el driver entrega las columnas DATE como objetos Date, a medianoche local) o
+ * de una petición a texto «AAAA-MM-DD». Devuelve null si no hay fecha o no se entiende.
+ */
+const aFechaIso = (valor) => {
+  if (!valor) return null;
+  if (valor instanceof Date) {
+    if (Number.isNaN(valor.getTime())) return null;
+    const mes = String(valor.getMonth() + 1).padStart(2, '0');
+    const dia = String(valor.getDate()).padStart(2, '0');
+    return `${valor.getFullYear()}-${mes}-${dia}`;
+  }
+  const coincide = String(valor).match(/^(\d{4}-\d{2}-\d{2})/);
+  return coincide ? coincide[1] : null;
+};
+
+/** ¿Es un texto «AAAA-MM-DD» que además es un día real del calendario? (rechaza 2026-02-30, 2026-13-01, etc.) */
+const esFechaIsoValida = (texto) => {
+  if (typeof texto !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(texto)) return false;
+  const [anio, mes, dia] = texto.split('-').map(Number);
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  return fecha.getUTCFullYear() === anio && fecha.getUTCMonth() === mes - 1 && fecha.getUTCDate() === dia;
+};
+
+/** «2026-10-20» → «20/10/2026», para los mensajes que ve el usuario */
+const fechaParaMensaje = (iso) => iso.split('-').reverse().join('/');
+
+/** Datos básicos del evento que acompañan al balance (incluye su fecha, para limitar las fechas límite). */
+const SQL_INFO_EVENTO =
+  "SELECT id, nombre_evento, asistentes, to_char(fecha_evento, 'YYYY-MM-DD') AS fecha_evento FROM eventos WHERE id = $1";
+
+/**
  * Normaliza y valida el ID de evento, aceptando enteros o códigos como 'evt-201'
  */
 const parseEventoId = (raw) => {
@@ -551,7 +586,9 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
       unit: r.unidad_medida,
       estado: estadoEs,
       status: statusVal, // Enum ResourceStatus (HU-32 · RF-41)
-      fecha_limite: r.fecha_limite ? String(r.fecha_limite).slice(0, 10) : null,
+      item_id: String(r.id),
+      fecha_limite: aFechaIso(r.fecha_limite),
+      deadline_date: aFechaIso(r.fecha_limite), // Mismo dato con el nombre del contrato oficial (HU-33 · RF-42)
       notas: r.notas,
       creado_en: r.creado_en,
       actualizado_en: r.actualizado_en
@@ -590,48 +627,56 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
       category_name: 'STAFF',
       category_label: 'Personal',
       items: recursosPorCategoria.personal.map((i) => ({
+        item_id: i.item_id,
         item_name: i.item_name,
         required_quantity: i.required_quantity,
         available_quantity: i.available_quantity,
         deficit_quantity: i.deficit_quantity,
         unit: i.unit,
-        status: i.status
+        status: i.status,
+        deadline_date: i.deadline_date
       }))
     },
     {
       category_name: 'FOOD',
       category_label: 'Alimentos',
       items: recursosPorCategoria.alimento.map((i) => ({
+        item_id: i.item_id,
         item_name: i.item_name,
         required_quantity: i.required_quantity,
         available_quantity: i.available_quantity,
         deficit_quantity: i.deficit_quantity,
         unit: i.unit,
-        status: i.status
+        status: i.status,
+        deadline_date: i.deadline_date
       }))
     },
     {
       category_name: 'DRINKS',
       category_label: 'Bebidas',
       items: recursosPorCategoria.bebida.map((i) => ({
+        item_id: i.item_id,
         item_name: i.item_name,
         required_quantity: i.required_quantity,
         available_quantity: i.available_quantity,
         deficit_quantity: i.deficit_quantity,
         unit: i.unit,
-        status: i.status
+        status: i.status,
+        deadline_date: i.deadline_date
       }))
     },
     {
       category_name: 'FURNITURE',
       category_label: 'Mobiliario',
       items: recursosPorCategoria.mobiliario.map((i) => ({
+        item_id: i.item_id,
         item_name: i.item_name,
         required_quantity: i.required_quantity,
         available_quantity: i.available_quantity,
         deficit_quantity: i.deficit_quantity,
         unit: i.unit,
-        status: i.status
+        status: i.status,
+        deadline_date: i.deadline_date
       }))
     }
   ];
@@ -641,12 +686,14 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
       category_name: 'OTHER',
       category_label: 'Servicios',
       items: recursosPorCategoria.servicio.map((i) => ({
+        item_id: i.item_id,
         item_name: i.item_name,
         required_quantity: i.required_quantity,
         available_quantity: i.available_quantity,
         deficit_quantity: i.deficit_quantity,
         unit: i.unit,
-        status: i.status
+        status: i.status,
+        deadline_date: i.deadline_date
       }))
     });
   }
@@ -656,10 +703,12 @@ const estructurarRespuestaBalance = (eventoId, filas, infoEvento = null) => {
     event_id: infoEvento ? String(infoEvento.id) : String(eventoId),
     event_name: infoEvento?.nombre_evento || 'Evento',
     guest_count: infoEvento ? Number(infoEvento.asistentes) : 0,
+    event_date: infoEvento?.fecha_evento ? aFechaIso(infoEvento.fecha_evento) : null,
     categories,
 
     // 2. Propiedades de retrocompatibilidad con la UI de la aplicación (HU-31)
     evento_id: eventoId,
+    fecha_evento: infoEvento?.fecha_evento ? aFechaIso(infoEvento.fecha_evento) : null,
     resumen: {
       total_recursos: total,
       disponibles,
@@ -689,7 +738,7 @@ const obtenerBalanceEvento = async (req, res) => {
   const client = await pool.connect();
   try {
     // 1. Verificar si el evento existe
-    const resEvento = await client.query('SELECT id, nombre_evento, asistentes FROM eventos WHERE id = $1', [eventoId]);
+    const resEvento = await client.query(SQL_INFO_EVENTO, [eventoId]);
     if (resEvento.rows.length === 0) {
       return res.status(404).json({
         error: 'Evento no encontrado',
@@ -725,7 +774,7 @@ const sincronizarBalanceEvento = async (req, res) => {
 
   const client = await pool.connect();
   try {
-    const resEvento = await client.query('SELECT id, nombre_evento, asistentes FROM eventos WHERE id = $1', [eventoId]);
+    const resEvento = await client.query(SQL_INFO_EVENTO, [eventoId]);
     if (resEvento.rows.length === 0) {
       return res.status(404).json({
         error: 'Evento no encontrado',
@@ -807,7 +856,7 @@ const cambiarEstadoRecursoBalance = async (req, res) => {
     }
 
     // Retornar balance actualizado
-    const resEvento = await client.query('SELECT id, nombre_evento, asistentes FROM eventos WHERE id = $1', [eventoId]);
+    const resEvento = await client.query(SQL_INFO_EVENTO, [eventoId]);
     const infoEvento = resEvento.rows[0];
     const { rows: filas } = await client.query(
       'SELECT * FROM evento_balance_recursos WHERE evento_id = $1 ORDER BY categoria, id ASC',
@@ -827,6 +876,103 @@ const cambiarEstadoRecursoBalance = async (req, res) => {
   }
 };
 
+/**
+ * PUT /api/eventos/:id/balance/recursos/:recursoId/fecha-limite
+ * PUT /api/v1/events/:eventId/logistics-balance/items/:itemId/deadline
+ * Fija, cambia o quita la fecha límite para conseguir un recurso del balance (HU-33 · RF-42).
+ *
+ * Cuerpo: { "deadline_date": "2026-10-15" } (también se acepta "fecha_limite"). Con `null` se borra la fecha.
+ * - Cambiarla sobrescribe la anterior: es una sola columna del recurso, nunca se duplica (Escenario 3).
+ * - No puede ser posterior a la fecha del evento (400, Escenario 2). Una fecha ya pasada sí se acepta.
+ */
+const establecerFechaLimiteRecurso = async (req, res) => {
+  const eventoId = parseEventoId(req.params.id || req.params.eventId);
+  const recursoId = Number(req.params.recursoId || req.params.itemId);
+
+  if (!eventoId) {
+    return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del evento no es válido.' });
+  }
+  if (!Number.isInteger(recursoId) || recursoId <= 0 || recursoId > 2147483647) {
+    return res.status(400).json({ error: 'Datos inválidos', detalle: 'El identificador del recurso no es válido.' });
+  }
+
+  const cuerpo = req.body && typeof req.body === 'object' ? req.body : {};
+  const nombreCampo = 'deadline_date' in cuerpo ? 'deadline_date' : 'fecha_limite' in cuerpo ? 'fecha_limite' : null;
+  if (!nombreCampo) {
+    return res.status(400).json({
+      error: 'Datos inválidos',
+      detalle: 'Falta la fecha límite (deadline_date). Envía una fecha AAAA-MM-DD, o null para quitarla.'
+    });
+  }
+
+  // null (o texto vacío) significa «quitar la fecha límite»
+  const crudo = cuerpo[nombreCampo];
+  const quitar = crudo === null || crudo === '';
+  if (!quitar && !esFechaIsoValida(crudo)) {
+    return res.status(400).json({
+      error: 'Datos inválidos',
+      detalle: 'La fecha límite debe tener el formato AAAA-MM-DD y ser un día real del calendario.'
+    });
+  }
+  const fechaLimite = quitar ? null : crudo;
+
+  const client = await pool.connect();
+  try {
+    // El recurso debe existir y ser de este evento; de paso se trae la fecha del evento para compararla
+    const resRecurso = await client.query(
+      `SELECT r.id, to_char(e.fecha_evento, 'YYYY-MM-DD') AS fecha_evento
+       FROM evento_balance_recursos r
+       JOIN eventos e ON e.id = r.evento_id
+       WHERE r.id = $1 AND r.evento_id = $2`,
+      [recursoId, eventoId]
+    );
+    if (resRecurso.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Recurso no encontrado',
+        detalle: 'No se encontró el recurso especificado para este evento.'
+      });
+    }
+
+    const fechaEvento = aFechaIso(resRecurso.rows[0].fecha_evento);
+    // Las dos son texto AAAA-MM-DD, así que comparar como texto es comparar fechas
+    if (fechaLimite && fechaEvento && fechaLimite > fechaEvento) {
+      return res.status(400).json({
+        error: 'Fecha límite inválida',
+        detalle: `La fecha límite no puede ser posterior a la fecha del evento (${fechaParaMensaje(fechaEvento)}).`
+      });
+    }
+
+    await client.query(
+      `UPDATE evento_balance_recursos
+       SET fecha_limite = $1,
+           actualizado_en = CURRENT_TIMESTAMP
+       WHERE id = $2 AND evento_id = $3`,
+      [fechaLimite, recursoId, eventoId]
+    );
+
+    // Se devuelve el balance ya con la fecha nueva, para que la pantalla no tenga que volver a pedirlo
+    const resEvento = await client.query(SQL_INFO_EVENTO, [eventoId]);
+    const { rows: filas } = await client.query(
+      'SELECT * FROM evento_balance_recursos WHERE evento_id = $1 ORDER BY categoria, id ASC',
+      [eventoId]
+    );
+
+    const mensaje = fechaLimite ? 'Fecha límite actualizada correctamente.' : 'Fecha límite eliminada correctamente.';
+    res.json({
+      event_id: String(eventoId),
+      item_id: String(recursoId),
+      deadline_date: fechaLimite,
+      message: mensaje,
+      balance: estructurarRespuestaBalance(eventoId, filas, resEvento.rows[0])
+    });
+  } catch (error) {
+    console.error('Error al establecer la fecha límite del recurso (HU-33):', error);
+    res.status(500).json({ error: 'Error al guardar la fecha límite', detalle: error.message });
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   ResourceStatus,
   determinarResourceStatus,
@@ -836,5 +982,8 @@ module.exports = {
   estructurarRespuestaBalance,
   obtenerBalanceEvento,
   sincronizarBalanceEvento,
-  cambiarEstadoRecursoBalance
+  cambiarEstadoRecursoBalance,
+  establecerFechaLimiteRecurso,
+  aFechaIso,
+  esFechaIsoValida
 };

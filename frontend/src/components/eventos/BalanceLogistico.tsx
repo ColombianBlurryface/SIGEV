@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { FechaLimiteRecurso } from '@/components/eventos/FechaLimiteRecurso'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatearNumero } from '@/lib/formato'
 import { cn } from '@/lib/utils'
@@ -181,6 +182,13 @@ export function BalanceLogistico({
     } finally {
       setActualizandoRecursoId(null)
     }
+  }
+
+  // HU-33 (RF-42): fija o quita la fecha límite de un recurso. Si el servidor la rechaza (por ejemplo, posterior al evento),
+  // el error sube hasta el campo de esa fila, que muestra el motivo; si sale bien, el balance trae ya la fecha nueva.
+  const manejarFechaLimite = async (recursoId: number, fecha: string | null) => {
+    const resp = await balanceService.establecerFechaLimite(eventoId, recursoId, fecha)
+    setBalance(resp.balance)
   }
 
   const cargarBalance = useCallback(
@@ -388,6 +396,11 @@ export function BalanceLogistico({
                     {rec.notas && (
                       <span className="text-[12px] text-muted-foreground">{rec.notas}</span>
                     )}
+                    <FechaLimiteRecurso
+                      recurso={rec}
+                      fechaEvento={balance.fecha_evento}
+                      onGuardar={(fecha) => manejarFechaLimite(rec.id, fecha)}
+                    />
                   </div>
                 </div>
 

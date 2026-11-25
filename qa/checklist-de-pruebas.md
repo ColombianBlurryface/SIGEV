@@ -284,6 +284,21 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **Evento grande:** con un evento de muchos alimentos, bebidas y servicios, todo se recorre con el scroll **dentro** de la ventana (no hay que bajar por la página). Revisar también en un celular (390 px) y una tableta (768 px): la ventana ocupa casi toda la pantalla y las pestañas se pueden desplazar a los lados.
 - [ ] 👀 Tras **crear o editar** un evento, la ventana de ese evento se abre sola sobre la lista (el aviso de éxito queda detrás y se ve al cerrarla).
 
+---
+
+### HU-33 · Establecer fechas límite en el balance (RF-42)
+
+> **No hay SQL nuevo para esta historia:** la fecha se guarda en la columna `fecha_limite` que ya tiene la tabla `evento_balance_recursos`. Ojo: esa tabla (con sus dos tipos `categoria_balance_enum` y `estado_balance_enum`) **no aparece en ninguno de los SQL de entrega a QA ni a producción** (el de QA incluso dice que no se crea); hay que crearla antes de desplegar el balance (HU-31), con o sin esta historia.
+
+- [ ] 🤖👀 **Se fija la fecha (Escenario 1):** en el balance logístico de un evento, cada recurso que todavía falta (pendiente, por comprar o por conseguir) tiene un campo «Fecha límite». Al elegir un día aparece **Guardar**; al pulsarlo (o con Enter) se ve «Fecha límite guardada.» y aparece **Quitar**. Al cerrar y volver a abrir el balance, o al recargar la página, la fecha sigue ahí, junto al recurso.
+- [ ] 🤖👀 **No pasa del día del evento (Escenario 2):** el calendario no deja elegir días posteriores al evento. Si se escribe a mano un día posterior, al guardar sale en rojo «La fecha límite no puede ser posterior a la fecha del evento (dd/mm/aaaa)», el campo se marca y **no** se guarda nada. El mismo día del evento sí se permite.
+- [ ] 🤖👀 **Cambiar y quitar (Escenario 3):** cambiar la fecha reemplaza la anterior (el recurso no se duplica en el balance). **Quitar** deja el campo vacío y la fecha desaparece también al recargar.
+- [ ] 🤖 **Sobrevive a sincronizar:** pulsar «Sincronizar» (o cambiar los asistentes del evento) recalcula cantidades, pero no borra las fechas límite ya puestas.
+- [ ] 🤖👀 **Recurso listo:** al marcar un recurso como «Listo» ya no se ofrece el campo, pero su fecha (si la tenía) sigue visible como texto «Fecha límite: …». Si vuelve a quedar pendiente, reaparece el campo con su fecha.
+- [ ] 🤖 **API:** `PUT /api/eventos/{id}/balance/recursos/{recursoId}/fecha-limite` (y su ruta del contrato `PUT …/logistics-balance/items/{itemId}/deadline`) con `{"deadline_date": "AAAA-MM-DD"}` → 200; `null` quita la fecha; formato incorrecto o un día que no existe (2026-02-30) → 400; recurso inexistente o de otro evento → 404; sin sesión → 401. El balance trae `deadline_date` e `item_id` en cada ítem y `event_date` arriba.
+- [ ] 👀 Una fecha límite **ya pasada** se acepta (la historia solo prohíbe pasarse del día del evento). Confirmar con el PO si debe avisar al responsable.
+- [ ] 👀 Si después de poner una fecha límite se **cambia la fecha del evento a un día anterior**, la fecha límite queda posterior al evento (no se corrige sola). Confirmar con el PO qué debe pasar.
+
 ## Resultado de la ejecución del 18 de octubre de 2026 (local, sobre `develop` en el PR #43)
 
 | Parte | Resultado |
