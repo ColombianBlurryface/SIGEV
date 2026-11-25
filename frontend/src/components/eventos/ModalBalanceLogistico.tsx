@@ -29,6 +29,8 @@ export function ModalBalanceLogistico({
 
     const manejarTeclaEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Sin esto, si el balance está sobre otra ventana (el detalle del evento, HU-53), la misma tecla cerraría también esa
+        e.preventDefault()
         onCerrar()
       }
     }

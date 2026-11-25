@@ -104,6 +104,7 @@ const crearCoctel = async (req, res) => {
       `SELECT id FROM catalogo_productos 
        WHERE id = ANY($1::int[]) 
          AND clasificacion = 'bar_cocteleria' 
+         AND tipo_calculo = 'botella_compartida' 
          AND categoria_inventario IS NULL 
          AND activo = true`,
       [licorIds]
@@ -113,7 +114,7 @@ const crearCoctel = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'Datos inválidos',
-        detalle: 'Todos los licores deben ser bebidas de coctelería activas del catálogo.',
+        detalle: 'Todos los licores deben ser licores de coctelería activos del catálogo (un cóctel no puede ser ingrediente de otro).',
       });
     }
 
@@ -266,12 +267,12 @@ const editarCoctel = async (req, res) => {
     const licorIds = ingredientes.map((i) => i.licor_id);
     const { rows: licoresValidos } = await client.query(
       `SELECT id FROM catalogo_productos
-       WHERE id = ANY($1::int[]) AND clasificacion = 'bar_cocteleria' AND categoria_inventario IS NULL AND activo = true`,
+       WHERE id = ANY($1::int[]) AND clasificacion = 'bar_cocteleria' AND tipo_calculo = 'botella_compartida' AND categoria_inventario IS NULL AND activo = true`,
       [licorIds]
     );
     if (licoresValidos.length !== licorIds.length) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Datos inválidos', detalle: 'Todos los licores deben ser bebidas de coctelería activas del catálogo.' });
+      return res.status(400).json({ error: 'Datos inválidos', detalle: 'Todos los licores deben ser licores de coctelería activos del catálogo (un cóctel no puede ser ingrediente de otro).' });
     }
 
     await client.query(`DELETE FROM coctel_ingredientes WHERE coctel_id = $1`, [id]);

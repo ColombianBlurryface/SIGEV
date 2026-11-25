@@ -69,7 +69,7 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖👀 **El campo de horas no se rellena solo:** al elegir un servicio queda vacío (solo muestra «Máx. N» como guía) y hay que escribir las horas; si se deja vacío, «Indica las horas del servicio».
 - [ ] 🤖👀 **Las horas no pueden superar la duración del evento.** En un evento de 5 h: 6 y 300 se rechazan con «no pueden superar la duración del evento (5 h)»; 5 pasa; 3,5 pasa; 3,25 no.
 - [ ] 🤖👀 **Si reduces la duración después de agregar un servicio:** Atrás → cambia la duración a 3 → sale una alerta amarilla «La duración no alcanza para los servicios agregados»; en el paso 2 hay otra alerta y *Siguiente: Resumen* no avanza («No se puede continuar»). Quitando el servicio, ya avanza.
-- [ ] 🤖👀 **COR-06 · Horas de 1 a 5:** en un evento de 8 h, un servicio de 6 h o de 0,5 h se rechaza («Las horas de un servicio van de 1 a 5»); 1, 1,5 y 5 pasan. El formulario propone 5 h (no 8).
+- [ ] 🤖👀 **RN-18 / HU-48 · Horas de 1 h hasta la duración del evento (ya no hay tope de 5 h):** en un evento de 8 h, 9 h se rechaza («Las horas no pueden superar la duración del evento (8 h)») y 0,5 h también («deben ser de al menos 1 hora»); 1, 1,5, 5, 6 y 8 pasan. En un evento de **3 h**, 5 h se rechaza y 3 h pasa, tanto al **registrar** como al **editar** el evento. El campo de horas solo aparece con la modalidad «Por hora» y no se rellena solo.
 - [ ] 🤖👀 **COR-06 · Tope de unidades por tipo en todo el evento:** DJ 3, música en vivo 3, entretenimiento 3, sonido 2, iluminación 2, otro 5. Probar: 4 DJs en una línea → «Un evento admite máximo 3 de «DJ»»; 2 + 2 DJs en dos líneas → la segunda dice «solo puedes agregar 1 más»; con los 3 ya agregados → «Ya agregaste el máximo». La API rechaza seis líneas de un DJ (el caso de la captura del PO).
 - [ ] 🤖 El tipo de servicio inventado y la descripción en blanco se rechazan.
 - [ ] 👀 El resumen y el detalle del evento muestran «2 und · 4 horas».
@@ -283,6 +283,7 @@ QA_VIEWPORT=390x844 npm run regresion      # lo mismo en pantalla de celular (76
 - [ ] 🤖 **Enlace directo:** `/eventos?evento=ID` abre la ventana de ese evento; un id que no existe no abre nada y se ve la lista.
 - [ ] 🤖👀 **Evento grande:** con un evento de muchos alimentos, bebidas y servicios, todo se recorre con el scroll **dentro** de la ventana (no hay que bajar por la página). Revisar también en un celular (390 px) y una tableta (768 px): la ventana ocupa casi toda la pantalla y las pestañas se pueden desplazar a los lados.
 - [ ] 👀 Tras **crear o editar** un evento, la ventana de ese evento se abre sola sobre la lista (el aviso de éxito queda detrás y se ve al cerrarla).
+- [ ] 🤖👀 **Balance logístico dentro de la ventana:** en el encabezado de la ventana hay un botón «Balance logístico» (junto a «Editar evento»). El balance se abre **encima** de la ventana del detalle; **Esc** (o su X, o un clic en su fondo) cierra solo el balance y la ventana del detalle sigue abierta; un segundo Esc cierra la ventana.
 
 ---
 
